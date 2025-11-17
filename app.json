@@ -31,6 +31,6 @@
         "projectId": "thomas-v2-mobile"
       }
     },
-    "plugins": ["expo-router"]
+    "plugins": []
   }
 }

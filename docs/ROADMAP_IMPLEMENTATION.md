@@ -18,10 +18,10 @@
 
 #### Tâches:
 
-- [ ] 1.1.1 - Initialiser projet Expo avec configuration TypeScript strict
-- [ ] 1.1.2 - Configurer structure dossiers selon architecture clean
-- [ ] 1.1.3 - Setup ESLint + Prettier + husky hooks
-- [ ] 1.1.4 - Configurer variables environnement (.env template)
+- [x] 1.1.1 - Initialiser projet Expo avec configuration TypeScript strict
+- [x] 1.1.2 - Configurer structure dossiers selon architecture clean
+- [x] 1.1.3 - Setup ESLint + Prettier + husky hooks
+- [x] 1.1.4 - Configurer variables environnement (.env template)
 
 #### Livrables:
 
@@ -43,11 +43,11 @@
 
 #### Tâches:
 
-- [ ] 1.2.1 - Créer projet Supabase + configuration base
-- [ ] 1.2.2 - Configurer providers OAuth (Google, Apple)
-- [ ] 1.2.3 - Setup templates email français pour auth
-- [ ] 1.2.4 - Intégrer SDK Supabase dans Expo
-- [ ] 1.2.5 - Tester connexion database + auth
+- [x] 1.2.1 - Créer projet Supabase + configuration base
+- [x] 1.2.2 - Configurer providers OAuth (Google, Apple)
+- [x] 1.2.3 - Setup templates email français pour auth
+- [x] 1.2.4 - Intégrer SDK Supabase dans Expo
+- [x] 1.2.5 - Tester connexion database + auth
 
 #### Livrables:
 
