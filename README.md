@@ -1,5 +1,7 @@
 # 🌱 Thomas V2 - Assistant Agricole IA
 
+Application de suivi d'activité pour les agriculteurs basé sur l'IA et les messages vocaux.
+
 Application mobile française pour maraîchers avec chatbot IA intégré, développée avec React Native/Expo et TypeScript.
 
 ## 🚀 Setup Développeur
