@@ -1,228 +1,184 @@
-# 📚 Documentation Implémentation Thomas V2
+# 📚 Documentation Thomas V2 - Guide Principal
 
-## 🎯 Vue d'Ensemble
+## 🎯 Vue d'ensemble
 
-Cette documentation complète détaille l'implémentation de **Thomas V2**, application mobile agricole française native avec chatbot IA intégré.
-
-**Durée**: 21 jours ouvrés | **Budget**: ~32k€ | **Équipe**: 2-3 développeurs
+Documentation complète de **Thomas V2**, application mobile agricole française native avec système d'initialisation ultra-simplifié et cache intelligent.
 
 ---
 
-## 📋 Documents de Planification
+## 📂 **ORGANISATION DE LA DOCUMENTATION**
 
-### 🚀 [ROADMAP_IMPLEMENTATION.md](./ROADMAP_IMPLEMENTATION.md)
+La documentation est organisée par thématique dans des sous-dossiers pour faciliter la navigation :
 
-**Plan d'implémentation étape par étape**
+- **[INDEX.md](./INDEX.md)** ⭐ - Index complet et navigation par thème
+- **[testing/](./testing/)** - Tests, QA, validations (13 docs)
+- **[chat/](./chat/)** - Système chat et agent IA (8 docs)
+- **[design/](./design/)** - Design system, UI/UX (11 docs)
+- **[forms/](./forms/)** - Migration formulaires (4 docs)
+- **[deployment/](./deployment/)** - Build, stores, publication (12 docs)
+- **[troubleshooting/](./troubleshooting/)** - Debug, fixes (10 docs)
+- **[observations/](./observations/)** - Corrections observations (6 docs)
+- **[archive/](./archive/)** - Documents historiques (36 docs)
 
-- ✅ 8 phases de développement structurées
-- ✅ 21 étapes numérotées avec durées précises
-- ✅ Livrables et critères d'acceptation détaillés
-- ✅ Timeline visuelle semaine par semaine
-
-**👀 À consulter pour**: Comprendre la séquence d'implémentation et les livrables
-
----
-
-### 🔗 [DEPENDENCIES_MATRIX.md](./DEPENDENCIES_MATRIX.md)
-
-**Analyse des dépendances et gestion des risques**
-
-- ✅ Matrice complète des dépendances entre étapes
-- ✅ Identification des 3 chemins critiques
-- ✅ Répartition des ressources par équipe/compétence
-- ✅ Plan de contingence si retards
-- ✅ Stratégies de parallélisation pour optimisation
-
-**👀 À consulter pour**: Gérer les risques et optimiser les ressources
+**👉 Consultez [INDEX.md](./INDEX.md) pour trouver rapidement un document !**
 
 ---
 
-### ⚡ [TECHNICAL_SPECIFICATIONS.md](./TECHNICAL_SPECIFICATIONS.md)
+## 🚀 **GUIDES ESSENTIELS** (à consulter en priorité)
 
-**Spécifications techniques détaillées**
+### 1. 📱 [INITIALIZATION_GUIDE.md](./INITIALIZATION_GUIDE.md)
+**Guide complet d'initialisation unifié**
+- Authentification, fermes, et cache des données métier
+- Architecture simple et prévisible, diagnostics intégrés
+- **À consulter pour** : Comprendre le démarrage et la configuration
 
-- ✅ Configurations précises pour chaque technologie (Expo, Supabase, etc.)
-- ✅ Code samples et interfaces TypeScript
-- ✅ Critères d'acceptation techniques précis
-- ✅ Métriques de performance attendues
-- ✅ Schémas BDD complets avec RLS
+### 2. 🌾 [FARM_CONTEXT_USAGE.md](./FARM_CONTEXT_USAGE.md)
+**Usage du système de gestion des fermes**
+- API complète du FarmContext, données métier avec cache
+- Hooks spécialisés et bonnes pratiques
+- **À consulter pour** : Développement avec les données ferme
 
-**👀 À consulter pour**: Implémenter concrètement chaque fonctionnalité
+### 3. 💾 [FARM_DATA_CACHE_SYSTEM.md](./FARM_DATA_CACHE_SYSTEM.md)
+**Système de cache des données métier**
+- Cache progressif, invalidation sélective
+- **À consulter pour** : Optimisation des performances
 
----
-
-### 📋 [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md)
-
-**Synthèse exécutive complète**
-
-- ✅ Vue d'ensemble projet et documents
-- ✅ Étapes prioritaires première semaine
-- ✅ Risques majeurs identifiés avec mitigations
-- ✅ Budget détaillé et plan de contingence
-- ✅ Checklist démarrage immédiat
-
-**👀 À consulter pour**: Vision globale et démarrage rapide
+### 4. 👥 [FARM_MEMBERS_GUIDE.md](./FARM_MEMBERS_GUIDE.md)
+**Gestion des membres et permissions**
+- Système de rôles, invitations et équipes
+- **À consulter pour** : Fonctionnalités multi-utilisateur
 
 ---
 
-## 🎯 Architecture Source
+## 🏗️ **ARCHITECTURE ET SYSTÈME**
 
-### 📖 [ThomasV2](./ThomasV2)
+- [ARCHITECTURE_COMPLETE.md](./ARCHITECTURE_COMPLETE.md) - Architecture complète
+- [TECHNICAL_SPECIFICATIONS.md](./TECHNICAL_SPECIFICATIONS.md) - Spécifications techniques
+- [DESIGN_SYSTEM_GUIDE.md](./DESIGN_SYSTEM_GUIDE.md) - Système de design
+- [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) - Configuration Supabase
+- [NEXT_STEPS_SUPABASE.md](./NEXT_STEPS_SUPABASE.md) - OAuth et finalisation
 
-**Document d'architecture original (1515 lignes)**
+## 📋 **PLANIFICATION**
 
-- Architecture complète et cohérente
-- Système d'authentification unifié
-- Système multi-fermes avec permissions
-- Parcelles optimisées LLM (2 niveaux)
-- Chatbot IA avec prompts français natifs
-- Interface mobile moderne
-- Base de données relationnelle complète
+- [ROADMAP_IMPLEMENTATION.md](./ROADMAP_IMPLEMENTATION.md) - Plan détaillé 8 phases
+- [DEPENDENCIES_MATRIX.md](./DEPENDENCIES_MATRIX.md) - Matrice des dépendances
 
-**👀 À consulter pour**: Comprendre la vision produit détaillée
+## 💬 **CHAT IA**
 
----
+- **[THOMAS_AGENT_V2_COMPLETE.md](./THOMAS_AGENT_V2_COMPLETE.md)** ⭐ - Agent IA complet
+- **[chat/](./chat/)** - Système chat complet (8 documents)
+  - Architecture, déploiement, intégration
+  - Bouton Chat+, troubleshooting
+  - Tests et rapports
 
-## 🚀 Quick Start Guide
+## 📊 **GUIDES FONCTIONNELS**
 
-### 1. **Première Lecture** (30 min)
+- [DOCUMENTS_SYSTEM_GUIDE.md](./DOCUMENTS_SYSTEM_GUIDE.md) - Gestion documents
+- [CULTURE_SYSTEM_GUIDE.md](./CULTURE_SYSTEM_GUIDE.md) - Gestion cultures
+- [CONTAINER_SYSTEM_GUIDE.md](./CONTAINER_SYSTEM_GUIDE.md) - Système contenants
+- [PERMISSIONS_GUIDE.md](./PERMISSIONS_GUIDE.md) - Gestion permissions
 
-```
-📋 IMPLEMENTATION_SUMMARY.md
-```
+## 🎨 **UI/UX & DESIGN SYSTEM**
 
-→ Vue d'ensemble complète du projet
+- **[design/](./design/)** - Design system complet (11 documents)
+  - Audits UI/UX mobile-first
+  - Guides composants (Input, Forms, Dropdown, Icons)
+  - Patterns UI réutilisables
+- **[forms/](./forms/)** - Migration formulaires (4 documents)
+  - Guide complet migration
+  - Unification design system
+  - Standards et validation
 
-### 2. **Planning Détaillé** (45 min)
+## 🔍 **TESTS & QUALITÉ**
 
-```
-🚀 ROADMAP_IMPLEMENTATION.md
-```
+- **[testing/](./testing/)** - Tests complets (13 documents)
+  - Guides web et mobile
+  - Tests compatibilité navigateurs
+  - Tests prompts IA
+  - Rapports régression
 
-→ Plan étape par étape avec timeline
+## 🚀 **DÉPLOIEMENT & PUBLICATION**
 
-### 3. **Gestion Projet** (30 min)
+- **[deployment/](./deployment/)** - Build et stores (12 documents)
+  - Configuration EAS Build
+  - Guides Play Console / App Store
+  - Checklist production
+  - Edge functions Supabase
 
-```
-🔗 DEPENDENCIES_MATRIX.md
-```
+## 🔧 **DÉPANNAGE & DEBUG**
 
-→ Risques, ressources, contingence
+- **[troubleshooting/](./troubleshooting/)** - Debug complet (10 documents)
+  - Guide debug crash
+  - Fixes réseau, affichage, notifications
+  - Troubleshooting développement
 
-### 4. **Implémentation Technique** (référence)
+## 📱 **SYSTÈME AVANCÉ**
 
-```
-⚡ TECHNICAL_SPECIFICATIONS.md
-```
-
-→ Spécifications détaillées par étape
-
----
-
-## 📊 Résumé Exécutif
-
-### **Objectif**
-
-Application mobile agricole française avec chatbot IA analysant les tâches en langage naturel français
-
-### **Délai**
-
-21 jours ouvrés (3 semaines) avec plan de contingence jusqu'à 25 jours
-
-### **Budget**
-
-- Développement: 30,650€
-- Infrastructure: 699€
-- Tools: 800€
-- **Total: 32,149€**
-
-### **Équipe**
-
-- 1 Développeur Backend/DevOps (21j)
-- 1 Développeur Frontend/Mobile (21j)
-- 1 Spécialiste IA (10j ponctuels)
-
-### **Stack Technique**
-
-- **Mobile**: React Native + Expo + TypeScript
-- **Backend**: Supabase (PostgreSQL + Auth + Storage)
-- **IA**: OpenAI GPT-4o-mini avec prompts français
-- **Styling**: NativeWind (Tailwind CSS)
-
-### **Fonctionnalités MVP**
-
-1. ✅ **Auth multi-provider** (Google, Apple, Email)
-2. ✅ **Gestion fermes multi-utilisateur** avec rôles/permissions
-3. ✅ **Parcelles 2-niveaux** optimisées reconnaissance LLM
-4. ✅ **Chat Thomas IA** analysant tâches en français naturel
-5. ✅ **Interface moderne** calendrier + navigation + configuration
-6. ✅ **Mode offline** 7 jours avec sync intelligente
+- [SOFT_DELETE_SYSTEM_GUIDE.md](./SOFT_DELETE_SYSTEM_GUIDE.md) - Suppression logique
+- [FILTER_SYSTEM_GUIDE.md](./FILTER_SYSTEM_GUIDE.md) - Filtres avancés
+- [NAVIGATION_INTEGRATION.md](./NAVIGATION_INTEGRATION.md) - Intégration navigation
+- [STATS_HEADER_GUIDE.md](./STATS_HEADER_GUIDE.md) - En-têtes statistiques
 
 ---
 
-## ⚠️ Points d'Attention Critiques
+## 🎯 **COMMENT UTILISER CETTE DOCUMENTATION**
 
-### **Semaine 1 - Fondations** (Risque: Architecture)
+### **🔍 Trouver un Document**
 
-- Configuration Supabase + OAuth providers
-- Design system cohérent
-- Base multi-tenant sécurisée
+**Méthode 1 : Par Thème**
+1. Identifier le thème (test, chat, design, etc.)
+2. Ouvrir le dossier correspondant
+3. Consulter le README du dossier
 
-### **Semaine 2 - Cœur Métier** (Risque: IA)
+**Méthode 2 : Via l'Index**
+1. Ouvrir **[INDEX.md](./INDEX.md)**
+2. Chercher par thématique ou nom
+3. Accéder directement au document
 
-- Service IA avec prompts français précis
-- Matching parcelles par reconnaissance naturelle
-- Interface chat Thomas moderne
+**Méthode 3 : Par Besoin**
+- **Tests ?** → `testing/`
+- **Chat/IA ?** → `chat/` ou `THOMAS_AGENT_V2_COMPLETE.md`
+- **Design/UI ?** → `design/`
+- **Formulaires ?** → `forms/`
+- **Build/Deploy ?** → `deployment/`
+- **Debug/Fix ?** → `troubleshooting/`
+- **Historique ?** → `archive/`
 
-### **Semaine 3 - Finalisation** (Risque: Intégration)
+### **📚 Pour Débuter**
+1. ✅ Lire `INITIALIZATION_GUIDE.md` pour l'architecture
+2. ✅ Consulter `FARM_CONTEXT_USAGE.md` pour le développement
+3. ✅ Parcourir `INDEX.md` pour découvrir la documentation
+4. ✅ Explorer les sous-dossiers selon vos besoins
 
-- Interface complète responsive
-- Fonctionnalités avancées
-- Tests et déploiement stores
+### **🔧 Pour le Dépannage**
+1. ✅ Consulter `troubleshooting/` pour les problèmes courants
+2. ✅ Utiliser diagnostics intégrés (triple-tap en dev)
+3. ✅ Vérifier les logs dans la console
+4. ✅ Chercher dans `troubleshooting/DEBUG_CRASH_GUIDE.md`
 
----
-
-## 📞 Support & Contact
-
-### **Questions Techniques**
-
-→ Consulter `TECHNICAL_SPECIFICATIONS.md` section concernée
-
-### **Questions Planning**
-
-→ Consulter `DEPENDENCIES_MATRIX.md` pour risques et mitigation
-
-### **Questions Produit**
-
-→ Se référer au document `ThomasV2` original
-
-### **Escalation**
-
-- Retard >3 jours: Product Owner
-- Problème technique majeur: CTO
-- Budget dépassé >20%: Direction
-
----
-
-## 🎯 Success Metrics
-
-### **MVP Livré J17**:
-
-- ✅ Auth multi-provider opérationnelle
-- ✅ Thomas IA analysant français >80% précision
-- ✅ Interface mobile moderne iOS + Android
-- ✅ Mode offline 7 jours fonctionnel
-- ✅ Apps déployées TestFlight + Play Internal
-
-### **Qualité**:
-
-- ✅ <2s temps démarrage
-- ✅ <0.1% crash rate
-- ✅ 85%+ test coverage
-- ✅ Conformité WCAG AA
+### **🚀 Pour Déployer**
+1. ✅ Lire `deployment/DEPLOYMENT_README.md`
+2. ✅ Suivre `deployment/PRODUCTION_DEPLOYMENT_CHECKLIST.md`
+3. ✅ Configurer EAS avec `deployment/SETUP_EAS_MANUAL.md`
+4. ✅ Publier avec `deployment/PLAY_CONSOLE_UPLOAD_GUIDE.md`
 
 ---
 
-**📅 Créé**: Novembre 2024  
-**📊 Status**: Prêt pour démarrage immédiat  
-**🚀 Next Step**: Validation budget + équipe → Kickoff J1
+## 🏆 **État Actuel : Production Ready**
+
+✅ **Initialisation simplifiée** : < 3s, robuste  
+✅ **Cache intelligent** : Données optimisées  
+✅ **Diagnostics intégrés** : Debug temps réel  
+✅ **Documentation organisée** : 100+ docs structurés  
+✅ **Tests complets** : Web, mobile, IA validés  
+✅ **Design system unifié** : 64 composants React Native  
+✅ **Agent IA v2.0** : Claude 3.5 Sonnet + RAG  
+✅ **Déploiement automatisé** : EAS Build configuré  
+
+**Thomas V2 est prêt pour la production !** 🎉
+
+---
+
+**📊 Documentation** : 100+ fichiers organisés en 7 thèmes  
+**🗂️ Navigation** : INDEX.md complet + README par dossier  
+**🔄 Mise à jour** : Janvier 2026 - Organisation thématique complète

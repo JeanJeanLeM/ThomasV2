@@ -1,0 +1,149 @@
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+
+// Types de navigation
+export type TabName = 'Dashboard' | 'Statistics' | 'Taches' | 'Chat' | 'Profil';
+export type ScreenName = TabName | 'Settings' | 'PlotsSettings' | 'MaterialsSettings' | 'ConversionsSettings' | 'CulturesListSettings' | 'PhytosanitaryProductsSettings' | 'FarmMembers' | 'MyInvitations' | 'FarmEdit' | 'FarmList' | 'AideEtSupport' | 'APropos' | 'Documents';
+
+interface NavigationState {
+  activeTab: TabName;
+  currentScreen: ScreenName;
+  chatState: 'list' | 'conversation';
+  navigationHistory: ScreenName[];
+}
+
+interface NavigationContextType {
+  // État de navigation
+  activeTab: TabName;
+  currentScreen: ScreenName;
+  chatState: 'list' | 'conversation';
+  navigationHistory: ScreenName[];
+  
+  // Actions de navigation
+  navigateToTab: (tab: TabName) => void;
+  navigateToScreen: (screen: ScreenName) => void;
+  goBack: () => void;
+  setChatState: (state: 'list' | 'conversation') => void;
+  
+  // Actions spécifiques
+  openFarmEdit: (farmId?: number) => void;
+  openFarmList: () => void;
+  openSettings: () => void;
+}
+
+const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
+
+interface NavigationProviderProps {
+  children: ReactNode;
+}
+
+export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children }) => {
+  const [activeTab, setActiveTab] = useState<TabName>('Chat');
+  const [currentScreen, setCurrentScreen] = useState<ScreenName>('Chat');
+  const [chatState, setChatState] = useState<'list' | 'conversation'>('list');
+  const [navigationHistory, setNavigationHistory] = useState<ScreenName[]>(['Chat']);
+
+  const navigateToTab = (tab: TabName) => {
+    console.log('🧭 [NAVIGATION] Navigate to tab:', tab);
+    setActiveTab(tab);
+    setCurrentScreen(tab);
+    addToHistory(tab);
+  };
+
+  const navigateToScreen = (screen: ScreenName) => {
+    console.log('🧭 [NAVIGATION] Navigate to screen:', screen);
+    setCurrentScreen(screen);
+    addToHistory(screen);
+  };
+
+  const addToHistory = (screen: ScreenName) => {
+    setNavigationHistory(prev => {
+      const newHistory = [...prev];
+      // Éviter les doublons consécutifs
+      if (newHistory[newHistory.length - 1] !== screen) {
+        newHistory.push(screen);
+      }
+      // Limiter l'historique à 10 éléments
+      return newHistory.slice(-10);
+    });
+  };
+
+  const goBack = () => {
+    console.log('🧭 [NAVIGATION] Go back, history:', navigationHistory);
+    
+    if (navigationHistory.length > 1) {
+      const newHistory = [...navigationHistory];
+      newHistory.pop(); // Retirer l'écran actuel
+      const previousScreen = newHistory[newHistory.length - 1];
+      
+      setNavigationHistory(newHistory);
+      setCurrentScreen(previousScreen);
+      
+      // Mettre à jour l'onglet actif si nécessaire
+      // Dashboard temporairement masqué de la bottom bar
+      const tabs: TabName[] = ['Statistics', 'Taches', 'Chat', 'Profil'];
+      if (tabs.includes(previousScreen as TabName)) {
+        setActiveTab(previousScreen as TabName);
+      }
+      
+      console.log('🧭 [NAVIGATION] Navigated back to:', previousScreen);
+    } else {
+      // Fallback vers Chat si pas d'historique
+      console.log('🧭 [NAVIGATION] No history, fallback to Chat');
+      navigateToTab('Chat');
+    }
+  };
+
+  const openFarmEdit = (farmId?: number) => {
+    console.log('🏢 [NAVIGATION] Open farm edit, farmId:', farmId);
+    navigateToScreen('FarmEdit');
+  };
+
+  const openFarmList = () => {
+    console.log('🏢 [NAVIGATION] Open farm list');
+    navigateToScreen('FarmList');
+  };
+
+  const openSettings = () => {
+    console.log('⚙️ [NAVIGATION] Open settings');
+    navigateToScreen('Settings');
+  };
+
+  const value: NavigationContextType = {
+    activeTab,
+    currentScreen,
+    chatState,
+    navigationHistory,
+    navigateToTab,
+    navigateToScreen,
+    goBack,
+    setChatState,
+    openFarmEdit,
+    openFarmList,
+    openSettings,
+  };
+
+  return (
+    <NavigationContext.Provider value={value}>
+      {children}
+    </NavigationContext.Provider>
+  );
+};
+
+export const useNavigation = (): NavigationContextType => {
+  const context = useContext(NavigationContext);
+  if (context === undefined) {
+    throw new Error('useNavigation must be used within a NavigationProvider');
+  }
+  return context;
+};
+
+
+
+
+
+
+
+
+
+
+

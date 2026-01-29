@@ -1,0 +1,57 @@
+=== COMMANDES DEBUG USB ANDROID - PowerShell ===
+
+ÉTAPE 1 : Vérifier la connexion
+--------------------------------
+adb devices
+
+Si aucun périphérique n'apparaît :
+- Activez "Débogage USB" dans Paramètres → Options pour les développeurs
+- Connectez le téléphone via USB
+- Acceptez l'autorisation sur le téléphone
+
+
+ÉTAPE 2 : Pour l'erreur AUDIO (recommandé)
+-------------------------------------------
+# Nettoyer les logs précédents
+adb logcat -c
+
+# Filtrer les logs audio en temps réel
+adb logcat | Select-String -Pattern "AUDIO|ERROR|FATAL|MediaService|ChatConversation|Recording|getURI|undefined" -CaseSensitive:$false
+
+IMPORTANT : Reproduisez l'erreur sur votre téléphone pendant que cette commande tourne !
+Appuyez sur Ctrl+C pour arrêter.
+
+
+ÉTAPE 3 : Alternative - Script automatique
+--------------------------------------------
+.\debug_android.ps1
+
+Le script vous guidera étape par étape.
+
+
+ÉTAPE 4 : Pour l'erreur d'INITIALISATION
+-----------------------------------------
+# Nettoyer les logs
+adb logcat -c
+
+# Filtrer les logs d'initialisation
+adb logcat | Select-String -Pattern "AUTH|INIT|FarmContext|AuthContext|DirectSupabaseService|getAuthToken|getSession|timeout" -CaseSensitive:$false
+
+
+ÉTAPE 5 : Logs ERREURS uniquement
+----------------------------------
+adb logcat -c
+adb logcat *:E *:F
+
+
+ÉTAPE 6 : Logs COMPLETS (tout)
+-------------------------------
+adb logcat -c
+adb logcat
+
+
+=== NOTES ===
+- Gardez le téléphone déverrouillé
+- Ne débranchez pas le câble USB
+- Appuyez sur Ctrl+C pour arrêter
+- Copiez les logs qui apparaissent au moment de l'erreur

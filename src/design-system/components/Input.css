@@ -1,0 +1,143 @@
+/* Styles CSS pour supprimer complètement les bordures natives des inputs sur web */
+
+/* Supprimer tous les styles par défaut des inputs - TRÈS AGRESSIF */
+input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+textarea {
+  /* Supprimer complètement les bordures */
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+  
+  /* Supprimer les apparences par défaut */
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  
+  /* Laisser React Native gérer le fond - NE PAS forcer transparent */
+  background-image: none !important;
+  
+  /* Supprimer les marges/padding par défaut */
+  margin: 0 !important;
+  
+  /* Supprimer les effets de focus par défaut */
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-focus-ring-color: transparent !important;
+  
+  /* Supprimer les transitions par défaut */
+  transition: none !important;
+  
+  /* Supprimer les ombres par défaut */
+  -webkit-box-shadow: none !important;
+  -moz-box-shadow: none !important;
+}
+
+/* Spécifiquement pour les inputs de recherche */
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration {
+  display: none !important;
+}
+
+/* Pour les navigateurs qui ajoutent des icônes par défaut */
+input::-ms-clear,
+input::-ms-reveal {
+  display: none !important;
+}
+
+/* Classe spécifique pour nos inputs personnalisés */
+.thomas-input {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  /* ✅ Laisser React Native gérer le background */
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  flex: 1 !important;
+  min-width: 0 !important; /* Permet au flex de fonctionner correctement */
+  max-width: 100% !important;
+  box-sizing: border-box !important; /* Inclure padding dans la largeur */
+}
+
+/* Spécifique pour les textareas multilignes */
+.thomas-input[multiline="true"],
+textarea.thomas-input {
+  resize: none !important; /* Empêcher le redimensionnement manuel */
+  overflow-wrap: break-word !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+  min-width: 0 !important; /* Permet au flex de fonctionner correctement */
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+  font-size: 16px !important;
+  line-height: 1.25 !important; /* 20px pour une font de 16px */
+  vertical-align: top !important;
+}
+
+/* Styles spécifiques pour tous les textareas */
+textarea {
+  resize: none !important;
+  overflow: auto !important;
+  vertical-align: top !important;
+  font-family: inherit !important;
+  font-size: 16px !important;
+  line-height: 1.25 !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Container spécifique pour les inputs multilignes */
+.thomas-input-container-multiline {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.thomas-input-container-multiline textarea {
+  flex: 1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.thomas-input:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* Supprimer l'auto-zoom sur iOS */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+textarea {
+  font-size: 16px !important; /* Empêche le zoom sur iOS */
+}

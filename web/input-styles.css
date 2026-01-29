@@ -1,0 +1,104 @@
+/* 🔥 CSS GLOBAL POUR SUPPRIMER LES DOUBLES BORDURES */
+/* Ce fichier DOIT être importé dans index.html ou App.tsx */
+
+/* ============================================
+   RÈGLE FONDAMENTALE :
+   - Le CONTAINER (View) a la bordure
+   - L'INPUT (TextInput) n'a AUCUNE bordure
+   ============================================ */
+
+/* SUPPRESSION TOTALE des styles natifs sur TOUS les inputs */
+input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+input[type="search"],
+input[type="date"],
+textarea,
+select {
+  /* 🔥 SUPPRESSION COMPLÈTE DES BORDURES */
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  border-radius: 0 !important;
+  
+  /* 🔥 SUPPRESSION DE L'OUTLINE */
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-style: none !important;
+  outline-color: transparent !important;
+  outline-offset: 0 !important;
+  
+  /* 🔥 SUPPRESSION DES OMBRES */
+  box-shadow: none !important;
+  -webkit-box-shadow: none !important;
+  -moz-box-shadow: none !important;
+  
+  /* 🔥 SUPPRESSION DES APPARENCES NATIVES */
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  
+  /* 🔥 FOND TRANSPARENT - le container gère le fond */
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  
+  /* Suppression des marges */
+  margin: 0 !important;
+  
+  /* Suppression des effets de focus natifs */
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-focus-ring-color: transparent !important;
+  
+  /* Font cohérente */
+  font-family: inherit !important;
+  font-size: 16px !important;
+}
+
+/* FOCUS - Aucun style natif */
+input:focus,
+textarea:focus,
+select:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  background: transparent !important;
+}
+
+/* TEXTAREA spécifique */
+textarea {
+  resize: none !important;
+  overflow: auto !important;
+}
+
+/* Suppression des icônes de navigateur */
+input::-webkit-search-decoration,
+input::-webkit-search-cancel-button,
+input::-webkit-search-results-button,
+input::-webkit-search-results-decoration,
+input::-ms-clear,
+input::-ms-reveal {
+  display: none !important;
+}
+
+/* React Native Web génère des divs avec data-focusable */
+div[data-focusable="true"] input,
+div[data-focusable="true"] textarea {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+div[data-focusable="true"] input:focus,
+div[data-focusable="true"] textarea:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}

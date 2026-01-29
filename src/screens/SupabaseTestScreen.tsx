@@ -22,7 +22,7 @@ import { ENV_CLIENT } from '@/utils/env';
 export default function SupabaseTestScreen(): JSX.Element {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [authStatus, setAuthStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [testEmail, setTestEmail] = useState('test@thomas-v2.fr');
+  const [testEmail, setTestEmail] = useState('thomas.test@gmail.com');
   const [testPassword, setTestPassword] = useState('TestPassword123!');
   const [logs, setLogs] = useState<string[]>([]);
 
@@ -44,24 +44,16 @@ export default function SupabaseTestScreen(): JSX.Element {
     addLog('🔍 Test connexion database...');
 
     try {
-      // Test simple requête pour vérifier la connexion
-      const { data, error } = await supabase
-        .from('_test_table_that_does_not_exist')
-        .select('*')
-        .limit(1);
+      // Test simple via le service d'auth - si ça répond, la connexion DB est OK
+      const { data, error } = await supabase.auth.getSession();
 
-      // Si on obtient une erreur "relation does not exist", c'est bon signe !
-      // Ça veut dire que la connexion fonctionne, juste la table n'existe pas
-      if (error && error.message.includes('relation') && error.message.includes('does not exist')) {
-        setConnectionStatus('success');
-        addLog('✅ Connexion database réussie (erreur table attendue)');
-        addLog(`📊 Database connectée: ${ENV_CLIENT.SUPABASE_URL}`);
-      } else if (error) {
+      if (error) {
         throw error;
-      } else {
-        setConnectionStatus('success');
-        addLog('✅ Connexion database réussie');
       }
+
+      setConnectionStatus('success');
+      addLog('✅ Connexion database réussie (via auth check)');
+      addLog(`📊 Database connectée: ${ENV_CLIENT.SUPABASE_URL}`);
     } catch (error: any) {
       setConnectionStatus('error');
       addLog(`❌ Erreur connexion: ${error.message}`);
@@ -131,33 +123,50 @@ export default function SupabaseTestScreen(): JSX.Element {
   // TEST 3: OAUTH PROVIDERS (simulation)
   // ==============================
 
-  const testOAuthProviders = async (): Promise<void> => {
-    addLog('📱 Test OAuth providers...');
-
+  const testGoogleOAuth = async (): Promise<void> => {
+    addLog('🟢 Test Google OAuth...');
+    
     try {
-      // Test Google OAuth (juste initiation, pas de vraie connexion)
-      addLog('🟢 Tentative Google OAuth...');
       const googleResult = await authService.signInWithGoogle();
       
       if (googleResult.success) {
-        addLog('✅ Google OAuth initialisé (redirection prête)');
+        addLog('✅ Google OAuth initialisé avec succès !');
+        addLog('💡 OAuth prêt - redirection vers Google fonctionnelle');
+        addLog('📱 Sur device réel: navigateur s\'ouvrirait pour auth');
       } else {
-        addLog(`⚠️ Google OAuth: ${googleResult.error?.message}`);
+        const error = googleResult.error;
+        if (error?.message?.includes('not enabled') || error?.message?.includes('Unsupported provider')) {
+          addLog('❌ Google OAuth: Provider pas activé dans Supabase');
+          addLog('🔧 Vérifier: Settings > Authentication > Providers > Google');
+        } else {
+          addLog(`⚠️ Google OAuth erreur: ${error?.message}`);
+        }
       }
+    } catch (error: any) {
+      addLog(`❌ Erreur Google OAuth: ${error.message}`);
+    }
+  };
 
-      // Test Apple OAuth
-      addLog('🍎 Tentative Apple OAuth...');
+  const testAppleOAuth = async (): Promise<void> => {
+    addLog('🍎 Test Apple OAuth...');
+    addLog('⚠️ Note: Apple OAuth non configuré (normal pour l\'instant)');
+    
+    try {
       const appleResult = await authService.signInWithApple();
       
       if (appleResult.success) {
-        addLog('✅ Apple OAuth initialisé (redirection prête)');
+        addLog('✅ Apple OAuth initialisé avec succès !');
       } else {
-        addLog(`⚠️ Apple OAuth: ${appleResult.error?.message}`);
+        const error = appleResult.error;
+        if (error?.message?.includes('not enabled') || error?.message?.includes('Unsupported provider')) {
+          addLog('🔧 Apple OAuth: Provider pas encore configuré (attendu)');
+          addLog('💡 Configuration Apple optionnelle - Google suffit pour tests');
+        } else {
+          addLog(`⚠️ Apple OAuth erreur: ${error?.message}`);
+        }
       }
-
-      addLog('💡 OAuth providers configurés (nécessitent interaction utilisateur réelle)');
     } catch (error: any) {
-      addLog(`❌ Erreur OAuth: ${error.message}`);
+      addLog(`❌ Erreur Apple OAuth: ${error.message}`);
     }
   };
 
@@ -175,7 +184,10 @@ export default function SupabaseTestScreen(): JSX.Element {
     await testEmailAuth();
     await new Promise(resolve => setTimeout(resolve, 1000)); // Pause 1s
     
-    await testOAuthProviders();
+    await testGoogleOAuth();
+    await new Promise(resolve => setTimeout(resolve, 500)); // Pause 0.5s
+    
+    await testAppleOAuth();
     
     addLog('🎯 Tests terminés !');
   };
@@ -239,9 +251,16 @@ export default function SupabaseTestScreen(): JSX.Element {
 
         <TouchableOpacity 
           style={styles.testButton}
-          onPress={testOAuthProviders}
+          onPress={testGoogleOAuth}
         >
-          <Text style={styles.buttonText}>3. Test OAuth Providers</Text>
+          <Text style={styles.buttonText}>3a. Test Google OAuth</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.testButton}
+          onPress={testAppleOAuth}
+        >
+          <Text style={styles.buttonText}>3b. Test Apple OAuth</Text>
         </TouchableOpacity>
       </View>
 

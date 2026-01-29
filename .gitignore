@@ -70,3 +70,5 @@ ios/**/*.perspectivev3
 # Temporary files
 tmp/
 temp/
+
+docs/

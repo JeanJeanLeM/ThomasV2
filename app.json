@@ -2,35 +2,57 @@
   "expo": {
     "name": "Thomas V2 - Assistant Agricole",
     "slug": "thomas-v2-mobile",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "scheme": "thomasv2",
+    "icon": "./assets/ThomasSmall.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/LogoFull.png",
       "resizeMode": "contain",
       "backgroundColor": "#22c55e"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "fr.thomas-assistant.mobile"
+      "bundleIdentifier": "fr.thomas-assistant.mobile",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application a besoin d'accéder à la caméra pour prendre des photos.",
+        "NSMicrophoneUsageDescription": "Cette application a besoin d'accéder au microphone pour enregistrer des messages vocaux.",
+        "NSPhotoLibraryUsageDescription": "Cette application a besoin d'accéder à la galerie photo pour sélectionner des images.",
+        "NSLocationWhenInUseUsageDescription": "Cette application a besoin d'accéder à votre localisation pour partager votre position dans le chat.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/LogoWhiteColorfull.png",
         "backgroundColor": "#22c55e"
       },
-      "package": "fr.thomas_assistant.mobile"
+      "package": "marketgardener.thomas.v2",
+      "versionCode": 39,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/LogoWhiteColorfull.png"
     },
     "extra": {
       "eas": {
-        "projectId": "thomas-v2-mobile"
+        "projectId": "adbc05c2-38c2-484e-8f5d-90eda98c1ed1"
       }
     },
-    "plugins": []
+    "owner": "jeanjeanlem"
   }
 }

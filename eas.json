@@ -1,0 +1,53 @@
+{
+  "cli": {
+    "version": ">= 7.8.6",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://kvwzbofifqqytyfertkh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_-nFv-R3kFUol-13goU3t2A_vIJreKUX",
+        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-4o-mini"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://kvwzbofifqqytyfertkh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_-nFv-R3kFUol-13goU3t2A_vIJreKUX",
+        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-4o-mini"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://kvwzbofifqqytyfertkh.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_-nFv-R3kFUol-13goU3t2A_vIJreKUX",
+        "EXPO_PUBLIC_OPENAI_MODEL": "gpt-4o-mini"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "internal"
+      },
+      "ios": {
+        "appleId": "your-apple-id@domain.com",
+        "ascAppId": "1234567890",
+        "appleTeamId": "ABCDEFGHIJ"
+      }
+    }
+  }
+}
+

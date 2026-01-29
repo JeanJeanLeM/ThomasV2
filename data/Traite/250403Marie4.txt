@@ -1,0 +1,1 @@
+Taille d'arbre pendant une heure.

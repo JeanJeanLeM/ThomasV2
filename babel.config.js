@@ -3,6 +3,7 @@ module.exports = function (api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
+      'nativewind/babel',
       [
         'module-resolver',
         {
@@ -19,6 +20,7 @@ module.exports = function (api) {
           },
         },
       ],
+      // 'react-native-reanimated/plugin', // Temporairement désactivé
     ],
   };
 };
