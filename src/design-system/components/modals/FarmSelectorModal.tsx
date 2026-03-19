@@ -229,9 +229,8 @@ export const FarmSelectorModal: React.FC<FarmSelectorModalProps> = ({
                       flexDirection: 'row', 
                       alignItems: 'center',
                       flexWrap: 'wrap',
-                      gap: spacing.sm 
                     }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: spacing.sm }}>
                         <Ionicons 
                           name="business-outline" 
                           size={14} 

@@ -75,7 +75,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
         </Text>
       )}
 
-      {/* Input Container - SEUL ÉLÉMENT AVEC BORDURE */}
+      {/* Input Container - collapsable={false} sur Android evite perte InputConnection (Session id mismatch) */}
       <View 
         style={[
           styles.inputContainer,
@@ -83,6 +83,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
           isFocused && styles.inputContainerFocused,
           disabled && styles.inputContainerDisabled,
         ]}
+        {...(Platform.OS === 'android' ? { collapsable: false } : {})}
       >
         {/* Left Icon */}
         {leftIcon && (
@@ -105,6 +106,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
           editable={!disabled}
           secureTextEntry={isSecure}
           placeholderTextColor={colors.gray[400]}
+          {...(Platform.OS === 'android' ? { importantForAutofill: 'no' as const } : {})}
           {...props}
         />
 

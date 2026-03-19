@@ -3,15 +3,13 @@ import { View, ScrollView, TouchableOpacity, StyleSheet, Text, Alert, Platform }
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
 import { 
-  UserIcon, 
-  BuildingOfficeIcon,
+  UserIcon,
   UsersIcon,
   ArrowRightOnRectangleIcon,
   ChevronRightIcon,
   CogIcon,
   QuestionMarkCircleIcon,
   BellIcon,
-  EnvelopeIcon,
   DocumentTextIcon,
   ArrowDownTrayIcon,
   LanguageIcon,
@@ -28,21 +26,37 @@ import { userInvitationService } from '../services/UserInvitationService';
 import { showAlert } from '../utils/webAlert';
 
 interface ProfileScreenProps {
+  onProfileAndFarmPress?: () => void;
   onSettingsPress?: () => void;
+  onAgentSettingsPress?: () => void;
   onFarmMembersPress?: () => void;
   onMyInvitationsPress?: () => void;
   onFarmEditPress?: () => void;
   onAideEtSupportPress?: () => void;
   onAProposPress?: () => void;
   onDocumentsPress?: () => void;
+  onCommercePress?: () => void;
+  onCommunityPress?: () => void;
+  onNotificationsPress?: () => void;
+  /** Ouverture du modal d’édition profil depuis la navigation (ex. écran Profil et ferme) */
+  openEditProfileFromNav?: boolean;
+  onClearOpenEditProfile?: () => void;
 }
 
-export default function ProfileScreen({ onSettingsPress, onFarmMembersPress, onMyInvitationsPress, onFarmEditPress, onAideEtSupportPress, onAProposPress, onDocumentsPress }: ProfileScreenProps) {
+export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, onAgentSettingsPress, onFarmMembersPress, onMyInvitationsPress, onFarmEditPress, onAideEtSupportPress, onAProposPress, onDocumentsPress, onCommercePress, onCommunityPress, onNotificationsPress, openEditProfileFromNav, onClearOpenEditProfile }: ProfileScreenProps) {
   const { user: authUser, signOut } = useAuth();
   const { activeFarm, updateFarm, deleteFarm, createFarm, farmData } = useFarm();
   const [isEditProfileVisible, setIsEditProfileVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [invitationCount, setInvitationCount] = useState(0);
+
+  // Ouvrir le modal d’édition profil quand on arrive depuis Profil et ferme
+  useEffect(() => {
+    if (openEditProfileFromNav) {
+      setIsEditProfileVisible(true);
+      onClearOpenEditProfile?.();
+    }
+  }, [openEditProfileFromNav, onClearOpenEditProfile]);
   
   // Farm selector hook
   
@@ -273,41 +287,22 @@ export default function ProfileScreen({ onSettingsPress, onFarmMembersPress, onM
     );
   };
 
-  const handleEditFarm = () => {
-    // Naviguer vers l'écran de modification de ferme
-    onFarmEditPress?.();
-  };
-
   const handleDocuments = () => {
     onDocumentsPress?.();
   };
 
-
   const menuItems = [
     {
       icon: <UserIcon color={colors.primary[600]} size={24} />,
-      title: 'Modifier le profil',
-      subtitle: 'Nom, email, photo de profil',
-      onPress: handleOpenEditProfile
+      title: 'Profil et ferme',
+      subtitle: 'Modifier le profil, la ferme, les membres et invitations',
+      onPress: onProfileAndFarmPress || (() => console.log('Profil et ferme'))
     },
     {
-      icon: <BuildingOfficeIcon color={colors.semantic.success} size={24} />,
-      title: 'Modifier les informations de la ferme',
-      subtitle: activeFarm ? `Ferme : ${activeFarm.farm_name}` : 'Créer ou sélectionner une ferme',
-      onPress: handleEditFarm
-    },
-    {
-      icon: <UsersIcon color={colors.semantic.success} size={24} />,
-      title: 'Gérer les membres',
-      subtitle: 'Inviter et gérer les membres de vos fermes',
-      onPress: onFarmMembersPress || (() => console.log('Gérer membres'))
-    },
-    {
-      icon: <EnvelopeIcon color={colors.secondary.blue} size={24} />,
-      title: 'Mes invitations',
-      subtitle: 'Voir et accepter les invitations reçues',
-      onPress: onMyInvitationsPress || (() => console.log('Mes invitations')),
-      badge: invitationCount > 0 ? invitationCount : undefined
+      icon: <CogIcon color={colors.primary[600]} size={24} />,
+      title: '🤖 Assistant IA',
+      subtitle: 'Configurer la méthode d\'analyse',
+      onPress: onAgentSettingsPress || (() => console.log('Assistant IA'))
     },
     {
       icon: <CogIcon color={colors.gray[600]} size={24} />,
@@ -322,6 +317,18 @@ export default function ProfileScreen({ onSettingsPress, onFarmMembersPress, onM
       onPress: handleDocuments
     },
     {
+      icon: <DocumentTextIcon color={colors.semantic.success} size={24} />,
+      title: 'Ventes & Achats',
+      subtitle: 'Factures, clients, fournisseurs et produits',
+      onPress: onCommercePress || (() => console.log('Commerce'))
+    },
+    {
+      icon: <UsersIcon color={colors.primary[600]} size={24} />,
+      title: 'Communaute',
+      subtitle: 'Rejoindre ou gerer une communaute',
+      onPress: onCommunityPress || (() => console.log('Communaute'))
+    },
+    {
       icon: <ArrowDownTrayIcon color={colors.secondary.orange} size={24} />,
       title: 'Exporter les données',
       subtitle: 'Télécharger vos données au format CSV/PDF',
@@ -331,7 +338,7 @@ export default function ProfileScreen({ onSettingsPress, onFarmMembersPress, onM
       icon: <BellIcon color={colors.semantic.warning} size={24} />,
       title: 'Notifications',
       subtitle: 'Rappels et alertes',
-      onPress: () => console.log('Notifications')
+      onPress: () => onNotificationsPress?.()
     },
     {
       icon: <LanguageIcon color={colors.secondary.purple} size={24} />,

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import AuthScreens from './src/screens/AuthScreens';
 import LoadingScreen from './src/screens/LoadingScreen';
 import FarmSelectionScreen from './src/screens/FarmSelectionScreen';
+import { ForceUpdateScreen } from './src/screens/ForceUpdateScreen';
 import NewSimpleNavigator from './src/navigation/NewSimpleNavigator';
 import InitializationDebug from './src/components/debug/InitializationDebug';
 import DatabaseConnectivityTest from './src/components/debug/DatabaseConnectivityTest';
@@ -11,7 +13,9 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { FarmProvider, useFarm } from './src/contexts/FarmContext';
 import { NavigationProvider } from './src/contexts/NavigationContext';
 import { useWebInputStyles } from './src/design-system/hooks/useWebInputStyles';
+import { useMandatoryUpdate } from './src/hooks/useMandatoryUpdate';
 import { UnifiedInitService, type UnifiedInitResult } from './src/services/UnifiedInitService';
+import { PushNotificationService } from './src/services/PushNotificationService';
 import { colors } from './src/design-system/colors';
 
 /**
@@ -21,9 +25,35 @@ function AppMainContent(): JSX.Element {
   const { error, needsSetup, refreshFarms } = useFarm();
   const [showDebug, setShowDebug] = useState(false);
   const [showDbTest, setShowDbTest] = useState(false);
-  
+  const notificationListener = useRef<Notifications.EventSubscription>();
+  const responseListener = useRef<Notifications.EventSubscription>();
+
   // Appliquer les styles web pour corriger les inputs
   useWebInputStyles();
+
+  // Enregistrement push notifications au démarrage (iOS/Android uniquement)
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    PushNotificationService.registerAndSave().catch(err =>
+      console.warn('⚠️ [APP] Push registration failed:', err)
+    );
+
+    // Listener: notification reçue pendant que l'app est ouverte
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('🔔 [APP] Notification reçue:', notification.request.content.title);
+    });
+
+    // Listener: l'utilisateur a tapé sur une notification
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('👆 [APP] Notification tapée:', response.notification.request.content.title);
+    });
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, []);
 
   // Plus de mode mock - on veut la vraie connectivité !
   const isDev = process.env.NODE_ENV === 'development';
@@ -324,9 +354,20 @@ function AppContent(): JSX.Element {
 
 /**
  * Composant racine de l'application
- * Architecture simple : SafeAreaProvider → AuthProvider → AppContent
+ * Vérification OTA : si une mise à jour est en attente (utilisateur en ligne), écran bloquant.
+ * Sinon : SafeAreaProvider → AuthProvider → AppContent
  */
 export default function App(): JSX.Element {
+  const { updatePending, reloadNow } = useMandatoryUpdate();
+
+  if (updatePending) {
+    return (
+      <SafeAreaProvider>
+        <ForceUpdateScreen onReload={reloadNow} />
+      </SafeAreaProvider>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

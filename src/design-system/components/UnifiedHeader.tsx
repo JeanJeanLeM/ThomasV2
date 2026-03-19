@@ -18,6 +18,11 @@ export interface UnifiedHeaderProps {
   onFarmSelector?: () => void;
   showBackButton?: boolean;
   style?: ViewStyle;
+  agentMethod?: 'simple' | 'pipeline' | null;
+  /** Slot de droite personnalisé (ex: switch aide vocale en chat) */
+  rightSlot?: React.ReactNode;
+  /** Largeur réservée aux zones latérales pour préserver le centrage du titre */
+  sideContentWidth?: number;
 }
 
 export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
@@ -26,6 +31,9 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
   onFarmSelector,
   showBackButton = true,
   style,
+  agentMethod = null,
+  rightSlot,
+  sideContentWidth = 48,
 }) => {
   const { width } = Dimensions.get('window');
   const insets = useSafeAreaInsets();
@@ -36,7 +44,7 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
   const headerContentHeight = 56;
   
   // Largeur des zones latérales (boutons)
-  const sideWidth = 48;
+  const sideWidth = sideContentWidth;
   
   // Header container styles - responsive et sans contraintes
   const getContainerStyle = (): ViewStyle => ({
@@ -149,23 +157,52 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
           >
             {title}
           </Text>
+          
+          {/* Indicateur méthode agent */}
+          {agentMethod ? (
+            <View style={{
+              marginTop: 2,
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+              backgroundColor: agentMethod === 'pipeline' 
+                ? colors.primary?.[50] || '#F0FDF4'
+                : colors.gray?.[100] || '#F3F4F6',
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: agentMethod === 'pipeline'
+                ? colors.primary?.[200] || '#BBF7D0'
+                : colors.gray?.[200] || '#E5E7EB',
+            }}>
+              <Text style={{
+                fontSize: 10,
+                fontWeight: '600',
+                color: agentMethod === 'pipeline'
+                  ? colors.primary?.[700] || '#15803D'
+                  : colors.gray?.[600] || '#4B5563',
+              }}>
+                {agentMethod === 'pipeline' ? '⚡ Pipeline' : '🚀 Simple'}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
-        {/* Right side - Farm selector avec positionnement absolu */}
+        {/* Right side - Slot personnalisé ou Farm selector */}
         <View style={getSideButtonContainerStyle(false)}>
-          {onFarmSelector ? (
-            <TouchableOpacity
-              style={getFarmSelectorButtonStyle()}
-              onPress={onFarmSelector}
-              activeOpacity={0.7}
-            >
-              <Ionicons 
-                name="business-outline" 
-                color={colors.primary?.[600] || '#16A34A'} 
-                size={20} 
-              />
-            </TouchableOpacity>
-          ) : null}
+          {rightSlot ? (
+            rightSlot
+          ) : onFarmSelector ? (
+              <TouchableOpacity
+                style={getFarmSelectorButtonStyle()}
+                onPress={onFarmSelector}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name="business-outline" 
+                  color={colors.primary?.[600] || '#16A34A'} 
+                  size={20} 
+                />
+              </TouchableOpacity>
+            ) : null}
         </View>
       </View>
     </View>

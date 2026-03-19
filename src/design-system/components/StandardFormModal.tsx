@@ -1,5 +1,5 @@
-import React, { ReactNode } from 'react';
-import { View, ScrollView, StyleSheet } from 'react-native';
+import React, { ReactNode, useMemo } from 'react';
+import { View, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Modal } from './Modal';
 import { Text } from './Text';
 import { colors } from '../colors';
@@ -35,6 +35,8 @@ export interface StandardFormModalProps {
  * - Organisation en sections
  * - Bannière informative optionnelle
  */
+const SCROLL_STYLE = { flex: 1 };
+
 export const StandardFormModal: React.FC<StandardFormModalProps> = ({
   visible,
   onClose,
@@ -44,21 +46,25 @@ export const StandardFormModal: React.FC<StandardFormModalProps> = ({
   secondaryAction,
   infoBanner,
 }) => {
-  const getBannerColor = () => {
-    switch (infoBanner?.type) {
-      case 'warning': return colors.semantic.warning;
-      case 'success': return colors.semantic.success;
-      default: return colors.primary[600];
-    }
-  };
+  const bannerStyle = useMemo(() => {
+    if (!infoBanner) return null;
+    const bg = infoBanner.type === 'warning' ? colors.semantic.warning + '15'
+      : infoBanner.type === 'success' ? colors.semantic.success + '15'
+      : colors.primary[50];
+    const border = infoBanner.type === 'warning' ? colors.semantic.warning
+      : infoBanner.type === 'success' ? colors.semantic.success
+      : colors.primary[600];
+    return { backgroundColor: bg, borderLeftColor: border };
+  }, [infoBanner?.type, infoBanner?.text]);
 
-  const getBannerBgColor = () => {
-    switch (infoBanner?.type) {
-      case 'warning': return colors.semantic.warning + '15';
-      case 'success': return colors.semantic.success + '15';
-      default: return colors.primary[50];
-    }
-  };
+  const bannerTextStyle = useMemo(() => {
+    const color = !infoBanner
+      ? colors.primary[600]
+      : infoBanner.type === 'warning' ? colors.semantic.warning
+      : infoBanner.type === 'success' ? colors.semantic.success
+      : colors.primary[600];
+    return { color };
+  }, [infoBanner?.type]);
 
   return (
     <Modal
@@ -70,22 +76,17 @@ export const StandardFormModal: React.FC<StandardFormModalProps> = ({
       secondaryAction={secondaryAction}
     >
       <ScrollView 
-        style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false}
+        style={SCROLL_STYLE}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled={true}
+        {...(Platform.OS === 'android' ? { collapsable: false } : {})}
       >
         {/* Bannière informative */}
-        {infoBanner && (
-          <View style={[
-            styles.banner,
-            { 
-              backgroundColor: getBannerBgColor(),
-              borderLeftColor: getBannerColor(),
-            }
-          ]}>
-            <Text style={[styles.bannerText, { color: getBannerColor() }]}>
+        {infoBanner && bannerStyle && (
+          <View style={[styles.banner, bannerStyle]}>
+            <Text style={[styles.bannerText, bannerTextStyle]}>
               {infoBanner.text}
             </Text>
           </View>
@@ -180,17 +181,25 @@ const styles = StyleSheet.create({
   },
   
   section: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: 12,
+    padding: spacing.md,
     gap: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: colors.text.primary,
   },
   
   sectionDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.text.secondary,
     marginBottom: spacing.xs,
   },

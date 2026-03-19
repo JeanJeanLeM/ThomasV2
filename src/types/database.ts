@@ -297,6 +297,7 @@ export interface Database {
           quantity_nature: string | null;
           quantity_type: 'engrais' | 'produit_phyto' | 'recolte' | 'plantation' | 'vente' | 'autre' | null;
           phytosanitary_product_amm: string | null;
+          recurring_template_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -320,6 +321,7 @@ export interface Database {
           quantity_nature?: string | null;
           quantity_type?: 'engrais' | 'produit_phyto' | 'recolte' | 'plantation' | 'vente' | 'autre' | null;
           phytosanitary_product_amm?: string | null;
+          recurring_template_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -343,6 +345,7 @@ export interface Database {
           material_ids?: number[];
           notes?: string | null;
           number_of_people?: number;
+          recurring_template_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };

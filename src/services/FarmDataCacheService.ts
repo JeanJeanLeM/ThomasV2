@@ -389,7 +389,9 @@ export class FarmDataCacheService {
   }
 
   /**
-   * Invalide partiellement le cache (ex: seulement les tâches)
+   * Invalide partiellement le cache (ex: seulement les parcelles).
+   * En mettant cachedAt à 0, le prochain loadFarmData considère le cache expiré
+   * et recharge depuis la DB pour les types concernés.
    */
   static async invalidatePartialCache(farmId: number, dataTypes: ('plots' | 'materials' | 'cultures' | 'tasks')[]): Promise<void> {
     try {
@@ -398,10 +400,10 @@ export class FarmDataCacheService {
 
       console.log('🔄 [FARM-CACHE] Invalidation partielle:', dataTypes);
 
-      // Marquer les données spécifiées comme expirées
+      // Forcer l'expiration du cache pour que le prochain loadFarmData recharge depuis la DB
       const updatedData: FarmDataCache = {
         ...cachedData,
-        cachedAt: dataTypes.includes('tasks') ? 0 : cachedData.cachedAt // Forcer expiration
+        cachedAt: 0,
       };
 
       await this.saveFarmDataToCache(updatedData);

@@ -1,91 +1,56 @@
-import React from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Linking } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Linking,
+} from 'react-native';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
-import { 
+import {
   QuestionMarkCircleIcon,
   ChatBubbleLeftRightIcon,
   PhoneIcon,
   EnvelopeIcon,
-  BookOpenIcon,
-  VideoCameraIcon,
   ExclamationTriangleIcon,
-  ArrowTopRightOnSquareIcon
+  ChevronRightIcon,
+  ChevronDownIcon,
 } from '../design-system/icons';
 import { Text } from '../design-system/components';
+import { FAQ_CHAPTERS, type FaqChapter } from '../constants/onboarding';
 
-export default function AideEtSupportScreen() {
-  const handleContactPress = (type: 'email' | 'phone') => {
-    if (type === 'email') {
-      Linking.openURL('mailto:support@thomas-app.com');
-    } else if (type === 'phone') {
-      Linking.openURL('tel:+33123456789');
-    }
+interface AideEtSupportScreenProps {
+  onStartTutorial?: () => void;
+}
+
+export default function AideEtSupportScreen({ onStartTutorial }: AideEtSupportScreenProps) {
+  const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
+
+  const toggleChapter = (id: string) => {
+    setExpandedChapters((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
-  const handleLinkPress = (url: string) => {
-    Linking.openURL(url);
+  const toggleQuestion = (id: string) => {
+    setExpandedQuestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
-
-  const supportOptions = [
-    {
-      id: 'faq',
-      title: 'Questions fréquentes',
-      subtitle: 'En cours de production',
-      icon: <QuestionMarkCircleIcon color={colors.gray[400]} size={24} />,
-      onPress: () => {},
-      hasExternalLink: false,
-      disabled: true
-    },
-    {
-      id: 'tutorials',
-      title: 'Tutoriels vidéo',
-      subtitle: 'En cours de production',
-      icon: <VideoCameraIcon color={colors.gray[400]} size={24} />,
-      onPress: () => {},
-      hasExternalLink: false,
-      disabled: true
-    },
-    {
-      id: 'documentation',
-      title: 'Documentation',
-      subtitle: 'En cours de production',
-      icon: <BookOpenIcon color={colors.gray[400]} size={24} />,
-      onPress: () => {},
-      hasExternalLink: false,
-      disabled: true
-    },
-    {
-      id: 'chat',
-      title: 'Chat en direct',
-      subtitle: 'En cours de production',
-      icon: <ChatBubbleLeftRightIcon color={colors.gray[400]} size={24} />,
-      onPress: () => {},
-      hasExternalLink: false,
-      disabled: true
-    }
-  ];
-
-  const contactMethods = [
-    {
-      id: 'email',
-      title: 'Email',
-      subtitle: 'En cours de production',
-      description: 'Bientôt disponible',
-      icon: <EnvelopeIcon color={colors.gray[400]} size={24} />,
-      onPress: () => {},
-      disabled: true
-    },
-    {
-      id: 'phone',
-      title: 'Téléphone',
-      subtitle: 'En cours de production',
-      description: 'Bientôt disponible',
-      icon: <PhoneIcon color={colors.gray[400]} size={24} />,
-      onPress: () => {},
-      disabled: true
-    }
-  ];
 
   return (
     <View style={styles.container}>
@@ -104,33 +69,100 @@ export default function AideEtSupportScreen() {
             </Text>
           </View>
 
-          {/* Options d'aide */}
+          {/* Bouton tutoriel */}
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.tutorialCard}
+              onPress={onStartTutorial}
+              activeOpacity={0.8}
+            >
+              <View style={styles.tutorialIconContainer}>
+                <Text style={styles.tutorialEmoji}>🎓</Text>
+              </View>
+              <View style={styles.tutorialContent}>
+                <Text variant="h4" style={styles.tutorialTitle}>
+                  Tutoriel d'utilisation
+                </Text>
+                <Text variant="caption" style={styles.tutorialSubtitle}>
+                  Relancer le guide pas à pas (3 étapes)
+                </Text>
+              </View>
+              <ChevronRightIcon color={colors.primary[600]} size={20} />
+            </TouchableOpacity>
+          </View>
+
+          {/* FAQ chapitrée */}
           <View style={styles.section}>
             <Text variant="h3" style={styles.sectionTitle}>
-              Centre d'aide
+              Questions fréquentes
             </Text>
-            <View style={styles.optionsContainer}>
-              {supportOptions.map((option) => (
-                <View
-                  key={option.id}
-                  style={[styles.optionCard, option.disabled && styles.disabledCard]}
-                >
-                  <View style={styles.optionIcon}>
-                    {option.icon}
+            <View style={styles.chaptersContainer}>
+              {FAQ_CHAPTERS.map((chapter: FaqChapter) => {
+                const isChapterOpen = expandedChapters.has(chapter.id);
+                return (
+                  <View key={chapter.id} style={styles.chapterCard}>
+                    {/* En-tête du chapitre */}
+                    <TouchableOpacity
+                      style={styles.chapterHeader}
+                      onPress={() => toggleChapter(chapter.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.chapterHeaderLeft}>
+                        <Text style={styles.chapterEmoji}>{chapter.icon}</Text>
+                        <Text variant="h4" style={styles.chapterTitle}>
+                          {chapter.title}
+                        </Text>
+                      </View>
+                      {isChapterOpen ? (
+                        <ChevronDownIcon color={colors.primary[600]} size={20} />
+                      ) : (
+                        <ChevronRightIcon color={colors.gray[400]} size={20} />
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Sous-points du chapitre */}
+                    {isChapterOpen && (
+                      <View style={styles.subPointsList}>
+                        {chapter.subPoints.map((point, index) => {
+                          const isQuestionOpen = expandedQuestions.has(point.id);
+                          return (
+                            <View
+                              key={point.id}
+                              style={[
+                                styles.questionItem,
+                                index < chapter.subPoints.length - 1 && styles.questionItemBorder,
+                              ]}
+                            >
+                              <TouchableOpacity
+                                style={styles.questionRow}
+                                onPress={() => toggleQuestion(point.id)}
+                                activeOpacity={0.7}
+                              >
+                                <View style={styles.questionBullet} />
+                                <Text variant="body" style={styles.questionText}>
+                                  {point.question}
+                                </Text>
+                                {isQuestionOpen ? (
+                                  <ChevronDownIcon color={colors.primary[500]} size={16} />
+                                ) : (
+                                  <ChevronRightIcon color={colors.gray[400]} size={16} />
+                                )}
+                              </TouchableOpacity>
+                              {isQuestionOpen && (
+                                <View style={styles.answerContainer}>
+                                  <Text variant="body" style={styles.answerText}>
+                                    {point.answer}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
                   </View>
-                  
-                  <View style={styles.optionContent}>
-                    <View style={styles.optionHeader}>
-                      <Text variant="h4" style={[styles.optionTitle, option.disabled && styles.disabledText]}>
-                        {option.title}
-                      </Text>
-                    </View>
-                    <Text variant="caption" style={[styles.optionSubtitle, option.disabled && styles.disabledText]}>
-                      {option.subtitle}
-                    </Text>
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </View>
 
@@ -140,28 +172,47 @@ export default function AideEtSupportScreen() {
               Nous contacter
             </Text>
             <View style={styles.contactContainer}>
-              {contactMethods.map((method) => (
-                <View
-                  key={method.id}
-                  style={[styles.contactCard, method.disabled && styles.disabledCard]}
-                >
-                  <View style={styles.contactIcon}>
-                    {method.icon}
-                  </View>
-                  
-                  <View style={styles.contactContent}>
-                    <Text variant="h4" style={[styles.contactTitle, method.disabled && styles.disabledText]}>
-                      {method.title}
-                    </Text>
-                    <Text variant="body" style={[styles.contactSubtitle, method.disabled && styles.disabledText]}>
-                      {method.subtitle}
-                    </Text>
-                    <Text variant="caption" style={[styles.contactDescription, method.disabled && styles.disabledText]}>
-                      {method.description}
-                    </Text>
-                  </View>
+              <View style={[styles.contactCard, styles.disabledCard]}>
+                <View style={styles.contactIcon}>
+                  <EnvelopeIcon color={colors.gray[400]} size={24} />
                 </View>
-              ))}
+                <View style={styles.contactContent}>
+                  <Text variant="h4" style={[styles.contactTitle, styles.disabledText]}>
+                    Email
+                  </Text>
+                  <Text variant="caption" style={[styles.contactDescription, styles.disabledText]}>
+                    Bientôt disponible
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.contactCard, styles.disabledCard]}>
+                <View style={styles.contactIcon}>
+                  <PhoneIcon color={colors.gray[400]} size={24} />
+                </View>
+                <View style={styles.contactContent}>
+                  <Text variant="h4" style={[styles.contactTitle, styles.disabledText]}>
+                    Téléphone
+                  </Text>
+                  <Text variant="caption" style={[styles.contactDescription, styles.disabledText]}>
+                    Bientôt disponible
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.contactCard, styles.disabledCard]}>
+                <View style={styles.contactIcon}>
+                  <ChatBubbleLeftRightIcon color={colors.gray[400]} size={24} />
+                </View>
+                <View style={styles.contactContent}>
+                  <Text variant="h4" style={[styles.contactTitle, styles.disabledText]}>
+                    Chat en direct
+                  </Text>
+                  <Text variant="caption" style={[styles.contactDescription, styles.disabledText]}>
+                    Bientôt disponible
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
@@ -171,7 +222,6 @@ export default function AideEtSupportScreen() {
               <View style={styles.reportIcon}>
                 <ExclamationTriangleIcon color={colors.gray[400]} size={24} />
               </View>
-              
               <View style={styles.reportContent}>
                 <Text variant="h4" style={[styles.reportTitle, styles.disabledText]}>
                   Signaler un problème
@@ -241,47 +291,115 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     fontWeight: '600',
   },
-  // Options d'aide
-  optionsContainer: {
-    gap: spacing.sm,
-  },
-  optionCard: {
+  // Tutoriel card
+  tutorialCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    borderRadius: 14,
+    padding: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: colors.primary[200],
+  },
+  tutorialIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.primary[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  tutorialEmoji: {
+    fontSize: 24,
+  },
+  tutorialContent: {
+    flex: 1,
+  },
+  tutorialTitle: {
+    color: colors.primary[700],
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  tutorialSubtitle: {
+    color: colors.primary[600],
+  },
+  // Chapitres FAQ
+  chaptersContainer: {
+    gap: spacing.sm,
+  },
+  chapterCard: {
     backgroundColor: colors.background.secondary,
     borderRadius: 12,
-    padding: spacing.lg,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
-  optionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.gray[50],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  optionContent: {
-    flex: 1,
-  },
-  optionHeader: {
+  chapterHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xs,
+    padding: spacing.lg,
   },
-  optionTitle: {
+  chapterHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  chapterEmoji: {
+    fontSize: 20,
+  },
+  chapterTitle: {
+    color: colors.text.primary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  subPointsList: {
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[100],
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+  },
+  questionItem: {
+    paddingVertical: spacing.sm,
+  },
+  questionItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[100],
+  },
+  questionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  questionBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary[400],
+    flexShrink: 0,
+  },
+  questionText: {
+    flex: 1,
     color: colors.text.primary,
     fontWeight: '500',
+    fontSize: 14,
   },
-  optionSubtitle: {
+  answerContainer: {
+    marginTop: spacing.sm,
+    marginLeft: spacing.lg + spacing.sm,
+    backgroundColor: colors.gray[50],
+    borderRadius: 8,
+    padding: spacing.md,
+  },
+  answerText: {
     color: colors.text.secondary,
-    lineHeight: 18,
+    lineHeight: 20,
+    fontSize: 13,
   },
   // Contact
   contactContainer: {
@@ -313,11 +431,6 @@ const styles = StyleSheet.create({
   },
   contactTitle: {
     color: colors.text.primary,
-    fontWeight: '500',
-    marginBottom: spacing.xs,
-  },
-  contactSubtitle: {
-    color: colors.primary[600],
     fontWeight: '500',
     marginBottom: spacing.xs,
   },
@@ -367,7 +480,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  // Styles pour les éléments désactivés
+  // Éléments désactivés
   disabledCard: {
     opacity: 0.5,
     backgroundColor: colors.gray[50],

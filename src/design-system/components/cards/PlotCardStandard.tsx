@@ -107,247 +107,253 @@ export const PlotCardStandard: React.FC<PlotCardStandardProps> = ({
   const isActive = plot.is_active !== false;
   const statusColor = getStatusColor(isActive ? 'active' : 'inactive');
 
+  const cardStyle = {
+    backgroundColor: colors.background.secondary,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: statusColor,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  };
+
   return (
-    <TouchableOpacity
-      style={[
-        {
-          backgroundColor: colors.background.secondary,
-          borderRadius: 12,
-          borderLeftWidth: 4,
-          borderLeftColor: statusColor,
-          padding: spacing.lg,
-          marginBottom: spacing.md,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          elevation: 3,
-        },
-        style,
-      ]}
-      onPress={() => onPress?.(plot)}
-      activeOpacity={0.7}
-    >
-      {/* Header avec icône et titre */}
+    <View style={[cardStyle, style]}>
+      {/* Header : zone cliquable (edit) + bouton delete en sibling pour éviter touchables imbriqués */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.md }}>
-        {/* Icône de parcelle */}
-        <View
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 24,
-            backgroundColor: colors.gray[100],
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: spacing.md,
-          }}
+        <TouchableOpacity
+          style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-start' }}
+          onPress={() => onPress?.(plot)}
+          activeOpacity={0.7}
         >
-          <MapIcon color={colors.semantic.success} size={24} />
-        </View>
-        
-        {/* Informations principales */}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
-            <Text
-              variant="h4"
-              style={{
-                color: colors.text.primary,
-                flex: 1,
-              }}
-            >
-              {plot.name}
-            </Text>
+          {/* Icône de parcelle */}
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              backgroundColor: colors.gray[100],
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: spacing.md,
+            }}
+          >
+            <MapIcon color={colors.semantic.success} size={24} />
           </View>
           
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <Text
-              variant="body"
-              style={{
-                color: colors.text.secondary,
-              }}
-            >
-              {plot.area} {plot.unit}
-            </Text>
-            
-            {/* Cartouche actif/inactif */}
-            <View
-              style={{
-                backgroundColor: isActive ? colors.semantic.success + '20' : colors.gray[200],
-                paddingHorizontal: spacing.sm,
-                paddingVertical: spacing.xs,
-                borderRadius: 12,
-              }}
-            >
+          {/* Informations principales */}
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
               <Text
-                variant="caption"
+                variant="h4"
                 style={{
-                  color: isActive ? colors.semantic.success : colors.gray[600],
-                  fontSize: 11,
-                  fontWeight: '500',
+                  color: colors.text.primary,
+                  flex: 1,
                 }}
               >
-                {isActive ? 'Actif' : 'Inactif'}
+                {plot.name}
               </Text>
             </View>
+            
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text
+                variant="body"
+                style={{
+                  color: colors.text.secondary,
+                  marginRight: spacing.sm,
+                }}
+              >
+                {plot.area} {plot.unit}
+              </Text>
+              
+              {/* Cartouche actif/inactif */}
+              <View
+                style={{
+                  backgroundColor: isActive ? colors.semantic.success + '20' : colors.gray[200],
+                  paddingHorizontal: spacing.sm,
+                  paddingVertical: spacing.xs,
+                  borderRadius: 12,
+                }}
+              >
+                <Text
+                  variant="caption"
+                  style={{
+                    color: isActive ? colors.semantic.success : colors.gray[600],
+                    fontSize: 11,
+                    fontWeight: '500',
+                  }}
+                >
+                  {isActive ? 'Actif' : 'Inactif'}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* Action soft delete / réactivation */}
+        {/* Action soft delete / réactivation : sibling du TouchableOpacity, pas imbriqué */}
         {showActions && onDelete && (
-          <View style={{ flexDirection: 'row', gap: spacing.sm, marginLeft: spacing.sm }}>
-            <TouchableOpacity
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                backgroundColor: colors.gray[100],
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              onPress={(e) => {
-                e.stopPropagation();
-                onDelete(plot);
-              }}
-            >
-              {!isActive ? (
-                <CheckCircleIcon color={colors.semantic.success} size={18} />
-              ) : (
-                <TrashIcon color={colors.semantic.error} size={16} />
-              )}
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: colors.gray[100],
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginLeft: spacing.sm,
+            }}
+            onPress={() => onDelete(plot)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {!isActive ? (
+              <CheckCircleIcon color={colors.semantic.success} size={18} />
+            ) : (
+              <TrashIcon color={colors.semantic.error} size={16} />
+            )}
+          </TouchableOpacity>
         )}
       </View>
 
-      {/* Informations supplémentaires */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        {/* Infos de structure (code / type) */}
-        <View style={{ flex: 1 }}>
-          {plot.code && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
-              <MapPinIcon color={colors.gray[500]} size={14} />
-              <Text
-                variant="caption"
-                style={{
-                  color: colors.text.secondary,
-                  marginLeft: spacing.xs,
-                }}
-              >
-                Code: {plot.code}
-              </Text>
-            </View>
-          )}
-
-          {plot.type && (
-            <Text
-              variant="caption"
-              style={{
-                color: colors.text.secondary,
-              }}
-            >
-              Type: {getTypeLabel()}
-            </Text>
-          )}
-        </View>
-
-        {/* Surface en grand */}
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text
-            style={{
-              fontSize: 20,
-              fontWeight: 'bold',
-              color: colors.primary[600],
-            }}
-          >
-            {plot.area}
-          </Text>
-          <Text
-            variant="caption"
-            style={{
-              color: colors.text.secondary,
-              fontSize: 12,
-            }}
-          >
-            {plot.unit}
-          </Text>
-        </View>
-      </View>
-
-      {/* Unités de surface si disponibles */}
-      {plot.surfaceUnits && plot.surfaceUnits.length > 0 && (
-        <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.gray[200] }}>
-          <Text
-            variant="caption"
-            style={{
-              color: colors.text.secondary,
-              fontWeight: '600',
-              marginBottom: spacing.xs,
-            }}
-          >
-            Unités de surface ({plot.surfaceUnits.length})
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-            {plot.surfaceUnits.slice(0, 3).map((unit) => (
-              <View
-                key={unit.id}
-                style={{
-                  backgroundColor: colors.gray[100],
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xs,
-                  borderRadius: 8,
-                }}
-              >
+      {/* Reste de la carte : cliquable pour ouvrir l'édition */}
+      <TouchableOpacity onPress={() => onPress?.(plot)} activeOpacity={0.7}>
+        {/* Informations supplémentaires */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          {/* Infos de structure (code / type) */}
+          <View style={{ flex: 1 }}>
+            {plot.code && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xs }}>
+                <MapPinIcon color={colors.gray[500]} size={14} />
                 <Text
                   variant="caption"
                   style={{
                     color: colors.text.secondary,
-                    fontSize: 11,
+                    marginLeft: spacing.xs,
                   }}
                 >
-                  {unit.fullName || unit.name}
-                </Text>
-              </View>
-            ))}
-            {plot.surfaceUnits.length > 3 && (
-              <View
-                style={{
-                  backgroundColor: colors.primary[100],
-                  paddingHorizontal: spacing.sm,
-                  paddingVertical: spacing.xs,
-                  borderRadius: 8,
-                }}
-              >
-                <Text
-                  variant="caption"
-                  style={{
-                    color: colors.primary[700],
-                    fontSize: 11,
-                    fontWeight: '600',
-                  }}
-                >
-                  +{plot.surfaceUnits.length - 3}
+                  Code: {plot.code}
                 </Text>
               </View>
             )}
+
+            {plot.type && (
+              <Text
+                variant="caption"
+                style={{
+                  color: colors.text.secondary,
+                }}
+              >
+                Type: {getTypeLabel()}
+              </Text>
+            )}
+          </View>
+
+          {/* Surface en grand */}
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: 'bold',
+                color: colors.primary[600],
+              }}
+            >
+              {plot.area}
+            </Text>
+            <Text
+              variant="caption"
+              style={{
+                color: colors.text.secondary,
+                fontSize: 12,
+              }}
+            >
+              {plot.unit}
+            </Text>
           </View>
         </View>
-      )}
 
-      {/* Description si disponible */}
-      {plot.description && (
-        <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.gray[200] }}>
-          <Text
-            variant="caption"
-            style={{
-              color: colors.text.secondary,
-              fontStyle: 'italic',
-            }}
-            numberOfLines={2}
-          >
-            {plot.description}
-          </Text>
-        </View>
-      )}
-    </TouchableOpacity>
+        {/* Unités de surface si disponibles */}
+        {plot.surfaceUnits && plot.surfaceUnits.length > 0 && (
+          <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.gray[200] }}>
+            <Text
+              variant="caption"
+              style={{
+                color: colors.text.secondary,
+                fontWeight: '600',
+                marginBottom: spacing.xs,
+              }}
+            >
+              Unités de surface ({plot.surfaceUnits.length})
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {plot.surfaceUnits.slice(0, 3).map((unit) => (
+                <View
+                  key={unit.id}
+                  style={{
+                    backgroundColor: colors.gray[100],
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xs,
+                    borderRadius: 8,
+                    marginRight: spacing.xs,
+                    marginBottom: spacing.xs,
+                  }}
+                >
+                  <Text
+                    variant="caption"
+                    style={{
+                      color: colors.text.secondary,
+                      fontSize: 11,
+                    }}
+                  >
+                    {unit.fullName || unit.name}
+                  </Text>
+                </View>
+              ))}
+              {plot.surfaceUnits.length > 3 && (
+                <View
+                  style={{
+                    backgroundColor: colors.primary[100],
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: spacing.xs,
+                    borderRadius: 8,
+                    marginRight: spacing.xs,
+                    marginBottom: spacing.xs,
+                  }}
+                >
+                  <Text
+                    variant="caption"
+                    style={{
+                      color: colors.primary[700],
+                      fontSize: 11,
+                      fontWeight: '600',
+                    }}
+                  >
+                    +{plot.surfaceUnits.length - 3}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Description si disponible */}
+        {plot.description && (
+          <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.gray[200] }}>
+            <Text
+              variant="caption"
+              style={{
+                color: colors.text.secondary,
+                fontStyle: 'italic',
+              }}
+              numberOfLines={2}
+            >
+              {plot.description}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 };

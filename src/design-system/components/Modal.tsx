@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Modal as RNModal,
   View,
@@ -6,6 +6,8 @@ import {
   TouchableWithoutFeedback,
   ViewStyle,
   ModalProps as RNModalProps,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { colors } from '../colors';
 import { spacing } from '../spacing';
@@ -141,6 +143,46 @@ export const Modal: React.FC<ModalProps> = ({
     }
   };
 
+  // Styles memoises pour eviter re-renders en boucle (Session id mismatch sur Android)
+  const containerStyle = useMemo(() => getContainerStyle(), [size]);
+  const contentStyle = useMemo(() => getContentStyle(), [size]);
+  const headerStyle = useMemo(() => getHeaderStyle(), [size, title]);
+  const actionsStyle = useMemo(() => getActionsStyle(), [size]);
+  const contentAreaStyle = useMemo((): ViewStyle => ({
+    flex: size === 'fullscreen' ? 1 : undefined,
+    maxHeight: size === 'lg' ? 550 : size === 'md' ? 450 : size === 'sm' ? 350 : undefined,
+    minHeight: 0,
+    overflow: 'hidden',
+  }), [size]);
+
+  // Sur Android, ne pas utiliser KeyboardAvoidingView en fullscreen (cause layout thrash + InputConnection recree)
+  const ContentWrapper = size === 'fullscreen' && Platform.OS === 'ios' ? KeyboardAvoidingView : View;
+  const contentWrapperProps = useMemo(() => (
+    size === 'fullscreen' && Platform.OS === 'ios'
+      ? {
+          behavior: 'padding' as const,
+          style: [contentStyle, style],
+          pointerEvents: 'auto' as const,
+        }
+      : {
+          style: [contentStyle, style],
+          pointerEvents: 'auto' as const,
+        }
+  ), [contentStyle, style, size]);
+
+  const backdropStyle = useMemo<ViewStyle>(() => ({
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  }), []);
+  const titleFlexStyle = useMemo<ViewStyle>(() => ({ flex: 1 }), []);
+  const closeButtonStyle = useMemo<ViewStyle>(() => ({
+    padding: spacing.sm,
+    marginRight: -spacing.sm,
+  }), []);
+
   return (
     <RNModal
       visible={visible}
@@ -149,27 +191,24 @@ export const Modal: React.FC<ModalProps> = ({
       statusBarTranslucent
       {...props}
     >
-      <View style={getContainerStyle()}>
+      <View style={containerStyle}>
         <TouchableWithoutFeedback onPress={handleBackdropPress}>
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          <View style={backdropStyle} />
         </TouchableWithoutFeedback>
         
-        <View style={[getContentStyle(), style]} pointerEvents="auto">
+        <ContentWrapper {...contentWrapperProps}>
           {/* Header */}
           {(title || showCloseButton) && (
-            <View style={getHeaderStyle()}>
+            <View style={headerStyle}>
               {title && (
-                <Text variant="h3" style={{ flex: 1 }}>
+                <Text variant="h3" style={titleFlexStyle}>
                   {title}
                 </Text>
               )}
               {showCloseButton && (
                 <TouchableOpacity
                   onPress={onClose}
-                  style={{
-                    padding: spacing.sm,
-                    marginRight: -spacing.sm,
-                  }}
+                  style={closeButtonStyle}
                 >
                   <Text variant="h4" color={colors.gray[500]}>
                     ✕
@@ -180,18 +219,13 @@ export const Modal: React.FC<ModalProps> = ({
           )}
 
           {/* Content */}
-          <View style={{ 
-            flex: size === 'fullscreen' ? 1 : undefined,
-            maxHeight: size === 'lg' ? 550 : size === 'md' ? 450 : size === 'sm' ? 350 : undefined,
-            minHeight: 0, // Important pour que flex fonctionne avec ScrollView
-            overflow: 'hidden', // Empêcher le débordement
-          }}>
+          <View style={contentAreaStyle}>
             {children}
           </View>
 
           {/* Actions */}
           {(primaryAction || secondaryAction) && (
-            <View style={getActionsStyle()}>
+            <View style={actionsStyle}>
               {secondaryAction && (
                 <Button
                   title={secondaryAction.title}
@@ -210,7 +244,7 @@ export const Modal: React.FC<ModalProps> = ({
               )}
             </View>
           )}
-        </View>
+        </ContentWrapper>
       </View>
     </RNModal>
   );

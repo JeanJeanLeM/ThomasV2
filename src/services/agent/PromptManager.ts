@@ -79,6 +79,7 @@ export class PromptManager {
 
     // Contexte agricole
     prompt = prompt.replace(/\{\{farm_context\}\}/g, this.formatFarmContext(context.farm));
+    prompt = prompt.replace(/\{\{farm_context_summary\}\}/g, this.formatFarmContextCompact(context.farm));
     prompt = prompt.replace(/\{\{available_tools\}\}/g, this.formatAvailableTools(context.availableTools));
 
     // Exemples few-shot dynamiques
@@ -483,6 +484,7 @@ export class PromptManager {
       'farm_type': 'maraîchage', // TODO: récupérer du contexte
       'farm_context': this.formatFarmContext(context.farm),
       'farm_context_compact': this.formatFarmContextCompact(context.farm),
+      'farm_context_summary': this.formatFarmContextCompact(context.farm),
       'available_tools_formatted': this.formatAvailableToolsAdvanced(context.availableTools),
       'available_tools_with_descriptions': this.formatToolsWithDescriptions(context.availableTools),
       

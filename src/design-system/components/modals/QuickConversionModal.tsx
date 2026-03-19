@@ -110,7 +110,10 @@ export const QuickConversionModal: React.FC<QuickConversionModalProps> = ({
 
   // Pré-remplissage intelligent basé sur le terme recherché OU la conversion existante
   useEffect(() => {
-    if (editingConversion && visible) {
+    // Ne s'exécuter qu'à l'ouverture du modal pour éviter les re-renders
+    if (!visible) return;
+    
+    if (editingConversion) {
       // Mode édition : pré-remplir avec les données existantes
       const containerName = extractContainerFromName(editingConversion.name) || '';
       const cropName = editingConversion.fromUnit || '';
@@ -130,7 +133,7 @@ export const QuickConversionModal: React.FC<QuickConversionModalProps> = ({
         label: cropName,
         type: editingConversion.whatType || 'culture',
       });
-    } else if (searchTerm && visible) {
+    } else if (searchTerm) {
       const term = searchTerm.toLowerCase().trim();
       
       // Essayer de détecter contenant + culture/matière dans le terme
@@ -200,7 +203,8 @@ export const QuickConversionModal: React.FC<QuickConversionModalProps> = ({
       setSelectedWhat(null);
     }
     setErrors({});
-  }, [searchTerm, visible, editingConversion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]); // Uniquement lorsque le modal s'ouvre/ferme
 
   // Fonction utilitaire pour extraire le nom du contenant depuis le nom de la conversion
   const extractContainerFromName = (name: string): string => {
@@ -289,7 +293,11 @@ export const QuickConversionModal: React.FC<QuickConversionModalProps> = ({
   };
 
   const updateFormData = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Optimisation : ne mettre à jour que si la valeur change réellement
+    setFormData(prev => {
+      if (prev[field as keyof typeof prev] === value) return prev;
+      return { ...prev, [field]: value };
+    });
     // Nettoyer l'erreur si elle existe
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));

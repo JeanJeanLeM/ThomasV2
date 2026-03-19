@@ -256,7 +256,10 @@ export class AgentPipeline {
     try {
       // Récupération prompt de classification v3.0
       const promptData = await this.promptManager.getPrompt('intent_classification', '3.0');
-      const intentPrompt = promptData.content.replace('{{user_message}}', message);
+      const farmSummary = `${context.farm.plots.length} parcelles, ${context.farm.materials.length} matériels, ${context.farm.conversions.length} conversions`;
+      const intentPrompt = promptData.content
+        .replace('{{user_message}}', message)
+        .replace(/\{\{farm_context_summary\}\}/g, farmSummary);
 
       // Appel LLM pour classification
       const llmResponse = await this.callOpenAIForClassification(intentPrompt, message);

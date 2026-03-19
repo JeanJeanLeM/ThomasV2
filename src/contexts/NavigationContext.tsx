@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 // Types de navigation
 export type TabName = 'Dashboard' | 'Statistics' | 'Taches' | 'Chat' | 'Profil';
-export type ScreenName = TabName | 'Settings' | 'PlotsSettings' | 'MaterialsSettings' | 'ConversionsSettings' | 'CulturesListSettings' | 'PhytosanitaryProductsSettings' | 'FarmMembers' | 'MyInvitations' | 'FarmEdit' | 'FarmList' | 'AideEtSupport' | 'APropos' | 'Documents';
+export type ScreenName = TabName | 'Settings' | 'ProfileAndFarmSettings' | 'FarmSettings' | 'PlotsSettings' | 'MaterialsSettings' | 'ConversionsSettings' | 'CulturesListSettings' | 'PhytosanitaryProductsSettings' | 'RecurringTasksSettings' | 'FarmMembers' | 'MyInvitations' | 'FarmEdit' | 'FarmList' | 'AideEtSupport' | 'APropos' | 'Documents' | 'Commerce' | 'InvoicesList' | 'InvoiceCreate' | 'InvoiceDetails' | 'CustomersList' | 'CustomerEdit' | 'SellerInfoSettings' | 'ProductsList' | 'CommunityList' | 'CommunityDetail' | 'CommunityCreate' | 'CommunitySettings' | 'Notifications' | 'CreateNotification';
 
 interface NavigationState {
   activeTab: TabName;
@@ -11,19 +11,30 @@ interface NavigationState {
   navigationHistory: ScreenName[];
 }
 
+export type NavigationParams = Record<string, unknown>;
+
 interface NavigationContextType {
   // État de navigation
   activeTab: TabName;
   currentScreen: ScreenName;
   chatState: 'list' | 'conversation';
   navigationHistory: ScreenName[];
-  
+  /** Titre de la conversation ouverte (pour le header en vue conversation) */
+  currentChatTitle: string | null;
+  /** Paramètres passés lors de la navigation (ex: invoiceId, customerId) */
+  navigationParams: NavigationParams;
+  setNavigationParams: (params: NavigationParams | ((prev: NavigationParams) => NavigationParams)) => void;
+
   // Actions de navigation
   navigateToTab: (tab: TabName) => void;
-  navigateToScreen: (screen: ScreenName) => void;
+  navigateToScreen: (screen: ScreenName, params?: NavigationParams) => void;
   goBack: () => void;
   setChatState: (state: 'list' | 'conversation') => void;
-  
+  setCurrentChatTitle: (title: string | null) => void;
+  /** Active/désactive l'aide vocale contextuelle dans le chat */
+  voiceHelpEnabled: boolean;
+  setVoiceHelpEnabled: (enabled: boolean) => void;
+
   // Actions spécifiques
   openFarmEdit: (farmId?: number) => void;
   openFarmList: () => void;
@@ -41,6 +52,12 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
   const [currentScreen, setCurrentScreen] = useState<ScreenName>('Chat');
   const [chatState, setChatState] = useState<'list' | 'conversation'>('list');
   const [navigationHistory, setNavigationHistory] = useState<ScreenName[]>(['Chat']);
+  const [currentChatTitle, setCurrentChatTitle] = useState<string | null>(null);
+  const [voiceHelpEnabled, setVoiceHelpEnabled] = useState<boolean>(true);
+  const [navigationParams, setNavigationParamsState] = useState<NavigationParams>({});
+  const setNavigationParams = React.useCallback((params: NavigationParams | ((prev: NavigationParams) => NavigationParams)) => {
+    setNavigationParamsState(prev => typeof params === 'function' ? params(prev) : params);
+  }, []);
 
   const navigateToTab = (tab: TabName) => {
     console.log('🧭 [NAVIGATION] Navigate to tab:', tab);
@@ -49,8 +66,9 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
     addToHistory(tab);
   };
 
-  const navigateToScreen = (screen: ScreenName) => {
-    console.log('🧭 [NAVIGATION] Navigate to screen:', screen);
+  const navigateToScreen = (screen: ScreenName, params?: NavigationParams) => {
+    console.log('🧭 [NAVIGATION] Navigate to screen:', screen, params);
+    setNavigationParamsState(params ?? {});
     setCurrentScreen(screen);
     addToHistory(screen);
   };
@@ -113,10 +131,16 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
     currentScreen,
     chatState,
     navigationHistory,
+    currentChatTitle,
+    navigationParams,
+    setNavigationParams,
     navigateToTab,
     navigateToScreen,
     goBack,
     setChatState,
+    setCurrentChatTitle,
+    voiceHelpEnabled,
+    setVoiceHelpEnabled,
     openFarmEdit,
     openFarmList,
     openSettings,

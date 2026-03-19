@@ -49,6 +49,9 @@ export const ContainerModal: React.FC<ContainerModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    // Ne s'exécuter qu'à l'ouverture du modal pour éviter les re-renders
+    if (!visible) return;
+    
     if (container) {
       setFormData({
         name: container.name,
@@ -75,7 +78,8 @@ export const ContainerModal: React.FC<ContainerModalProps> = ({
       });
     }
     setErrors({});
-  }, [container, visible, defaultCategory]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]); // Uniquement lorsque le modal s'ouvre/ferme
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};

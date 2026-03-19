@@ -5,10 +5,10 @@ import { corsHeaders } from '../_shared/cors.ts'
 /**
  * ROUTER: Architecture Pipeline vs Legacy
  * 
- * - use_pipeline=true (default) : Utilise nouvelle architecture séquencée
- * - use_pipeline=false : Utilise ancienne architecture (fallback)
+ * - use_pipeline=false (default) : Utilise ancienne architecture (stable)
+ * - use_pipeline=true : Utilise nouvelle architecture (expérimental)
  */
-const USE_PIPELINE_BY_DEFAULT = true
+const USE_PIPELINE_BY_DEFAULT = false
 
 // Fonction pour convertir les dates relatives en format ISO
 function convertRelativeDateToISO(dateStr: string): string {
@@ -175,7 +175,7 @@ function matchConversionFlexible(term1: string, term2: string): boolean {
 
 // Fonction pour appliquer les conversions utilisateur
 function applyUserConversions(extractedData: any, conversions: any[]): any {
-  if (!extractedData.quantity || !conversions.length) {
+  if (!extractedData.quantity || !extractedData.quantity.unit || !conversions.length) {
     return extractedData
   }
   
@@ -295,16 +295,45 @@ serve(async (req) => {
       message_id, 
       user_message, 
       chat_session_id,
-      use_pipeline = USE_PIPELINE_BY_DEFAULT 
+      use_pipeline = USE_PIPELINE_BY_DEFAULT,
+      agent_method = 'auto' // 'simple', 'pipeline', ou 'auto' (auto-detect from DB)
     } = requestBody
 
     console.log(`🤖 [ANALYZE] Démarrage analyse - Message ID: ${message_id}`)
     console.log(`🔍 [ANALYZE] Session ID: ${chat_session_id}`)
     console.log(`📝 [ANALYZE] Message: ${user_message?.substring(0, 100)}...`)
-    console.log(`🔀 [ROUTER] Architecture: ${use_pipeline ? 'PIPELINE (new)' : 'LEGACY (fallback)'}`)
+    console.log(`🔀 [ROUTER] Agent method param: ${agent_method}`)
+    console.log(`🏠 [ROUTER] Farm ID: ${requestBody.farm_id}`)
 
-    // ROUTER: Redirect to Pipeline architecture if enabled
-    if (use_pipeline) {
+    // Déterminer la méthode à utiliser
+    let selectedMethod = agent_method
+    
+    // Si agent_method est 'auto', chercher config ferme (défaut: pipeline)
+    if (agent_method === 'auto') {
+      if (!requestBody.farm_id) {
+        console.warn(`⚠️ [ROUTER] Farm ID manquant, fallback pipeline`)
+        selectedMethod = 'pipeline'
+      } else {
+        const { data: farmConfig, error: configError } = await supabaseClient
+          .from('farm_agent_config')
+          .select('agent_method')
+          .eq('farm_id', requestBody.farm_id)
+          .single()
+        
+        if (configError) {
+          console.error(`❌ [ROUTER] Erreur lecture config:`, configError)
+          selectedMethod = 'pipeline'
+        } else {
+          selectedMethod = farmConfig?.agent_method || 'pipeline'
+          console.log(`🔀 [ROUTER] Méthode auto-détectée depuis DB: ${selectedMethod}`)
+        }
+      }
+    } else {
+      console.log(`🔀 [ROUTER] Méthode explicite: ${selectedMethod}`)
+    }
+
+    // ROUTER: Redirect to thomas-agent-pipeline if method is 'pipeline'
+    if (selectedMethod === 'pipeline') {
       console.log('➡️ [ROUTER] Redirecting to thomas-agent-pipeline...')
       
       try {
@@ -317,20 +346,25 @@ serve(async (req) => {
             'Authorization': req.headers.get('Authorization') || ''
           },
           body: JSON.stringify({
-            message: user_message,
-            session_id: chat_session_id,
+            message_id: message_id,
+            user_message: user_message,
+            chat_session_id: chat_session_id,
             user_id: requestBody.user_id,
-            farm_id: requestBody.farm_id,
-            use_pipeline: true
+            farm_id: requestBody.farm_id
           })
         })
 
         if (!pipelineResponse.ok) {
-          console.error('❌ [ROUTER] Pipeline call failed, falling back to legacy...')
-          // Continue with legacy below
+          const errorText = await pipelineResponse.text()
+          console.error(`❌ [ROUTER] Pipeline failed (${pipelineResponse.status}): ${errorText}`)
+          console.error('❌ [ROUTER] Falling back to simple method...')
+          // Continue with simple method below
         } else {
           console.log('✅ [ROUTER] Pipeline response received')
           const pipelineData = await pipelineResponse.json()
+          
+          // Enregistrer succès pipeline
+          await recordMethodSuccess(supabaseClient, requestBody.farm_id, 'pipeline', true)
           
           return new Response(
             JSON.stringify(pipelineData),
@@ -340,13 +374,16 @@ serve(async (req) => {
           )
         }
       } catch (pipelineError) {
-        console.error('❌ [ROUTER] Pipeline error, falling back to legacy:', pipelineError)
-        // Continue with legacy below
+        console.error('❌ [ROUTER] Pipeline error, falling back to simple:', pipelineError)
+        // Enregistrer échec pipeline
+        await recordMethodSuccess(supabaseClient, requestBody.farm_id, 'pipeline', false)
+        // Continue with simple method below
       }
     }
 
-    // LEGACY ARCHITECTURE (fallback)
-    console.log('🔄 [ROUTER] Using LEGACY architecture...')
+    // SIMPLE METHOD (legacy architecture - 1 call)
+    console.log('🔄 [ROUTER] Using SIMPLE method (1-call analysis)...')
+    console.log(`🎯 [ROUTER] Méthode finale: ${selectedMethod}`)
 
     // Vérifier clé OpenAI avant tout
     const openaiKey = Deno.env.get('OPENAI_API_KEY')
@@ -378,13 +415,22 @@ serve(async (req) => {
     const userContext = await buildUserContext(supabaseClient, user_id, farm_id)
     console.log(`✅ [ANALYZE] Contexte construit - ${userContext.plots?.length || 0} parcelles, ${userContext.materials?.length || 0} matériaux`)
 
-    // 3. Obtenir le prompt d'analyse
+    // 3. Obtenir le prompt d'analyse selon la méthode choisie
     console.log(`📡 [ANALYZE] Étape 3/6: Récupération prompt système...`)
+    console.log(`🔀 [ANALYZE] Méthode sélectionnée: ${selectedMethod}`)
+    
+    // Chercher le prompt selon la méthode (déjà déterminée plus haut dans le routing)
+    // Pour 'simple': cherche v2.0 (prompt complet)
+    // Pour 'pipeline': cherche v3.0 (prompt modulaire)
+    const targetVersion = selectedMethod === 'simple' ? '2.0' : '3.0'
+    
+    console.log(`🔍 [ANALYZE] Recherche prompt version: ${targetVersion}`)
     
     const { data: promptData, error: promptError } = await supabaseClient
       .from('chat_prompts')
       .select('*')
       .eq('name', 'thomas_agent_system')
+      .eq('version', targetVersion)
       .eq('is_active', true)
       .limit(1)
     
@@ -396,6 +442,16 @@ serve(async (req) => {
     console.log(`✅ [ANALYZE] Prompt trouvé: ${prompt.name} (v${prompt.version})`)
     console.log(`📋 [ANALYZE] Prompt ID: ${prompt.id}`)
     console.log(`📊 [ANALYZE] Prompt longueur: ${prompt.content.length} caractères`)
+    console.log(`🎯 [ANALYZE] Méthode sélectionnée: ${selectedMethod}`)
+    console.log(`🎯 [ANALYZE] Version cherchée: ${targetVersion}`)
+    
+    // Vérification critique: le prompt DOIT être ~9000 chars pour 'simple'
+    if (selectedMethod === 'simple' && prompt.content.length < 8000) {
+      console.error(`❌ [ANALYZE] ERREUR CRITIQUE: Prompt 'simple' trop court!`)
+      console.error(`   Attendu: ~9000 caractères, Reçu: ${prompt.content.length}`)
+      console.error(`   Le prompt v2.0 complet n'est peut-être pas déployé!`)
+      throw new Error(`Prompt simple incomplet (${prompt.content.length} chars au lieu de ~9000)`)
+    }
 
     // 4. Construire et exécuter la requête OpenAI
     console.log(`📡 [ANALYZE] Étape 4/6: Appel OpenAI GPT-4o-mini...`)
@@ -518,6 +574,12 @@ serve(async (req) => {
 
     console.log(`🎉 [ANALYZE] ANALYSE TERMINÉE AVEC SUCCÈS !`)
 
+    // Enregistrer succès méthode simple
+    await recordMethodSuccess(supabaseClient, chatSession.farm_id, 'simple', true)
+
+    // Détecter si c'est une demande d'aide (première action = help)
+    const isHelpRequest = actionsForFrontend.length > 0 && actionsForFrontend[0].action_type === 'help'
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -525,7 +587,8 @@ serve(async (req) => {
         actions: actionsForFrontend,
         confidence: analysisResult.confidence,
         processing_time_ms: Date.now() - startTime,
-        message: `Analyse terminée avec ${actionsForFrontend.length} action(s) détectée(s)`
+        message: `Analyse terminée avec ${actionsForFrontend.length} action(s) détectée(s)`,
+        is_help_request: isHelpRequest
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -838,6 +901,10 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
   }
   
   for (const mention of mentions) {
+    if (!mention || typeof mention !== 'string') {
+      console.log(`⚠️ [MATCH-PLOTS] Mention invalide ignorée:`, mention)
+      continue
+    }
     const mentionLower = mention.toLowerCase().trim()
     console.log(`🔍 [MATCH-PLOTS] Traitement mention: "${mention}"`)
     
@@ -1019,6 +1086,10 @@ async function matchMaterials(mentions: string[], context: UserContext) {
   }
   
   for (const mention of mentions) {
+    if (!mention || typeof mention !== 'string') {
+      console.log(`⚠️ [MATCH-MATERIALS] Mention invalide ignorée:`, mention)
+      continue
+    }
     const mentionLower = mention.toLowerCase().trim()
     console.log(`🔍 [MATCH-MATERIALS] Traitement mention: "${mention}"`)
     
@@ -1415,5 +1486,38 @@ async function decomposeAction(action: any): Promise<string> {
     
     default:
       return action.original_text
+  }
+}
+
+/**
+ * Enregistrer succès/échec d'une méthode
+ */
+async function recordMethodSuccess(supabase: any, farmId: number, method: 'simple' | 'pipeline', success: boolean) {
+  try {
+    if (!farmId) {
+      console.log(`⚠️ [STATS] Farm ID manquant, skip stats`)
+      return
+    }
+    
+    // Vérifier si la fonction RPC existe avant de l'appeler
+    const { error: rpcError } = await supabase.rpc('increment_agent_method_stats', {
+      p_farm_id: farmId,
+      p_method: method,
+      p_success: success
+    })
+    
+    if (rpcError) {
+      // Si la fonction n'existe pas (migration 047 pas exécutée), skip silencieusement
+      if (rpcError.message?.includes('function') || rpcError.code === '42883') {
+        console.log(`⚠️ [STATS] Fonction RPC pas encore déployée, skip stats`)
+        return
+      }
+      throw rpcError
+    }
+    
+    console.log(`📊 [STATS] Enregistré: ${method} = ${success ? 'succès' : 'échec'}`)
+  } catch (error) {
+    console.error('⚠️ [STATS] Erreur enregistrement stats:', error)
+    // Ne pas crash l'analyse si les stats échouent
   }
 }

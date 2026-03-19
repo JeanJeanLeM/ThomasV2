@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Alert, Switch } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Alert, Switch, Platform } from 'react-native';
 import { StandardFormModal, FormSection, RowFields } from '../StandardFormModal';
 import { EnhancedInput } from '../EnhancedInput';
 import { DropdownSelector } from '../DropdownSelector';
@@ -80,13 +80,11 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
   const [unitWidth, setUnitWidth] = useState('');
   const [codeTouched, setCodeTouched] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialiser le formulaire avec les données de la parcelle
   useEffect(() => {
-    console.log('🔄 [PlotFormModal] Initializing form:', { plot: !!plot, isCreating, visible });
-    
     if (plot && !isCreating) {
-      console.log('📝 [PlotFormModal] Loading existing plot data');
       setFormName(plot.name || '');
       setFormCode(plot.code || '');
       setFormType(plot.type || 'plein_champ');
@@ -106,7 +104,6 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
       setCodeTouched(true);
     } else {
       // Réinitialiser pour une nouvelle parcelle
-      console.log('🆕 [PlotFormModal] Resetting form for new plot');
       setFormName('');
       setFormCode('');
       setFormType('plein_champ');
@@ -126,25 +123,27 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
     }
   }, [plot, isCreating, visible]);
 
-  // Auto-génération du code basé sur le nom
+  // Auto-génération code + slug en DEBOUNCE (évite re-renders à chaque touche → Session id mismatch sur Android)
+  const debounceMs = Platform.OS === 'android' ? 500 : 300;
   useEffect(() => {
-    if (!codeTouched && formName) {
-      const autoCode = slugify(formName).substring(0, 10);
-      setFormCode(autoCode);
-    }
-  }, [formName, codeTouched]);
-
-  // Auto-génération du slug
-  useEffect(() => {
-    const slugInfo = buildSlugInfo(formName, formCode, formDescription);
-    setFormSlugText(slugify(slugInfo));
-  }, [formName, formCode, formDescription]);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (!codeTouched && formName) {
+        const autoCode = slugify(formName).substring(0, 10);
+        setFormCode(prev => (prev === autoCode ? prev : autoCode));
+      }
+      const codeForSlug = !codeTouched && formName ? slugify(formName).substring(0, 10) : formCode;
+      const slugInfo = buildSlugInfo(formName, codeForSlug, formDescription);
+      const newSlug = slugify(slugInfo);
+      setFormSlugText(prev => (prev === newSlug ? prev : newSlug));
+      debounceRef.current = null;
+    }, debounceMs);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [formName, formDescription, codeTouched, formCode]);
 
   const handleSave = async () => {
-    console.log('🚀 [PlotFormModal] handleSave called');
-    console.log('📝 [PlotFormModal] formName:', formName);
-    console.log('📝 [PlotFormModal] formName.trim():', formName.trim());
-    console.log('📝 [PlotFormModal] activeFarm:', activeFarm);
     
     if (!formName.trim()) {
       console.warn('⚠️ [PlotFormModal] Form name is empty');
@@ -227,19 +226,6 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
   };
 
   const isButtonDisabled = !formName.trim() || isLoading;
-  
-  // Log pour debug
-  useEffect(() => {
-    if (visible) {
-      console.log('🔍 [PlotFormModal] Button state:', {
-        formName,
-        formNameTrimmed: formName.trim(),
-        isButtonDisabled,
-        isLoading,
-        isCreating,
-      });
-    }
-  }, [visible, formName, isButtonDisabled, isLoading, isCreating]);
 
   return (
     <StandardFormModal

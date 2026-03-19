@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, RefreshControl } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
 import { 
@@ -56,7 +57,25 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
     isActive: false,
   });
 
-  // Les parcelles sont chargées automatiquement via useFarmPlots()
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!activeFarm) return;
+    setRefreshing(true);
+    try {
+      await invalidateFarmData(['plots']);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Au montage (ouverture du menu Parcelles), forcer le rechargement depuis la DB
+  // pour afficher les parcelles créées via le chat ou ailleurs
+  useEffect(() => {
+    if (activeFarm) {
+      invalidateFarmData(['plots']);
+    }
+  }, [activeFarm?.farm_id]);
 
   // Gérer le changement de titre pour cacher la navbar quand le formulaire est ouvert
   useEffect(() => {
@@ -224,7 +243,18 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
   return (
     <>
       {!isFormVisible ? (
-        <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={[colors.primary[600]]}
+              tintColor={colors.primary[600]}
+            />
+          }
+        >
           <View style={styles.content}>
             <View style={styles.header}>
               <View>
@@ -237,15 +267,24 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
                 </Text>
               </View>
 
-              <TouchableOpacity style={styles.addButton} onPress={handleAddPlot}>
-                <PlusIcon color="white" size={20} />
-              </TouchableOpacity>
+              <View style={styles.headerActions}>
+                <TouchableOpacity
+                  style={[styles.addButton, styles.reloadButton]}
+                  onPress={handleRefresh}
+                  disabled={refreshing}
+                >
+                  <Ionicons name="refresh" size={20} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.addButton} onPress={handleAddPlot}>
+                  <PlusIcon color="white" size={20} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* En-tête statistiques */}
             <View style={styles.summaryCard}>
               <View style={styles.summaryHeader}>
-                <MapIcon color={colors.semantic.info} size={22} />
+                <MapIcon color={colors.semantic.info} size={22} style={{ marginRight: spacing.sm }} />
                 <Text variant="h3" style={styles.summaryTitle}>
                   Aperçu de vos données
                 </Text>
@@ -305,7 +344,7 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
                     >
                       Toutes
                     </Text>
-                    <View style={[styles.countBadge, styles.countBadgeSelected]}>
+                    <View style={[styles.countBadge, styles.countBadgeSelected, { marginLeft: spacing.xs }]}>
                       <Text
                         variant="caption"
                         weight="bold"
@@ -353,6 +392,7 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
                           style={[
                             styles.countBadge,
                             isSelected && styles.countBadgeSelected,
+                            { marginLeft: spacing.xs },
                           ]}
                         >
                           <Text
@@ -415,6 +455,7 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
                           style={[
                             styles.countBadge,
                             isSelected && styles.countBadgeSelected,
+                            { marginLeft: spacing.xs },
                           ]}
                         >
                           <Text
@@ -574,7 +615,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.md,
-    gap: spacing.sm,
   },
   summaryTitle: {
     color: colors.text.primary,
@@ -606,6 +646,11 @@ const styles = StyleSheet.create({
   filtersContainer: {
     marginBottom: spacing.lg,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
   addButton: {
     width: 48,
     height: 48,
@@ -614,15 +659,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  reloadButton: {
+    marginRight: spacing.sm,
+  },
   plotsList: {
-    gap: spacing.md,
+    // Removed gap property (not fully supported on React Native Web)
+    // Cards have marginBottom instead
   },
   filterChipsContainer: {
     marginTop: spacing.sm,
   },
   filterScrollContent: {
     paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
   },
   filterChip: {
     flexDirection: 'row',
@@ -633,7 +681,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     borderWidth: 1,
     borderColor: colors.gray[300],
-    gap: spacing.xs,
+    marginRight: spacing.sm,
   },
   countBadge: {
     backgroundColor: colors.primary[600],
@@ -696,7 +744,6 @@ const styles = StyleSheet.create({
   },
   plotActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
   },
   actionButton: {
     width: 36,
@@ -705,6 +752,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray[100],
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: spacing.sm,
   },
   plotFooter: {
     flexDirection: 'row',

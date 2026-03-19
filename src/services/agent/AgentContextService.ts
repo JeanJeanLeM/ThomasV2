@@ -156,7 +156,7 @@ export class AgentContextService {
       this.getActivePlots(farmId),
       this.getMaterialsByCategory(farmId),
       this.getUserConversions(farmId),
-      this.getUserPhytoProducts(farmId, userId)
+      this.getFarmPhytoProducts(farmId)
     ]);
 
     return {
@@ -233,7 +233,7 @@ export class AgentContextService {
   }
 
   /**
-   * Récupération des conversions utilisateur avec aliases
+   * Récupération des conversions de la ferme (partagées entre membres)
    */
   private async getUserConversions(farmId: number): Promise<UserConversionWithAliases[]> {
     const { data: conversions, error } = await this.supabase
@@ -252,39 +252,41 @@ export class AgentContextService {
   }
 
   /**
-   * Récupération des noms de produits phytosanitaires de l'utilisateur
-   * Retourne seulement les noms pour le contexte Whisper et le matching
+   * Récupération des noms de produits phytosanitaires de la ferme (partagés entre membres)
+   * Fusionne les préférences de tous les membres et retourne les noms pour le contexte
    */
-  private async getUserPhytoProducts(farmId: number, userId: string): Promise<string[]> {
+  private async getFarmPhytoProducts(farmId: number): Promise<string[]> {
     try {
-      // Récupérer les préférences utilisateur
-      const { data: preferences, error: prefsError } = await this.supabase
+      const { data: preferencesRows, error: prefsError } = await this.supabase
         .from('user_phytosanitary_preferences')
         .select('product_amms')
-        .eq('farm_id', farmId)
-        .eq('user_id', userId)
-        .single();
+        .eq('farm_id', farmId);
 
-      if (prefsError || !preferences?.product_amms?.length) {
-        console.log('No phytosanitary products found for user');
+      if (prefsError || !preferencesRows?.length) {
         return [];
       }
 
-      // Charger les produits correspondants
+      const allAmms = new Set<string>();
+      for (const row of preferencesRows) {
+        if (row.product_amms?.length) {
+          row.product_amms.forEach((amm: string) => allAmms.add(amm));
+        }
+      }
+      if (allAmms.size === 0) return [];
+
       const { data: products, error: productsError } = await this.supabase
         .from('phytosanitary_products')
         .select('name')
-        .in('amm', preferences.product_amms);
+        .in('amm', Array.from(allAmms));
 
       if (productsError) {
         console.error('Error fetching phytosanitary products:', productsError);
         return [];
       }
 
-      // Retourner seulement les noms
       return products?.map(p => p.name).filter(Boolean) || [];
     } catch (error) {
-      console.error('Error in getUserPhytoProducts:', error);
+      console.error('Error in getFarmPhytoProducts:', error);
       return [];
     }
   }

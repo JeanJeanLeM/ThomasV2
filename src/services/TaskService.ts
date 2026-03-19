@@ -192,6 +192,40 @@ export class TaskService {
   }
 
   /**
+   * Soft-delete all planned tasks (en_attente, en_cours) for a farm.
+   * Tasks already completed (terminee) are never deleted.
+   * Deleted tasks disappear from the app (is_active = false) but remain in the table.
+   */
+  static async deleteAllPlannedTasksForFarm(farmId: number): Promise<{ deleted: number }> {
+    try {
+      const conditionsEnAttente: WhereCondition[] = [
+        { column: 'farm_id', value: farmId },
+        { column: 'status', value: 'en_attente' },
+        { column: 'is_active', value: true },
+      ];
+      const conditionsEnCours: WhereCondition[] = [
+        { column: 'farm_id', value: farmId },
+        { column: 'status', value: 'en_cours' },
+        { column: 'is_active', value: true },
+      ];
+      const whereEq = (c: WhereCondition[]) => c.map(({ column, value }) => ({ column, value }));
+
+      const [r1, r2] = await Promise.all([
+        DirectSupabaseService.directUpdate('tasks', { is_active: false }, whereEq(conditionsEnAttente), 'id'),
+        DirectSupabaseService.directUpdate('tasks', { is_active: false }, whereEq(conditionsEnCours), 'id'),
+      ]);
+      const deleted = (Array.isArray(r1.data) ? r1.data.length : 0) + (Array.isArray(r2.data) ? r2.data.length : 0);
+      if (r1.error) console.error('❌ [TASK-SERVICE] deleteAllPlanned (en_attente):', r1.error);
+      if (r2.error) console.error('❌ [TASK-SERVICE] deleteAllPlanned (en_cours):', r2.error);
+      console.log('✅ [TASK-SERVICE] Planned tasks soft-deleted:', deleted);
+      return { deleted };
+    } catch (error) {
+      console.error('❌ [TASK-SERVICE] Exception deleteAllPlannedTasksForFarm:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Soft delete a task by setting is_active to false
    */
   static async deleteTask(taskId: string): Promise<void> {

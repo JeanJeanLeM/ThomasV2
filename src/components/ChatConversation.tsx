@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Linking, Image, ActivityIndicator } from 'react-native';
-import { Text, Card, FarmSelectorModal, SoundWave, UnifiedHeader } from '../design-system/components';
+import { View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Linking, Image, ActivityIndicator, Switch, PanResponder } from 'react-native';
+import { Text, Card, FarmSelectorModal, SoundWave } from '../design-system/components';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { AIResponseWithActions } from './chat/AIResponseWithActions';
 import { TypingIndicator } from './chat/TypingIndicator';
 import { useFarm } from '../contexts/FarmContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigation, type ScreenName } from '../contexts/NavigationContext';
 import { DirectSupabaseService } from '../services/DirectSupabaseService';
 import { ChatPlusMenu, PlusAction } from '../design-system/components/chat/ChatPlusMenu';
 import { AttachmentPreview, ChatAttachment } from '../design-system/components/chat/AttachmentPreview';
@@ -22,6 +23,7 @@ import { DocumentPickerModal } from '../design-system/components/modals/Document
 import { TaskEditModal, TaskData } from '../design-system/components/modals/TaskEditModal';
 import { ActionEditModal } from './chat/ActionEditModal';
 import { ActionData } from './chat/AIResponseWithActions';
+import { sanitizeQuantityType } from '../utils/quantityUtils';
 import { TaskService } from '../services/TaskService';
 import { ObservationService } from '../services/ObservationService';
 import { mediaService, AttachedPhoto } from '../services/MediaService';
@@ -29,6 +31,8 @@ import { locationService, LocationResult } from '../services/LocationService';
 import { Document } from '../services/DocumentService';
 import { supabase } from '../utils/supabase';
 import { TranscriptionService, TranscriptionResult } from '../services/TranscriptionService';
+import { AgricultureGlossaryService } from '../services/AgricultureGlossaryService';
+import { TranscriptionCorrectionService, AppliedCorrection } from '../services/TranscriptionCorrectionService';
 import { UserPhytosanitaryPreferencesService } from '../services/UserPhytosanitaryPreferencesService';
 import { NetworkService } from '../services/NetworkService';
 import { OfflineQueueService, PendingMessage } from '../services/OfflineQueueService';
@@ -36,6 +40,9 @@ import { AudioStorageService } from '../services/AudioStorageService';
 import { SyncService } from '../services/SyncService';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useOfflineQueue } from '../hooks/useOfflineQueue';
+import { useUnifiedSpeechRecognition } from '../hooks/useUnifiedSpeechRecognition';
+import { WebSpeechCorrectionService, WebSpeechContextualCorrection, ExactCorrectionRule } from '../services/WebSpeechCorrectionService';
+import type { VocabEntry } from '../services/WebSpeechCorrectionService';
 import { OfflineIndicator } from './OfflineIndicator';
 
 // Importation conditionnelle pour éviter les erreurs sur web
@@ -64,10 +71,288 @@ interface Message {
   realMessageId?: string; // UUID réel du message de la DB pour l'analyse
   actions?: any[]; // Actions détectées par l'IA
   hasActions?: boolean;
+  helpShortcut?: { screen: string; label: string }; // Card "Aller à..." pour réponses d'aide
   attachments?: any[]; // Pièces jointes du message
   hasAttachments?: boolean;
   confidence?: number;
 }
+
+type InputMode = 'vocal_direct' | 'dictation';
+
+interface PendingTranscribedAudio {
+  audioAttachment: ChatAttachment;
+  audioFileId?: string | null;
+  rawText: string;
+  correctedText: string;
+  appliedCorrections: AppliedCorrection[];
+  language?: string;
+  // Champs pour la traçabilité de la source de transcription
+  source?: 'whisper' | 'web_speech' | 'both';
+  webSpeechTranscript?: string;
+  whisperTranscript?: string;
+}
+
+interface ProcessTranscribedAudioParams {
+  text: string | null;
+  language?: string;
+  audioAttachment: ChatAttachment;
+  audioFileId?: string | null;
+  tempMessageId: string;
+  appliedCorrections?: AppliedCorrection[];
+  rawText?: string | null;
+}
+
+interface VoiceHelpTag {
+  icon: string;
+  label: string;
+  value: string;
+  highlight?: string; // texte à surligner dans la phrase (si différent de value)
+  bgColor: string;
+  textColor: string;
+}
+
+interface VoiceHelpExample {
+  shortcutLabel: string;
+  category: 'template' | 'action' | 'observation' | 'parametering' | 'question';
+  sentence: string;
+  essentials: VoiceHelpTag[];
+  optional: VoiceHelpTag[];
+}
+
+const VOICE_HELP_EXAMPLES: VoiceHelpExample[] = [
+  {
+    shortcutLabel: 'Template',
+    category: 'template',
+    sentence: '',
+    essentials: [
+      { icon: '🏷️', label: 'Action', value: 'action', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Culture', value: 'culture', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '⏱️', label: 'Durée', value: 'durée', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+    optional: [
+      { icon: '📍', label: 'Parcelle', value: 'parcelle', bgColor: '#ccfbf1', textColor: '#0d9488' },
+      { icon: '🌱', label: 'Planche', value: 'planche', bgColor: '#f3e8ff', textColor: '#7c3aed' },
+      { icon: '👥', label: 'Personnes', value: 'nb personnes', highlight: 'nb personnes', bgColor: '#e0e7ff', textColor: '#4338ca' },
+      { icon: '🔢', label: 'Quantité', value: 'quantité', bgColor: '#ffedd5', textColor: '#9a3412' },
+      { icon: '📏', label: 'Unité', value: 'unité', bgColor: '#ffedd5', textColor: '#9a3412' },
+      { icon: '📦', label: 'Nature', value: 'nature', bgColor: '#ffedd5', textColor: '#9a3412' },
+      { icon: '🔧', label: 'Matériel', value: 'matériel', bgColor: '#f1f5f9', textColor: '#475569' },
+    ],
+  },
+  {
+    shortcutLabel: 'Traitement',
+    category: 'action',
+    sentence: "J'ai traité les salades pendant 45 minutes sur la parcelle Est, planche 3, avec 2 personnes.",
+    essentials: [
+      { icon: '🏷️', label: 'Action', value: 'traiter', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Culture', value: 'salades', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '⏱️', label: 'Durée', value: '45 min', highlight: '45 minutes', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+    optional: [
+      { icon: '📍', label: 'Parcelle', value: 'Parcelle Est', bgColor: '#ccfbf1', textColor: '#0d9488' },
+      { icon: '🌱', label: 'Planche', value: 'Planche 3', bgColor: '#f3e8ff', textColor: '#7c3aed' },
+      { icon: '👥', label: 'Personnes', value: '2', highlight: '2 personnes', bgColor: '#e0e7ff', textColor: '#4338ca' },
+    ],
+  },
+  {
+    shortcutLabel: 'Plantation',
+    category: 'action',
+    sentence: "J'ai planté 1200 plants de poivrons pendant 3 heures avec le transplanteur.",
+    essentials: [
+      { icon: '🏷️', label: 'Action', value: 'planter', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Culture', value: 'poivrons', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '⏱️', label: 'Durée', value: '3 heures', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+    optional: [
+      { icon: '📦', label: 'Quantité', value: '1200 plants', bgColor: '#ffedd5', textColor: '#9a3412' },
+      { icon: '🔧', label: 'Matériel', value: 'transplanteur', bgColor: '#f1f5f9', textColor: '#475569' },
+    ],
+  },
+  {
+    shortcutLabel: 'Désherbage',
+    category: 'action',
+    sentence: "J'ai désherbé les carottes pendant 1 heure sur la parcelle Nord.",
+    essentials: [
+      { icon: '🏷️', label: 'Action', value: 'désherber', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Culture', value: 'carottes', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '⏱️', label: 'Durée', value: '1 heure', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+    optional: [
+      { icon: '📍', label: 'Parcelle', value: 'Parcelle Nord', bgColor: '#ccfbf1', textColor: '#0d9488' },
+    ],
+  },
+  {
+    shortcutLabel: 'Planification',
+    category: 'action',
+    sentence: "Demain je dois planter des laitues pendant 2 heures sur la parcelle Nord avec 3 personnes.",
+    essentials: [
+      { icon: '📅', label: 'Date', value: 'Demain', bgColor: '#e0e7ff', textColor: '#4338ca' },
+      { icon: '🏷️', label: 'Action', value: 'planter', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Culture', value: 'laitues', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '⏱️', label: 'Durée', value: '2 heures', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+    optional: [
+      { icon: '📍', label: 'Parcelle', value: 'parcelle Nord', bgColor: '#ccfbf1', textColor: '#0d9488' },
+      { icon: '👥', label: 'Personnes', value: '3 personnes', bgColor: '#e0e7ff', textColor: '#4338ca' },
+    ],
+  },
+  {
+    shortcutLabel: 'Param parcelle',
+    category: 'parametering',
+    sentence: "Crée une parcelle Maraîchage Nord avec 8 planches de 25 mètres.",
+    essentials: [
+      { icon: '🗺️', label: 'Action', value: 'Crée', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '📍', label: 'Type', value: 'parcelle', bgColor: '#ccfbf1', textColor: '#0d9488' },
+      { icon: '🏷️', label: 'Nom', value: 'Maraîchage Nord', bgColor: '#dcfce7', textColor: '#166534' },
+    ],
+    optional: [
+      { icon: '🌱', label: 'Planches', value: '8 planches', bgColor: '#f3e8ff', textColor: '#7c3aed' },
+      { icon: '📐', label: 'Dimensions', value: '25 mètres', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+  },
+  {
+    shortcutLabel: 'Param matériel',
+    category: 'parametering',
+    sentence: "Ajoute un matériel Motoculteur Honda F560 dans la catégorie Préparation du sol.",
+    essentials: [
+      { icon: '🔧', label: 'Action', value: 'Ajoute', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🛠️', label: 'Type', value: 'matériel', bgColor: '#f1f5f9', textColor: '#475569' },
+      { icon: '🏷️', label: 'Nom', value: 'Motoculteur', bgColor: '#dcfce7', textColor: '#166534' },
+    ],
+    optional: [
+      { icon: '🏭', label: 'Modèle', value: 'Honda F560', bgColor: '#e0e7ff', textColor: '#4338ca' },
+      { icon: '📂', label: 'Catégorie', value: 'Préparation du sol', bgColor: '#ffedd5', textColor: '#9a3412' },
+    ],
+  },
+  {
+    shortcutLabel: 'Param conversion',
+    category: 'parametering',
+    sentence: "Crée une conversion : 1 caisse de tomates équivaut à 12 kg.",
+    essentials: [
+      { icon: '📐', label: 'Action', value: 'conversion', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '📦', label: 'Contenant', value: '1 caisse', bgColor: '#ffedd5', textColor: '#9a3412' },
+      { icon: '🌾', label: 'Nature', value: 'tomates', bgColor: '#dcfce7', textColor: '#166534' },
+    ],
+    optional: [
+      { icon: '🔄', label: 'Équivalent', value: '12 kg', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+  },
+  {
+    shortcutLabel: 'Obs ravageurs',
+    category: 'observation',
+    sentence: "J'ai observé des pucerons sur les laitues dans la parcelle Tunnel, gravité moyenne.",
+    essentials: [
+      { icon: '👁️', label: 'Action', value: 'observé', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Culture', value: 'laitues', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '🐛', label: 'Problème', value: 'pucerons', bgColor: '#fee2e2', textColor: '#991b1b' },
+    ],
+    optional: [
+      { icon: '📍', label: 'Parcelle', value: 'parcelle Tunnel', bgColor: '#ccfbf1', textColor: '#0d9488' },
+      { icon: '⚠️', label: 'Gravité', value: 'moyenne', bgColor: '#e0e7ff', textColor: '#4338ca' },
+    ],
+  },
+  {
+    shortcutLabel: 'Obs maladie',
+    category: 'observation',
+    sentence: "J'ai observé du mildiou sur les tomates dans la serre 2, gravité élevée.",
+    essentials: [
+      { icon: '👁️', label: 'Action', value: 'observé', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Culture', value: 'tomates', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '🦠', label: 'Problème', value: 'mildiou', bgColor: '#fee2e2', textColor: '#991b1b' },
+    ],
+    optional: [
+      { icon: '📍', label: 'Parcelle', value: 'serre 2', bgColor: '#ccfbf1', textColor: '#0d9488' },
+      { icon: '⚠️', label: 'Gravité', value: 'élevée', bgColor: '#e0e7ff', textColor: '#4338ca' },
+    ],
+  },
+  {
+    shortcutLabel: 'Vente',
+    category: 'action',
+    sentence: "J'ai vendu 4 caisses de tomates à Bernard à 20 euros la caisse, paiement dimanche.",
+    essentials: [
+      { icon: '💰', label: 'Action', value: 'vendu', bgColor: '#fef3c7', textColor: '#92400e' },
+      { icon: '🌾', label: 'Nature', value: 'tomates', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '📦', label: 'Quantité', value: '4 caisses', bgColor: '#ffedd5', textColor: '#9a3412' },
+    ],
+    optional: [
+      { icon: '👤', label: 'Client', value: 'Bernard', bgColor: '#dbeafe', textColor: '#1e40af' },
+      { icon: '💶', label: 'Prix', value: '20 euros la caisse', bgColor: '#d1fae5', textColor: '#047857' },
+      { icon: '📅', label: 'Paiement', value: 'dimanche', bgColor: '#fef3c7', textColor: '#92400e' },
+    ],
+  },
+  {
+    shortcutLabel: 'Question',
+    category: 'question',
+    sentence: "Quelle dose de traitement recommandes-tu pour les tomates contre le mildiou ?",
+    essentials: [
+      { icon: '❓', label: 'Type', value: 'Quelle dose', bgColor: '#ede9fe', textColor: '#6d28d9' },
+      { icon: '🌾', label: 'Culture', value: 'tomates', bgColor: '#dcfce7', textColor: '#166534' },
+      { icon: '🦠', label: 'Sujet', value: 'mildiou', bgColor: '#fee2e2', textColor: '#991b1b' },
+    ],
+    optional: [
+      { icon: '🧪', label: 'Action', value: 'traitement', bgColor: '#dbeafe', textColor: '#1e40af' },
+    ],
+  },
+];
+
+const VOICE_HELP_CATEGORY_STYLES: Record<
+  VoiceHelpExample['category'],
+  {
+    label: string;
+    activeBg: string;
+    activeBorder: string;
+    activeText: string;
+    inactiveBg: string;
+    inactiveBorder: string;
+    inactiveText: string;
+  }
+> = {
+  template: {
+    label: 'Template',
+    activeBg: '#ecfeff',
+    activeBorder: '#a5f3fc',
+    activeText: '#0e7490',
+    inactiveBg: '#f8fafc',
+    inactiveBorder: '#e2e8f0',
+    inactiveText: '#64748b',
+  },
+  action: {
+    label: 'Action',
+    activeBg: '#dcfce7',
+    activeBorder: '#86efac',
+    activeText: '#166534',
+    inactiveBg: '#f0fdf4',
+    inactiveBorder: '#bbf7d0',
+    inactiveText: '#15803d',
+  },
+  observation: {
+    label: 'Observation',
+    activeBg: '#fef3c7',
+    activeBorder: '#fcd34d',
+    activeText: '#92400e',
+    inactiveBg: '#fffbeb',
+    inactiveBorder: '#fde68a',
+    inactiveText: '#b45309',
+  },
+  parametering: {
+    label: 'Paramétrage',
+    activeBg: '#e5e7eb',
+    activeBorder: '#9ca3af',
+    activeText: '#374151',
+    inactiveBg: '#f3f4f6',
+    inactiveBorder: '#d1d5db',
+    inactiveText: '#4b5563',
+  },
+  question: {
+    label: 'Question',
+    activeBg: '#dbeafe',
+    activeBorder: '#93c5fd',
+    activeText: '#1d4ed8',
+    inactiveBg: '#eff6ff',
+    inactiveBorder: '#bfdbfe',
+    inactiveText: '#2563eb',
+  },
+};
 
 interface ChatConversationProps {
   chat: Chat | null;
@@ -109,7 +394,8 @@ function adaptChatMessageToMessage(chatMessage: ChatMessage): Message {
   const attachments = metadata.attachments || [];
   const hasAttachments = metadata.has_attachments || attachments.length > 0;
   const analysisId = metadata.analysis_id;
-  
+  const helpShortcut = metadata.help_shortcut as { screen: string; label: string } | undefined;
+
   return {
     id: chatMessage.id,
     text: chatMessage.content,
@@ -120,6 +406,7 @@ function adaptChatMessageToMessage(chatMessage: ChatMessage): Message {
     realMessageId: chatMessage.id, // UUID réel pour l'analyse
     actions: actions,
     hasActions: hasActions,
+    helpShortcut: helpShortcut,
     attachments: attachments,
     hasAttachments: hasAttachments,
     confidence: chatMessage.ai_confidence || metadata.confidence,
@@ -135,10 +422,12 @@ export default function ChatConversation({
 }: ChatConversationProps) {
   const { activeFarm } = useFarm();
   const { user } = useAuth();
+  const navigation = useNavigation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true); // Nouvel état pour le chargement des messages
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string>('');
   // Utiliser directement user?.id au lieu de currentUserId
@@ -149,6 +438,73 @@ export default function ChatConversation({
   const { messages: pendingMessages, refreshQueue } = useOfflineQueue();
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [pendingTranscribedAudio, setPendingTranscribedAudio] = useState<PendingTranscribedAudio | null>(null);
+  const [isTranscriptionAutocorrectEnabled, setIsTranscriptionAutocorrectEnabled] = useState(true);
+  const [showVoiceHelpOverlay, setShowVoiceHelpOverlay] = useState(false);
+  const [voiceHelpExampleIndex, setVoiceHelpExampleIndex] = useState(0);
+
+  // ===== Mode d'enregistrement : Vocal direct (Whisper) ou Dictée (Web Speech en temps réel) =====
+  const [inputMode, setInputMode] = useState<InputMode>('vocal_direct');
+  // Texte interim Web Speech (affiché en live pendant la dictée, avant validation segment)
+  const [webSpeechInterim, setWebSpeechInterim] = useState('');
+  // Texte finalisé Web Speech avant que l'utilisateur ne l'envoie (pour metadata raw_transcription)
+  const webSpeechFinalizedRef = useRef('');
+  // Vocabulaire contextuel pré-calculé pour la correction Web Speech (fuzzy)
+  const webSpeechVocabRef = useRef<VocabEntry[]>([]);
+  // Règles exactes (phonetic aliases) chargées depuis user_speech_corrections
+  const webSpeechExactRulesRef = useRef<ExactCorrectionRule[]>([]);
+  // Corrections contextuelles accumulées sur la session de dictée en cours
+  const webSpeechCorrectionsRef = useRef<WebSpeechContextualCorrection[]>([]);
+
+  const webSpeech = useUnifiedSpeechRecognition({
+    language: 'fr-FR',
+    onFinalSegment: (_segment, fullFinalized) => {
+      // Appliquer la correction contextuelle sur le texte finalisé complet
+      let displayText = fullFinalized;
+      if (webSpeechVocabRef.current.length > 0 || webSpeechExactRulesRef.current.length > 0) {
+        const result = WebSpeechCorrectionService.correct(
+          fullFinalized,
+          webSpeechVocabRef.current,
+          webSpeechExactRulesRef.current
+        );
+        if (result.corrections.length > 0) {
+          displayText = result.correctedText;
+          // Accumuler les corrections pour les métadonnées
+          webSpeechCorrectionsRef.current = [
+            ...webSpeechCorrectionsRef.current,
+            ...result.corrections,
+          ];
+        }
+      }
+
+      // Mettre à jour le ref brut (avant correction) + l'input (après correction)
+      webSpeechFinalizedRef.current = fullFinalized;
+      setInputText(displayText);
+      setWebSpeechInterim('');
+      // Recalculer la hauteur de l'input
+      const lineCount = displayText
+        .split('\n')
+        .reduce((acc: number, line: string) => acc + Math.max(1, Math.ceil(line.length / 60)), 0);
+      const computedHeight = Math.min(
+        MAX_INPUT_HEIGHT,
+        Math.max(MIN_INPUT_HEIGHT, lineCount * LINE_HEIGHT + 16)
+      );
+      setInputHeight(computedHeight);
+    },
+    onInterim: (interim) => {
+      setWebSpeechInterim(interim);
+    },
+    onStop: () => {
+      setWebSpeechInterim('');
+    },
+    onError: (error) => {
+      console.error('❌ [WEB-SPEECH] Erreur reconnaissance:', error);
+      if (error !== 'no-speech') {
+        Alert.alert('Erreur dictée', `La reconnaissance vocale a rencontré une erreur : ${error}`);
+      }
+    },
+  });
 
   // Fonction unifiée pour scroller vers le bas
   const scrollToBottom = (animated: boolean = true, delay: number = 100) => {
@@ -229,6 +585,19 @@ export default function ChatConversation({
   // Constantes pour l'enregistrement
   const MAX_RECORDING_DURATION = 5 * 60; // 5 minutes en secondes
   const RECORDING_WARNING_DURATION = 4.5 * 60; // 4:30 en secondes
+
+  // L'aide vocale couvre les messages uniquement pendant l'enregistrement/dictée.
+  useEffect(() => {
+    if (!isRecording) {
+      setShowVoiceHelpOverlay(false);
+    }
+  }, [isRecording]);
+
+  useEffect(() => {
+    if (!navigation.voiceHelpEnabled) {
+      setShowVoiceHelpOverlay(false);
+    }
+  }, [navigation.voiceHelpEnabled]);
 
   // Fonction centralisée pour réinitialiser l'état audio
   const resetAudioState = () => {
@@ -325,6 +694,46 @@ export default function ChatConversation({
     };
   };
 
+  // Démarrer la dictée (Web Speech sur navigateur, ExpoSpeechRecognition sur mobile)
+  const startDictation = () => {
+    if (!webSpeech.isDictationAvailable) {
+      Alert.alert(
+        'Non disponible',
+        'La dictée en temps réel nécessite Chrome ou Edge sur navigateur, ou un development build sur téléphone.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (pendingTranscribedAudio) {
+      setPendingTranscribedAudio(null);
+    }
+
+    // Réinitialiser le texte brut Web Speech pour cette session (pas l'inputText existant)
+    webSpeechFinalizedRef.current = '';
+    webSpeechCorrectionsRef.current = [];
+    setWebSpeechInterim('');
+    // Vider aussi l'input pour accumuler uniquement le transcript de cette session
+    setInputText('');
+    setInputHeight(MIN_INPUT_HEIGHT);
+
+    console.log('🎙️ [DICTATION] Démarrage dictée Web Speech...');
+    webSpeech.start();
+    setIsRecording(true);
+    if (navigation.voiceHelpEnabled) {
+      setVoiceHelpExampleIndex(0);
+      setShowVoiceHelpOverlay(true);
+    }
+  };
+
+  // Arrêter la dictée Web Speech
+  const stopDictation = () => {
+    console.log('🛑 [DICTATION] Arrêt dictée Web Speech...');
+    webSpeech.stop();
+    setIsRecording(false);
+    setWebSpeechInterim('');
+  };
+
   // Démarrer l'enregistrement audio
   const startRecording = async () => {
     try {
@@ -332,6 +741,10 @@ export default function ChatConversation({
       if (isRecording) {
         console.warn('⚠️ [AUDIO] Enregistrement déjà en cours, ignore le double appel');
         return;
+      }
+
+      if (pendingTranscribedAudio) {
+        setPendingTranscribedAudio(null);
       }
 
       // PROTECTION: Nettoyer tout timeout/interval restant (sécurité)
@@ -406,6 +819,10 @@ export default function ChatConversation({
           console.log('✅ [AUDIO] MediaRecorder démarré (web)');
 
           setIsRecording(true);
+          if (navigation.voiceHelpEnabled) {
+            setVoiceHelpExampleIndex(0);
+            setShowVoiceHelpOverlay(true);
+          }
           setRecordingDuration(0);
 
           // Démarrer le timer
@@ -533,6 +950,10 @@ export default function ChatConversation({
         });
         
         setIsRecording(true);
+        if (navigation.voiceHelpEnabled) {
+          setVoiceHelpExampleIndex(0);
+          setShowVoiceHelpOverlay(true);
+        }
         setRecordingDuration(0);
 
         // Démarrer le timer
@@ -860,7 +1281,20 @@ export default function ChatConversation({
   // Annuler l'enregistrement
   const cancelRecording = async () => {
     try {
-      console.log('❌ [AUDIO] Annulation enregistrement...', { platform: Platform.OS });
+      console.log('❌ [AUDIO] Annulation enregistrement...', { platform: Platform.OS, inputMode });
+
+      // Si mode dictée : annuler la Web Speech et vider l'input
+      if (inputMode === 'dictation') {
+        webSpeech.abort();
+        setWebSpeechInterim('');
+        webSpeechFinalizedRef.current = '';
+        webSpeechCorrectionsRef.current = [];
+        setInputText('');
+        setInputHeight(MIN_INPUT_HEIGHT);
+        setIsRecording(false);
+        console.log('✅ [DICTATION] Dictée annulée');
+        return;
+      }
 
       if (Platform.OS !== 'web') {
         // Mobile: essayer de supprimer le fichier avant nettoyage
@@ -1134,14 +1568,25 @@ export default function ChatConversation({
         // Continuer sans les produits si erreur
       }
 
+      let vocabularyTerms: string[] = [];
+      try {
+        vocabularyTerms = await AgricultureGlossaryService.getCoreTerms();
+        console.log('📚 [AUDIO] Termes agricoles chargés:', vocabularyTerms.length);
+      } catch (error) {
+        console.warn('⚠️ [AUDIO] Erreur chargement glossaire agricole:', error);
+      }
+
       // Utiliser filePath si disponible (plus fiable que l'URL publique)
       let transcription: TranscriptionResult;
       try {
         transcription = await TranscriptionService.transcribeFromUrl(
           uploadResult.fileUrl,
           'fr',
-          uploadResult.filePath, // Passer le chemin Storage pour téléchargement direct
-          productNames.length > 0 ? productNames : undefined // Passer les noms de produits
+          uploadResult.filePath,
+          {
+            productNames: productNames.length > 0 ? productNames : undefined,
+            vocabularyTerms: vocabularyTerms.length > 0 ? vocabularyTerms : undefined,
+          }
         );
       } catch (transcriptionError: any) {
         console.error('❌ [AUDIO] Erreur lors de la transcription:', transcriptionError);
@@ -1151,261 +1596,86 @@ export default function ChatConversation({
         };
       }
 
-      if (!transcription.success || !transcription.text) {
-        console.warn('⚠️ [AUDIO] Transcription échouée:', transcription.error);
-        console.log('📤 [AUDIO] Envoi audio sans transcription');
-        
-        // Mettre à jour le message pour indiquer que la transcription a échoué
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempMessageId
-            ? { ...msg, text: '🎤 Message vocal', isProcessing: false }
-            : msg
-        ));
-      } else {
-        console.log('✅ [AUDIO] Transcription réussie:', transcription.text?.substring(0, 100));
-        
-        // Mettre à jour le message avec la transcription
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempMessageId
-            ? { 
-                ...msg, 
-                text: transcription.text || '🎤 Message vocal',
-                isProcessing: false,
-                attachments: [{
-                  ...audioAttachment,
-                  transcription: transcription.text,
-                }],
-              }
-            : msg
-        ));
-        scrollToBottom(true, 50);
-        
-        // Mettre à jour l'enregistrement audio_files avec la transcription
-        if (uploadResult.audioFileId) {
-          try {
-            const { AudioFileService } = await import('../services/AudioFileService');
-            await AudioFileService.updateAudioFile(uploadResult.audioFileId, {
-              transcription: transcription.text,
-              transcription_language: transcription.language || 'fr',
-            });
-            console.log('✅ [AUDIO] Transcription enregistrée dans audio_files');
-          } catch (updateError) {
-            console.error('❌ [AUDIO] Erreur mise à jour audio_files:', updateError);
-          }
-        }
-      }
+      const rawTranscriptionText = transcription.text ?? '';
+      const rawTrimmedTranscription = rawTranscriptionText.trim();
+      const hasRawTranscription = transcription.success && rawTrimmedTranscription.length > 0;
 
-      // 🆕 Utiliser la transcription comme contenu du message si disponible
-      const messageContent = transcription.text || '🎤 Message vocal';
-      const metadata = {
-        attachments: [{
-          ...audioAttachment,
-          transcription: transcription.text,
-        }],
-        has_attachments: true,
-        has_transcription: !!transcription.text, // 🆕
+      let correctionOutcome = {
+        correctedText: rawTrimmedTranscription,
+        appliedCorrections: [] as AppliedCorrection[],
       };
 
-      // Vérifier si c'est un chat temporaire
-      const isTemporaryChat = chat.id.startsWith('temp-');
-      
-      if (isTemporaryChat) {
-        console.log('⚡ [OPTIMISTIC] Message audio sent to temporary chat');
+      if (hasRawTranscription && isTranscriptionAutocorrectEnabled) {
+        correctionOutcome = TranscriptionCorrectionService.apply(rawTrimmedTranscription);
+        if (correctionOutcome.appliedCorrections.length > 0) {
+          console.log(
+            '🛠️ [AUDIO] Corrections auto appliquées:',
+            correctionOutcome.appliedCorrections.map(c => `${c.id} x${c.occurrences}`).join(', ')
+          );
+          console.log('📝 [AUDIO] Aperçu correction', {
+            before: rawTrimmedTranscription.substring(0, 120),
+            after: correctionOutcome.correctedText.substring(0, 120),
+          });
+        } else {
+          console.log('ℹ️ [AUDIO] Aucune correction auto appliquée (texte conforme)');
+        }
+      } else if (!isTranscriptionAutocorrectEnabled) {
+        console.log('ℹ️ [AUDIO] Corrections automatiques désactivées');
+      }
+
+      const correctedTrimmed = correctionOutcome.correctedText.trim();
+      const hasValidTranscription = hasRawTranscription && correctedTrimmed.length > 0;
+      const finalTranscriptionText = hasValidTranscription ? correctedTrimmed : rawTrimmedTranscription;
+      const appliedCorrections = hasRawTranscription ? correctionOutcome.appliedCorrections : [];
+
+      if (!hasRawTranscription) {
+        console.warn('⚠️ [AUDIO] Transcription indisponible ou vide:', transcription.error);
+        console.log('📤 [AUDIO] Envoi audio sans transcription');
+        await processTranscribedAudio({
+          text: null,
+          language: transcription.language || 'fr',
+          audioAttachment,
+          audioFileId,
+          tempMessageId,
+          appliedCorrections,
+          rawText: rawTrimmedTranscription,
+        });
+        resetAudioState();
         return;
       }
 
-      // Pour les vrais chats, envoyer à la DB
-      try {
-        console.log('💬 [REAL-CHAT] Sending audio message to real chat:', chat.id);
-        
-        const dbMessage = await ChatServiceDirect.sendMessage({
-          session_id: chat.id,
-          role: 'user',
-          content: messageContent,
-          metadata: metadata,
+      console.log('✅ [AUDIO] Transcription prête pour édition:', finalTranscriptionText.substring(0, 100));
+      if (rawTrimmedTranscription !== finalTranscriptionText) {
+        console.log('📝 [AUDIO] Whisper vs texte corrigé', {
+          raw: rawTrimmedTranscription,
+          corrected: finalTranscriptionText,
         });
-
-        // Lier le fichier audio au message chat si disponible
-        if (audioFileId && dbMessage.id) {
-          const { AudioFileService } = await import('../services/AudioFileService');
-          await AudioFileService.updateAudioFile(audioFileId, {
-            chat_message_id: dbMessage.id,
-          });
-          console.log('🔗 [AUDIO] Fichier audio lié au message chat:', dbMessage.id);
-        }
-
-        // Remplacer le message temporaire par celui de la DB
-        setMessages(prev => prev.map(msg => 
-          msg.id === tempMessageId ? adaptChatMessageToMessage(dbMessage) : msg
-        ));
-
-        // Invalider le cache
-        await ChatCacheService.invalidateCache(chat.id);
-        console.log('🔄 [CACHE] Invalidated cache after audio message');
-
-        // Mettre à jour le chat
-        onUpdateChat(chat.id, {
-          lastMessage: messageContent,
-          timestamp: new Date(),
-          messageCount: messages.length + 1,
-        });
-
-        scrollToBottom(true);
-
-        // 🆕 Analyser la transcription avec l'IA si disponible
-        if (transcription.text && needsAIAnalysis(transcription.text)) {
-          console.log('🤖 [AUDIO] Analyse IA de la transcription...');
-          setIsAnalyzing(true);
-
-          // Ajouter un message d'indicateur d'analyse
-          const analysisStatusMessage: Message = {
-            id: `analysis-audio-${Date.now()}`,
-            text: "🧠 Thomas analyse votre message vocal...\n\n📝 Étape 1/4: Extraction des données agricoles\n⏳ Classification des entités...",
-            isUser: false,
-            timestamp: new Date(),
-            isAnalyzing: true,
-          };
-          setMessages(prev => [...prev, analysisStatusMessage]);
-          scrollToBottom(true, 50);
-
-          try {
-            // Mettre à jour le message d'analyse avec progression
-            setMessages(prev => prev.map(msg => 
-              msg.id === analysisStatusMessage.id 
-                ? { ...msg, text: "🧠 Thomas analyse votre message vocal...\n\n✅ Étape 1/4: Données extraites\n📊 Étape 2/4: Classification des intentions\n⏳ Identification des actions..." }
-                : msg
-            ));
-
-            const analysisResult = await AIChatService.analyzeMessage(
-              dbMessage.id,
-              transcription.text,
-              chat.id
-            );
-
-            if (analysisResult.success && analysisResult.actions && analysisResult.actions.length > 0) {
-              console.log('✅ [AUDIO] Analyse IA terminée:', analysisResult.actions.length, 'actions détectées');
-
-              // Mettre à jour le message d'analyse avec progression finale
-              setMessages(prev => prev.map(msg => 
-                msg.id === analysisStatusMessage.id 
-                  ? { ...msg, text: "🧠 Thomas analyse votre message vocal...\n\n✅ Étape 1/4: Données extraites\n✅ Étape 2/4: Intentions classifiées\n✅ Étape 3/4: Actions générées\n🎯 Finalisation..." }
-                  : msg
-              ));
-
-              // 🆕 Appliquer le split multi-cultures si nécessaire
-              const processedActions = [];
-              for (const action of analysisResult.actions) {
-                if (CropSplitterService.shouldSplit(action)) {
-                  const splitActions = CropSplitterService.splitAction(action);
-                  processedActions.push(...splitActions);
-                } else {
-                  processedActions.push(action);
-                }
-              }
-
-              // Créer le message de réponse IA avec les actions
-              const aiResponseContent = `Parfait ! J'ai identifié ${processedActions.length} action${processedActions.length > 1 ? 's' : ''} dans votre message vocal.`;
-              
-              const aiMessage: Message = {
-                id: `ai-audio-${Date.now()}`,
-                text: aiResponseContent,
-                isUser: false,
-                isAI: true,
-                timestamp: new Date(),
-                actions: processedActions,
-                hasActions: true,
-                confidence: analysisResult.confidence,
-                analysis_id: analysisResult.analysis_id,
-              };
-
-              // Remplacer le message d'analyse par la réponse finale
-              setMessages(prev => prev.map(msg => 
-                msg.id === analysisStatusMessage.id ? aiMessage : msg
-              ));
-
-              // Enregistrer le message IA en DB
-              const aiDbMessage = await ChatServiceDirect.sendMessage({
-                session_id: chat.id,
-                role: 'assistant',
-                content: aiResponseContent,
-                ai_confidence: analysisResult.confidence,
-                metadata: {
-                  actions: processedActions,
-                  has_actions: true,
-                  analysis_id: analysisResult.analysis_id,
-                },
-              });
-
-              // Créer automatiquement les tâches/observations et les lier à l'audio
-              for (const action of processedActions) {
-                try {
-                  if (action.action_type === 'observation') {
-                    const observationId = await AIChatService.createObservationFromAction(
-                      action,
-                      activeFarm?.farm_id || 0,
-                      currentUserId || ''
-                    );
-                    
-                    // Lier l'observation au fichier audio si disponible
-                    if (audioFileId && observationId) {
-                      const { DirectSupabaseService } = await import('../services/DirectSupabaseService');
-                      await DirectSupabaseService.directUpdate(
-                        'observations',
-                        { audio_file_id: audioFileId },
-                        [{ column: 'id', value: observationId }]
-                      );
-                      console.log('🔗 [AUDIO] Observation liée au fichier audio:', observationId);
-                    }
-                  } else {
-                    const taskId = await AIChatService.createTaskFromAction(
-                      action,
-                      activeFarm?.farm_id || 0,
-                      currentUserId || ''
-                    );
-                    
-                    // Lier la tâche au fichier audio si disponible
-                    if (audioFileId && taskId) {
-                      const { DirectSupabaseService } = await import('../services/DirectSupabaseService');
-                      await DirectSupabaseService.directUpdate(
-                        'tasks',
-                        { audio_file_id: audioFileId },
-                        [{ column: 'id', value: taskId }]
-                      );
-                      console.log('🔗 [AUDIO] Tâche liée au fichier audio:', taskId);
-                    }
-                  }
-                } catch (error) {
-                  console.error('❌ [AUDIO] Erreur création action:', error);
-                }
-              }
-
-              await ChatCacheService.invalidateCache(chat.id);
-              scrollToBottom(true);
-            } else {
-              // Pas d'actions détectées, retirer le message d'analyse
-              setMessages(prev => prev.filter(msg => msg.id !== analysisStatusMessage.id));
-            }
-          } catch (analysisError: any) {
-            console.error('❌ [AUDIO] Erreur analyse IA:', analysisError);
-            // Retirer le message d'analyse en cas d'erreur
-            setMessages(prev => prev.filter(msg => msg.id !== analysisStatusMessage.id));
-            // Afficher un message d'erreur discret
-            Alert.alert(
-              'Analyse indisponible',
-              'L\'analyse automatique n\'a pas pu être effectuée. Votre message vocal a bien été enregistré.',
-              [{ text: 'OK' }]
-            );
-          } finally {
-            setIsAnalyzing(false);
-          }
-        } else {
-          console.log('ℹ️ [AUDIO] Pas d\'analyse IA nécessaire pour ce message audio');
-        }
-
-      } catch (error: any) {
-        console.error('❌ [AUDIO] Erreur envoi message audio:', error);
-        Alert.alert('Erreur', `Impossible d'envoyer le message audio: ${error.message || 'Erreur inconnue'}`);
       }
+
+      // Retirer le message temporaire (il sera remplacé par l'envoi manuel)
+      setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+
+      setPendingTranscribedAudio({
+        audioAttachment,
+        audioFileId,
+        rawText: rawTrimmedTranscription,
+        correctedText: finalTranscriptionText,
+        appliedCorrections,
+        language: transcription.language || 'fr',
+      });
+
+      setInputText(finalTranscriptionText);
+      const lineCount = finalTranscriptionText
+        .split('\n')
+        .reduce((acc, line) => acc + Math.max(1, Math.ceil(line.length / 60)), 0);
+      const computedHeight = Math.min(
+        MAX_INPUT_HEIGHT,
+        Math.max(MIN_INPUT_HEIGHT, lineCount * LINE_HEIGHT + 16)
+      );
+      setInputHeight(computedHeight);
+
+      resetAudioState();
+      return;
 
     } catch (error: any) {
       console.error('❌ [AUDIO] Erreur envoi message audio:', error);
@@ -1433,6 +1703,9 @@ export default function ChatConversation({
       return false;
     }
     
+    // Critère 0: Questions (intent help) - mots interrogatifs ou point d'interrogation
+    const isQuestion = /\?/.test(trimmedText) || /\b(comment|où|quand|pourquoi|quel|quelle|quels|quelles|qui|aide|expliquer)\b/i.test(lowerText);
+    
     // Critère 1: Verbes d'action agricole (patterns courants)
     const hasActionVerb = /\b(j'ai|je|fait|faite|effectué|récolté|planté|semé|observé|inspecté|surveillé|vérifié|contrôlé|arrosé|traité|taillé|désherbé|paillé|bâché|installé|posé|enlevé|retiré|vais|prévu|planifie|dois|besoin)\b/i.test(lowerText);
     
@@ -1444,7 +1717,8 @@ export default function ChatConversation({
       'parcelle', 'planche', 'serre', 'tunnel', 'voile', 'plein champ',
       'kg', 'gramme', 'litre', 'hectare', 'mètre', 'heure', 'minute',
       'tomate', 'laitue', 'carotte', 'salade', 'chou', 'culture',
-      'puceron', 'maladie', 'ravageur', 'dégât', 'problème'
+      'puceron', 'maladie', 'ravageur', 'dégât', 'problème',
+      'conversion', 'caisse', 'panier', 'matériel', 'tracteur', 'outil'
     ];
     const hasAgricultureKeyword = agricultureKeywords.some(keyword => lowerText.includes(keyword));
     
@@ -1452,15 +1726,266 @@ export default function ChatConversation({
     const hasContext = /\b(sur|dans|pendant|avec|pour|depuis|jusqu'à|entre)\b/i.test(lowerText) && trimmedText.length > 20;
     
     // Déclenchement si:
-    // - (Verbe d'action OU chiffres) ET message > 15 caractères
+    // - Question (?, comment, où, etc.)
+    // - OU (Verbe d'action OU chiffres) ET message > 15 caractères
     // - OU mot-clé agricole présent
     // - OU (contexte + longueur suffisante)
     return (
+      isQuestion ||
       (trimmedText.length > 15 && (hasActionVerb || hasNumbers)) ||
       hasAgricultureKeyword ||
       hasContext
     );
   };
+
+  async function processTranscribedAudio({
+    text,
+    language,
+    audioAttachment,
+    audioFileId,
+    tempMessageId,
+    appliedCorrections,
+    rawText,
+  }: ProcessTranscribedAudioParams): Promise<void> {
+    const hasTranscription = !!(text && text.trim().length > 0);
+    const normalizedText = hasTranscription ? text!.trim() : '';
+    const messageContent = hasTranscription ? normalizedText : '🎤 Message vocal';
+
+    const attachments = [{
+      ...audioAttachment,
+      transcription: hasTranscription ? normalizedText : undefined,
+    }];
+
+    const serializedCorrections = appliedCorrections?.map(correction => ({
+      id: correction.id,
+      occurrences: correction.occurrences,
+      description: correction.description,
+    }));
+
+    const metadata: any = {
+      attachments,
+      has_attachments: true,
+      has_transcription: hasTranscription,
+    };
+
+    if (serializedCorrections && serializedCorrections.length > 0) {
+      metadata.transcription_corrections = serializedCorrections;
+      console.log('🧾 [AUDIO] Corrections enregistrées dans le metadata:', serializedCorrections);
+    }
+
+    if (rawText && text && rawText !== text) {
+      metadata.raw_transcription = rawText;
+    }
+
+    if (audioFileId) {
+      try {
+        const { AudioFileService } = await import('../services/AudioFileService');
+        await AudioFileService.updateAudioFile(
+          audioFileId,
+          hasTranscription
+            ? {
+                transcription: normalizedText,
+                transcription_language: language || 'fr',
+              }
+            : {
+                transcription: null,
+                transcription_language: null,
+              }
+        );
+        console.log('✅ [AUDIO] Métadonnées audio mises à jour');
+      } catch (updateError) {
+        console.error('❌ [AUDIO] Erreur mise à jour audio_files:', updateError);
+      }
+    }
+
+    const isTemporaryChat = chat.id.startsWith('temp-');
+
+    if (isTemporaryChat) {
+      console.log('⚡ [OPTIMISTIC] Message audio envoyé en mode temporaire');
+      setMessages(prev => prev.map(msg =>
+        msg.id === tempMessageId
+          ? {
+              ...msg,
+              text: messageContent,
+              isProcessing: false,
+              attachments,
+            }
+          : msg
+      ));
+      return;
+    }
+
+    try {
+      console.log('💬 [REAL-CHAT] Sending audio message to real chat:', chat.id);
+
+      const dbMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: messageContent,
+        metadata,
+      });
+
+      if (audioFileId && dbMessage.id) {
+        const { AudioFileService } = await import('../services/AudioFileService');
+        await AudioFileService.updateAudioFile(audioFileId, {
+          chat_message_id: dbMessage.id,
+        });
+        console.log('🔗 [AUDIO] Fichier audio lié au message chat:', dbMessage.id);
+      }
+
+      setMessages(prev => prev.map(msg =>
+        msg.id === tempMessageId ? adaptChatMessageToMessage(dbMessage) : msg
+      ));
+
+      await ChatCacheService.invalidateCache(chat.id);
+      console.log('🔄 [CACHE] Invalidated cache after audio message');
+
+      onUpdateChat(chat.id, {
+        lastMessage: messageContent,
+        timestamp: new Date(),
+        messageCount: messages.length + 1,
+      });
+
+      scrollToBottom(true);
+
+      if (hasTranscription && needsAIAnalysis(normalizedText)) {
+        console.log('🤖 [AUDIO] Analyse IA de la transcription...');
+        setIsAnalyzing(true);
+
+        const analysisStatusMessage: Message = {
+          id: `analysis-audio-${Date.now()}`,
+          text: "🧠 Thomas analyse votre message vocal...\n\n📝 Étape 1/4: Extraction des données agricoles\n⏳ Classification des entités...",
+          isUser: false,
+          timestamp: new Date(),
+          isAnalyzing: true,
+        };
+        setMessages(prev => [...prev, analysisStatusMessage]);
+        scrollToBottom(true, 50);
+
+        try {
+          setMessages(prev => prev.map(msg =>
+            msg.id === analysisStatusMessage.id
+              ? {
+                  ...msg,
+                  text: "🧠 Thomas analyse votre message vocal...\n\n✅ Étape 1/4: Données extraites\n📊 Étape 2/4: Classification des intentions\n⏳ Identification des actions...",
+                }
+              : msg
+          ));
+
+          const analysisResult = await AIChatService.analyzeMessage(
+            dbMessage.id,
+            normalizedText,
+            chat.id,
+            activeFarm?.farm_id
+          );
+
+          if (analysisResult.success && analysisResult.actions && analysisResult.actions.length > 0) {
+            console.log('✅ [AUDIO] Analyse IA terminée:', analysisResult.actions.length, 'actions détectées');
+
+            setMessages(prev => prev.map(msg =>
+              msg.id === analysisStatusMessage.id
+                ? {
+                    ...msg,
+                    text: "🧠 Thomas analyse votre message vocal...\n\n✅ Étape 1/4: Données extraites\n✅ Étape 2/4: Intentions classifiées\n✅ Étape 3/4: Actions générées\n🎯 Finalisation...",
+                  }
+                : msg
+            ));
+
+            const processedActions: any[] = [];
+            for (const action of analysisResult.actions) {
+              if (CropSplitterService.shouldSplit(action)) {
+                const splitActions = CropSplitterService.splitAction(action);
+                processedActions.push(...splitActions);
+              } else {
+                processedActions.push(action);
+              }
+            }
+
+            const aiResponseContent = `Parfait ! J'ai identifié ${processedActions.length} action${processedActions.length > 1 ? 's' : ''} dans votre message vocal.`;
+
+            const aiMessage: Message = {
+              id: `ai-audio-${Date.now()}`,
+              text: aiResponseContent,
+              isUser: false,
+              isAI: true,
+              timestamp: new Date(),
+              actions: processedActions,
+              hasActions: true,
+              confidence: analysisResult.confidence,
+              analysis_id: analysisResult.analysis_id,
+            };
+
+            setMessages(prev => prev.map(msg =>
+              msg.id === analysisStatusMessage.id ? aiMessage : msg
+            ));
+
+            const aiDbMessage = await ChatServiceDirect.sendMessage({
+              session_id: chat.id,
+              role: 'assistant',
+              content: aiResponseContent,
+              ai_confidence: analysisResult.confidence,
+              metadata: {
+                actions: processedActions,
+                has_actions: true,
+                analysis_id: analysisResult.analysis_id,
+              },
+            });
+
+            // Les tâches/observations sont déjà créées par le pipeline server-side.
+            // Ici on lie seulement le fichier audio via record_id retourné par le pipeline.
+            for (const action of processedActions) {
+              try {
+                const recordId = action.record_id;
+                if (!audioFileId || !recordId) {
+                  console.log('ℹ️ [AUDIO] Pas de liaison audio:', { audioFileId, recordId: recordId || 'none', actionType: action.action_type });
+                  continue;
+                }
+                const { DirectSupabaseService } = await import('../services/DirectSupabaseService');
+                if (action.action_type === 'observation') {
+                  await DirectSupabaseService.directUpdate(
+                    'observations',
+                    { audio_file_id: audioFileId },
+                    [{ column: 'id', value: recordId }]
+                  );
+                  console.log('🔗 [AUDIO] Observation liée au fichier audio:', recordId);
+                } else {
+                  await DirectSupabaseService.directUpdate(
+                    'tasks',
+                    { audio_file_id: audioFileId },
+                    [{ column: 'id', value: recordId }]
+                  );
+                  console.log('🔗 [AUDIO] Tâche liée au fichier audio:', recordId);
+                }
+              } catch (error) {
+                console.error('❌ [AUDIO] Erreur liaison action audio:', error);
+              }
+            }
+
+            await ChatCacheService.invalidateCache(chat.id);
+            scrollToBottom(true);
+          } else {
+            setMessages(prev => prev.filter(msg => msg.id !== analysisStatusMessage.id));
+          }
+        } catch (analysisError: any) {
+          console.error('❌ [AUDIO] Erreur analyse IA:', analysisError);
+          setMessages(prev => prev.filter(msg => msg.id !== analysisStatusMessage.id));
+          Alert.alert(
+            'Analyse indisponible',
+            'L\'analyse automatique n\'a pas pu être effectuée. Votre message vocal a bien été enregistré.',
+            [{ text: 'OK' }]
+          );
+        } finally {
+          setIsAnalyzing(false);
+        }
+      } else {
+        console.log('ℹ️ [AUDIO] Pas d\'analyse IA nécessaire pour ce message audio');
+      }
+    } catch (error: any) {
+      console.error('❌ [AUDIO] Erreur envoi message audio:', error);
+      Alert.alert('Erreur', `Impossible d'envoyer le message audio: ${error.message || 'Erreur inconnue'}`);
+      throw error;
+    }
+  }
 
   // Fonction pour analyser rétroactivement un message
   const analyzeMessageRetroactively = async (messageId: string, messageText: string) => {
@@ -1508,7 +2033,7 @@ export default function ChatConversation({
       scrollToBottom(true);
 
       // Lancer l'analyse
-      const result = await AIChatService.analyzeMessage(actualMessageId, messageText, chat.id);
+      const result = await AIChatService.analyzeMessage(actualMessageId, messageText, chat.id, activeFarm?.farm_id);
       console.log('✅ [RETROACTIVE-ANALYSIS] Résultat:', result);
 
       // Préparer les actions
@@ -1539,6 +2064,33 @@ export default function ChatConversation({
 
       console.log(`📊 [RETROACTIVE-ANALYSIS] Actions après expansion: ${expandedActions.length} (avant: ${actionsWithData.length})`);
 
+      // Mettre à jour le message user original avec is_help_request si nécessaire
+      if (result.is_help_request) {
+        try {
+          await DirectSupabaseService.directUpdate(
+            'chat_messages',
+            {
+              metadata: {
+                is_help_request: true,
+                analysis_id: result.analysis_id,
+                analyzed: true
+              }
+            },
+            [{ column: 'id', value: actualMessageId }]
+          );
+          console.log('✅ [RETROACTIVE-ANALYSIS] Message user marqué comme help_request');
+        } catch (updateError) {
+          console.error('⚠️ [RETROACTIVE-ANALYSIS] Échec mise à jour metadata user:', updateError);
+        }
+      }
+
+      // Pour les demandes d'aide, filtrer les actions "help" (ne pas les afficher comme cards)
+      const displayableActions = result.is_help_request 
+        ? expandedActions.filter(action => action.action_type !== 'help')
+        : expandedActions;
+
+      console.log(`📊 [RETROACTIVE-ANALYSIS] Actions affichables: ${displayableActions.length} (après filtrage help)`);
+
       // Créer un message de réponse dans le chat avec les actions
       const aiResponseMessage = await ChatServiceDirect.sendMessage({
         session_id: chat.id,
@@ -1547,10 +2099,12 @@ export default function ChatConversation({
         ai_confidence: result.confidence,
         metadata: {
           analysis_id: result.analysis_id,
-          actions: expandedActions, // Stocker les actions dans metadata
-          actions_count: expandedActions.length,
-          has_actions: expandedActions.length > 0,
-          processing_time_ms: result.processing_time_ms
+          actions: displayableActions, // Actions filtrées (sans help)
+          actions_count: displayableActions.length,
+          has_actions: displayableActions.length > 0, // false pour help
+          processing_time_ms: result.processing_time_ms,
+          is_help_request: result.is_help_request || false,
+          ...(result.help_shortcut && { help_shortcut: result.help_shortcut })
         }
       });
 
@@ -1563,8 +2117,9 @@ export default function ChatConversation({
         isUser: false,
         timestamp: new Date(aiResponseMessage.created_at),
         isAI: true,
-        hasActions: expandedActions.length > 0,
-        actions: expandedActions, // Utiliser les actions expansées
+        hasActions: displayableActions.length > 0, // false pour help
+        actions: displayableActions, // Actions filtrées (sans help)
+        helpShortcut: result.help_shortcut,
         confidence: result.confidence
       };
 
@@ -1614,8 +2169,12 @@ export default function ChatConversation({
     if (!chat?.id) {
       setMessages([]);
       setHasMoreMessages(false);
+      setIsLoadingMessages(false);
       return;
     }
+
+    // Démarrer le chargement
+    setIsLoadingMessages(true);
 
     // Vérifier si c'est un chat temporaire
     const isTemporaryChat = chat.id.startsWith('temp-');
@@ -1631,13 +2190,14 @@ export default function ChatConversation({
       setMessages([welcomeMessage]);
       setHasMoreMessages(false);
       setLoading(false);
+      setIsLoadingMessages(false);
       return;
     }
 
     // ========== STRATÉGIE CACHE-FIRST ==========
     // 1. Charger le cache D'ABORD (toujours disponible, même offline)
     // 2. Afficher le cache immédiatement
-    // 3. Vérifier la connexion
+    // 3. Vérifier la connexion (attendre que le statut soit déterminé)
     // 4. Si connexion OK, charger les messages frais depuis la DB
     // 5. Si pas de connexion ET pas de cache, afficher message "hors ligne"
     // ================================================================
@@ -1649,6 +2209,7 @@ export default function ChatConversation({
       const adaptedPreloadedMessages = chat.preloadedMessages.map(adaptChatMessageToMessage);
       setMessages(adaptedPreloadedMessages);
       setLoading(false);
+      setIsLoadingMessages(false);
       scrollToBottom(false, 50);
     } else {
       setLoading(true);
@@ -1667,6 +2228,7 @@ export default function ChatConversation({
         const adaptedCachedMessages = cachedMessages.map(adaptChatMessageToMessage);
         setMessages(adaptedCachedMessages);
         setLoading(false);
+        setIsLoadingMessages(false);
         hasCache = true;
         cachedMessagesCount = cachedMessages.length;
         scrollToBottom(false, 100);
@@ -1680,6 +2242,15 @@ export default function ChatConversation({
     // Étape 3: Vérifier la connexion (en parallèle, ne pas bloquer)
     const checkConnection = async () => {
       try {
+        // Attendre que le statut réseau soit déterminé (max 2 secondes)
+        let retries = 0;
+        const maxRetries = 4;
+        while (networkStatus.isLoading && retries < maxRetries) {
+          console.log('⏳ [NETWORK] Attente de la détermination du statut réseau...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          retries++;
+        }
+        
         const isOnline = await NetworkService.isOnline();
         
         if (!isOnline) {
@@ -1698,11 +2269,13 @@ export default function ChatConversation({
             setHasMoreMessages(false);
             setLoading(false);
             setIsInitialLoad(false);
+            setIsLoadingMessages(false);
             return;
           } else {
             console.log('✅ [OFFLINE] Cache ou messages préchargés disponibles, conservation des messages');
             setLoading(false);
             setIsInitialLoad(false);
+            setIsLoadingMessages(false);
             return; // Garder les messages du cache/préchargés
           }
         }
@@ -1761,6 +2334,7 @@ export default function ChatConversation({
       } finally {
         setLoading(false);
         setIsInitialLoad(false);
+        setIsLoadingMessages(false);
       }
     };
 
@@ -1809,6 +2383,88 @@ export default function ChatConversation({
   useEffect(() => {
     loadMessages();
   }, [chat?.id]);
+
+  // Charger le vocabulaire contextuel pour la correction Web Speech
+  // (uniquement si Web Speech disponible et ferme active connue)
+  useEffect(() => {
+    if (!webSpeech.isDictationAvailable || !activeFarm?.farm_id) return;
+
+    let cancelled = false;
+
+    const loadVocab = async () => {
+      try {
+        console.log('📚 [WEB-SPEECH-VOCAB] Chargement vocabulaire contextuel...');
+
+        // On garde les objets produit pour extraire aussi les speech_aliases
+        let userProducts: any[] = [];
+        const [glossaryTerms] = await Promise.all([
+          AgricultureGlossaryService.getCoreTerms().catch(() => [] as string[]),
+          (async () => {
+            if (!user?.id) return;
+            try {
+              userProducts = await UserPhytosanitaryPreferencesService.getUserProducts(
+                user.id,
+                activeFarm.farm_id
+              );
+            } catch { /* non bloquant */ }
+          })(),
+        ]);
+        const productNames = userProducts.map((p: any) => p.name as string);
+
+        if (cancelled) return;
+
+        // Récupérer parcelles et cultures depuis le FarmContext (déjà chargées)
+        // Note: farmData est accessible via useFarm() mais on ne peut pas appeler
+        // des hooks conditionnellement — on passe par activeFarm directement.
+        // Les plots sont dans farmData mais ChatConversation n'expose que activeFarm.
+        // On charge les noms via PlotService pour avoir aliases + unités.
+        let plotNames: string[] = [];
+        try {
+          const { PlotService } = await import('../services/plotService');
+          const plots = await PlotService.getPlotsByFarm(activeFarm.farm_id);
+          plotNames = plots.flatMap(p => [
+            p.name,
+            ...(p.aliases || []),
+            ...(p.surfaceUnits || []).map((u: any) => u.name),
+            ...(p.surfaceUnits || []).flatMap((u: any) => [u.fullName]),
+          ]).filter(Boolean) as string[];
+        } catch { /* non bloquant */ }
+
+        if (cancelled) return;
+
+        const vocabEntries = WebSpeechCorrectionService.buildVocabulary({
+          products: productNames,
+          plots: plotNames,
+          glossary: glossaryTerms,
+        });
+
+        webSpeechVocabRef.current = vocabEntries;
+
+        // Construire les règles exactes depuis speech_aliases de chaque produit
+        const exactRules: ExactCorrectionRule[] = [];
+        for (const product of userProducts) {
+          if (Array.isArray(product.speech_aliases)) {
+            for (const alias of product.speech_aliases) {
+              if (alias && alias.trim()) {
+                exactRules.push({ alias: alias.trim(), corrected_term: product.name });
+              }
+            }
+          }
+        }
+        webSpeechExactRulesRef.current = exactRules;
+
+        console.log(
+          `✅ [WEB-SPEECH-VOCAB] ${vocabEntries.length} entrées fuzzy + ${exactRules.length} règles exactes`,
+          `(produits: ${productNames.length}, parcelles: ${plotNames.length}, glossaire: ${glossaryTerms.length})`
+        );
+      } catch (err) {
+        console.warn('⚠️ [WEB-SPEECH-VOCAB] Erreur chargement vocabulaire:', err);
+      }
+    };
+
+    loadVocab();
+    return () => { cancelled = true; };
+  }, [activeFarm?.farm_id, user?.id, webSpeech.isDictationAvailable]);
 
   // Nettoyer l'enregistrement si l'utilisateur quitte l'écran ou change de chat
   useEffect(() => {
@@ -2002,6 +2658,7 @@ export default function ChatConversation({
     if ((!inputText.trim() && draftAttachments.length === 0) || !chat) return;
 
     const originalText = inputText.trim();
+    const pendingAudio = pendingTranscribedAudio;
     const attachments = [...draftAttachments]; // Copie des pièces jointes
     setInputText('');
     setInputHeight(MIN_INPUT_HEIGHT); // Réinitialiser la hauteur
@@ -2011,12 +2668,11 @@ export default function ChatConversation({
     let messageContent = originalText;
     let metadata: any = {};
 
-    // Traiter les pièces jointes
+    let processedAttachments: ChatAttachment[] = [];
     if (attachments.length > 0) {
       console.log('📎 [CHAT] Traitement de', attachments.length, 'pièces jointes');
       
-      // Uploader les images et traiter les autres pièces jointes
-      const processedAttachments = await Promise.all(
+      processedAttachments = await Promise.all(
         attachments.map(async (attachment) => {
           if (attachment.type === 'image' && attachment.data) {
             console.log('☁️ [CHAT] Upload image:', attachment.name);
@@ -2029,7 +2685,7 @@ export default function ChatConversation({
             if (uploadResult.success) {
               return {
                 ...attachment,
-                uploadedUri: uploadResult.fileUrl, // Garder l'URI uploadée séparément
+                uploadedUri: uploadResult.fileUrl,
                 uploaded: true
               };
             }
@@ -2037,24 +2693,98 @@ export default function ChatConversation({
           return attachment;
         })
       );
+    }
 
-      // Ajouter les pièces jointes aux métadonnées
+    if (pendingAudio) {
+      processedAttachments = [
+        ...processedAttachments,
+        {
+          ...pendingAudio.audioAttachment,
+          transcription: originalText,
+        },
+      ];
+    }
+
+    if (processedAttachments.length > 0) {
       metadata.attachments = processedAttachments;
       metadata.has_attachments = true;
+    }
 
-      // Ajouter un résumé des pièces jointes au message
-      if (!originalText) {
-        const attachmentTypes = processedAttachments.map(att => {
-          switch (att.type) {
-            case 'image': return '📸 Photo';
-            case 'document': return '📄 Document';
-            case 'location': return '📍 Localisation';
-            case 'task': return '✅ Tâche';
-            default: return '📎 Fichier';
-          }
-        });
-        messageContent = `${attachmentTypes.join(', ')} partagé${processedAttachments.length > 1 ? 's' : ''}`;
+    if (!originalText && processedAttachments.length > 0) {
+      const attachmentTypes = processedAttachments.map(att => {
+        switch (att.type) {
+          case 'image': return '📸 Photo';
+          case 'document': return '📄 Document';
+          case 'location': return '📍 Localisation';
+          case 'task': return '✅ Tâche';
+          case 'audio': return '🎧 Audio';
+          default: return '📎 Fichier';
+        }
+      });
+      messageContent = `${attachmentTypes.join(', ')} partagé${processedAttachments.length > 1 ? 's' : ''}`;
+    }
+
+    if (pendingAudio) {
+      // Métadonnées de transcription Whisper (mode vocal direct)
+      metadata.has_transcription = true;
+      metadata.raw_transcription = pendingAudio.rawText;
+      metadata.transcription_language = pendingAudio.language || 'fr';
+      metadata.transcription_source = pendingAudio.source || 'whisper';
+      if (pendingAudio.appliedCorrections.length > 0) {
+        metadata.transcription_corrections = pendingAudio.appliedCorrections.map(correction => ({
+          id: correction.id,
+          occurrences: correction.occurrences,
+          description: correction.description,
+        }));
       }
+      metadata.transcription_user_modified = pendingAudio.correctedText !== originalText;
+      // Transcriptions optionnelles pour comparaison (si les deux sources sont disponibles)
+      if (pendingAudio.webSpeechTranscript) {
+        metadata.web_speech_transcript = pendingAudio.webSpeechTranscript;
+      }
+      if (pendingAudio.whisperTranscript) {
+        metadata.whisper_transcript = pendingAudio.whisperTranscript;
+      }
+
+      console.log('📝 [AUDIO] Comparaison finale', {
+        source: pendingAudio.source || 'whisper',
+        raw: pendingAudio.rawText,
+        corrected: pendingAudio.correctedText,
+        final: originalText,
+      });
+    } else if (webSpeechFinalizedRef.current && !pendingAudio) {
+      // Mode dictée Web Speech seul (pas d'audio Whisper) :
+      // Le texte dans l'input EST la transcription finale Web Speech
+      const webSpeechRaw = webSpeechFinalizedRef.current;
+      if (webSpeechRaw) {
+        metadata.has_transcription = true;
+        metadata.raw_transcription = webSpeechRaw;
+        metadata.transcription_source = 'web_speech';
+        metadata.web_speech_transcript = webSpeechRaw;
+        metadata.transcription_user_modified = webSpeechRaw !== originalText;
+        // Corrections contextuelles appliquées pendant la dictée
+        if (webSpeechCorrectionsRef.current.length > 0) {
+          metadata.web_speech_contextual_corrections = webSpeechCorrectionsRef.current.map(c => ({
+            original: c.original,
+            corrected: c.corrected,
+            similarity: Math.round(c.similarity * 100) / 100,
+            gramSize: c.gramSize,
+          }));
+          console.log(
+            '✏️ [DICTATION] Corrections contextuelles enregistrées:',
+            webSpeechCorrectionsRef.current.map(c => `"${c.original}" → "${c.corrected}"`).join(', ')
+          );
+        }
+        console.log('📝 [DICTATION] Métadonnées Web Speech', {
+          webSpeechRaw,
+          final: originalText,
+          modified: webSpeechRaw !== originalText,
+          contextualCorrections: webSpeechCorrectionsRef.current.length,
+        });
+      }
+      // Réinitialiser les refs de la session de dictée
+      webSpeechFinalizedRef.current = '';
+      webSpeechCorrectionsRef.current = [];
     }
 
     // Vérifier si c'est un chat temporaire
@@ -2106,9 +2836,27 @@ export default function ChatConversation({
       const isOnline = await NetworkService.isOnline();
       
       if (!isOnline) {
+        if (pendingAudio) {
+          Alert.alert(
+            'Mode hors ligne',
+            'La transcription ne peut pas être envoyée hors ligne. Vérifiez votre connexion et réessayez.',
+            [{ text: 'OK' }]
+          );
+          setInputText(originalText);
+          const restoreLines = originalText
+            .split('\n')
+            .reduce((acc, line) => acc + Math.max(1, Math.ceil(line.length / 60)), 0);
+          const restoreHeight = Math.min(
+            MAX_INPUT_HEIGHT,
+            Math.max(MIN_INPUT_HEIGHT, restoreLines * LINE_HEIGHT + 16)
+          );
+          setInputHeight(restoreHeight);
+          setDraftAttachments(attachments);
+          return;
+        }
+
         console.log('📴 [OFFLINE] Mode hors ligne, ajout à la queue locale');
         
-        // Ajouter à la queue locale (l'effet useOfflineQueue l'affichera automatiquement)
         const queueId = await OfflineQueueService.addMessage({
           type: 'text',
           session_id: chat.id,
@@ -2119,10 +2867,8 @@ export default function ChatConversation({
         
         console.log('✅ [OFFLINE] Message ajouté à la queue:', queueId);
         
-        // Rafraîchir la queue pour afficher le message en attente
         await refreshQueue();
         
-        // Afficher un message informatif
         Alert.alert(
           'Mode hors ligne',
           'Votre message sera envoyé automatiquement dès que la connexion sera rétablie.',
@@ -2133,13 +2879,15 @@ export default function ChatConversation({
       }
 
       // Créer le message local pour affichage immédiat (seulement si en ligne)
+      const hasAnyAttachments = processedAttachments.length > 0;
+
       tempMessage = {
         id: `temp-${Date.now()}`,
         text: messageContent,
         isUser: true,
         timestamp: new Date(),
-        attachments: attachments.length > 0 ? attachments : undefined,
-        hasAttachments: attachments.length > 0
+        attachments: hasAnyAttachments ? processedAttachments : undefined,
+        hasAttachments: hasAnyAttachments
       };
 
       // Ajouter immédiatement à l'UI pour réactivité
@@ -2155,6 +2903,15 @@ export default function ChatConversation({
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined
       });
 
+      if (pendingAudio?.audioFileId && dbMessage.id) {
+        const { AudioFileService } = await import('../services/AudioFileService');
+        await AudioFileService.updateAudioFile(pendingAudio.audioFileId, {
+          transcription: originalText,
+          transcription_language: pendingAudio.language || 'fr',
+          chat_message_id: dbMessage.id,
+        });
+        console.log('🔗 [AUDIO] Fichier audio lié au message envoyé:', dbMessage.id);
+      }
 
       // Remplacer le message temporaire par celui de la DB
       setMessages(prev => prev.map(msg => 
@@ -2176,9 +2933,15 @@ export default function ChatConversation({
       // Défiler vers le bas
       scrollToBottom(true);
 
+      if (pendingAudio) {
+        setPendingTranscribedAudio(null);
+      }
+      // Réinitialiser le transcript Web Speech après envoi
+      webSpeechFinalizedRef.current = '';
+
       // Déterminer si le message nécessite une analyse IA
       // Ne pas analyser les messages avec des images pour éviter d'envoyer les images à l'API
-      const hasImages = attachments.some(att => att.type === 'image');
+      const hasImages = processedAttachments.some(att => att.type === 'image');
       const shouldAnalyze = needsAIAnalysis(originalText);
       
       console.log('🤔 [ANALYSIS-DECISION]', {
@@ -2220,8 +2983,28 @@ export default function ChatConversation({
           ));
 
           // Appel à l'IA avec l'ID du message de la DB (UUID valide)
-          const result = await AIChatService.analyzeMessage(dbMessage.id, originalText, chat.id);
+          const result = await AIChatService.analyzeMessage(dbMessage.id, originalText, chat.id, activeFarm?.farm_id);
           console.log('✅ [CHAT-ANALYSIS] Résultat analyse IA:', result);
+          
+          // Mettre à jour le message user original avec is_help_request si nécessaire
+          if (result.is_help_request) {
+            try {
+              await DirectSupabaseService.directUpdate(
+                'chat_messages',
+                {
+                  metadata: {
+                    is_help_request: true,
+                    analysis_id: result.analysis_id,
+                    analyzed: true
+                  }
+                },
+                [{ column: 'id', value: dbMessage.id }]
+              );
+              console.log('✅ [CHAT-ANALYSIS] Message user marqué comme help_request');
+            } catch (updateError) {
+              console.error('⚠️ [CHAT-ANALYSIS] Échec mise à jour metadata user:', updateError);
+            }
+          }
           
           // Étape 3
           setMessages(prev => prev.map(msg => 
@@ -2232,9 +3015,13 @@ export default function ChatConversation({
 
           // Message court + actions dans metadata pour affichage cards
           const actionsCount = result.actions?.length || 0;
-          const aiResponseText = actionsCount > 0 
-            ? `Parfait ! J'ai identifié ${actionsCount} action${actionsCount > 1 ? 's' : ''} dans votre message.`
-            : `J'ai bien noté votre message.`;
+          
+          // Si c'est une demande d'aide, utiliser le message du pipeline directement
+          const aiResponseText = result.is_help_request && result.message
+            ? result.message
+            : actionsCount > 0 
+              ? `Parfait ! J'ai identifié ${actionsCount} action${actionsCount > 1 ? 's' : ''} dans votre message.`
+              : `J'ai bien noté votre message.`;
 
           // Préparer les actions avec les données extraites complètes
           const actionsWithData = (result.actions || []).map((action: any) => ({
@@ -2264,23 +3051,19 @@ export default function ChatConversation({
 
           console.log(`📊 [CHAT-ANALYSIS] Actions après expansion: ${expandedActions.length} (avant: ${actionsWithData.length})`);
 
-          // ✅ AUTO-VALIDATION: Créer automatiquement les tâches/observations
-          if (expandedActions.length > 0 && activeFarm?.farm_id && currentUserId) {
-            console.log('🚀 [AUTO-VALIDATE] Création automatique des tâches/observations...');
-            for (const action of expandedActions) {
-              try {
-                if (action.action_type === 'observation') {
-                  await AIChatService.createObservationFromAction(action, activeFarm.farm_id, currentUserId);
-                  console.log(`✅ [AUTO-VALIDATE] Observation créée: ${action.id}`);
-                } else if (['task_done', 'task_planned', 'harvest'].includes(action.action_type)) {
-                  await AIChatService.createTaskFromAction(action, activeFarm.farm_id, currentUserId);
-                  console.log(`✅ [AUTO-VALIDATE] Tâche créée: ${action.id}`);
-                }
-              } catch (autoValidateError) {
-                console.error(`⚠️ [AUTO-VALIDATE] Erreur création action ${action.id}:`, autoValidateError);
-                // Continue avec les autres actions même en cas d'erreur
-              }
-            }
+          // Pour les demandes d'aide, filtrer les actions "help" (elles ne doivent pas être affichées comme des cards)
+          const displayableActions = result.is_help_request 
+            ? expandedActions.filter(action => action.action_type !== 'help')
+            : expandedActions;
+
+          console.log(`📊 [CHAT-ANALYSIS] Actions affichables: ${displayableActions.length} (après filtrage help)`);
+
+          // Les tâches/observations sont déjà créées par le pipeline server-side (thomas-agent-pipeline).
+          // Pas de création client-side pour éviter les doublons.
+          if (displayableActions.length > 0) {
+            console.log(`ℹ️ [AUTO-VALIDATE] ${displayableActions.length} action(s) déjà créées par le pipeline (record_ids: ${displayableActions.map((a: any) => a.record_id || 'none').join(', ')})`);
+          } else if (result.is_help_request) {
+            console.log('ℹ️ [AUTO-VALIDATE] Help request détecté, pas d\'actions');
           }
 
           // Envoyer à la DB
@@ -2291,11 +3074,13 @@ export default function ChatConversation({
             ai_confidence: result.confidence || 0.8,
             metadata: { 
               analysis_id: result.analysis_id,
-              actions: expandedActions, // Utiliser les actions expansées
-              actions_count: expandedActions.length, // Compter les actions expansées
+              actions: displayableActions, // Actions filtrées (sans help)
+              actions_count: displayableActions.length,
               processing_time: result.processing_time_ms || 0,
-              has_actions: expandedActions.length > 0,
-              auto_validated: true
+              has_actions: displayableActions.length > 0, // false pour help
+              auto_validated: true,
+              is_help_request: result.is_help_request || false,
+              ...(result.help_shortcut && { help_shortcut: result.help_shortcut })
             }
           });
 
@@ -2307,8 +3092,9 @@ export default function ChatConversation({
             timestamp: new Date(),
             isAI: true,
             isAnalyzing: false,
-            actions: expandedActions, // Utiliser les actions expansées
-            hasActions: expandedActions.length > 0,
+            actions: displayableActions, // Actions filtrées (sans help)
+            hasActions: displayableActions.length > 0, // false pour help
+            helpShortcut: result.help_shortcut,
             confidence: result.confidence || 0.8,
             analysis_id: result.analysis_id
           };
@@ -2828,7 +3614,7 @@ export default function ChatConversation({
             quantity_value: updatedAction.extracted_data?.quantity?.value,
             quantity_unit: updatedAction.extracted_data?.quantity?.unit,
             quantity_nature: updatedAction.extracted_data?.quantity_nature,
-            quantity_type: updatedAction.extracted_data?.quantity_type,
+            quantity_type: sanitizeQuantityType(updatedAction.extracted_data),
             notes: updatedAction.extracted_data?.notes
           };
           
@@ -2935,6 +3721,161 @@ export default function ChatConversation({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const renderVoiceHelpTag = (tag: VoiceHelpTag, key: string) => (
+    <View
+      key={key}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: tag.bgColor,
+        borderRadius: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        marginRight: 6,
+        marginBottom: 6,
+      }}
+    >
+      <Text style={{ fontSize: 12, marginRight: 4 }}>{tag.icon}</Text>
+      <Text style={{ fontSize: 12, color: tag.textColor, fontWeight: '500' }}>
+        {tag.value}
+      </Text>
+    </View>
+  );
+
+  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const renderHighlightedVoiceHelpSentence = (example: VoiceHelpExample) => {
+    if (!example.sentence.trim()) {
+      return (
+        <View
+          style={{
+            borderWidth: 1,
+            borderStyle: 'dashed',
+            borderColor: colors.border.primary,
+            borderRadius: 8,
+            minHeight: 34,
+            justifyContent: 'center',
+            paddingHorizontal: 8,
+            marginBottom: 8,
+          }}
+        >
+          <Text style={{ fontSize: 13, color: colors.text.tertiary, fontStyle: 'italic' }}>
+            (phrase vide)
+          </Text>
+        </View>
+      );
+    }
+
+    type HighlightTerm = { term: string; bgColor: string; textColor: string };
+    const uniqueTerms = new Map<string, HighlightTerm>();
+    for (const tag of [...example.essentials, ...example.optional]) {
+      const term = (tag.highlight || tag.value).trim();
+      if (term.length < 2) continue;
+      const key = term.toLowerCase();
+      if (!uniqueTerms.has(key)) {
+        uniqueTerms.set(key, {
+          term,
+          bgColor: tag.bgColor,
+          textColor: tag.textColor,
+        });
+      }
+    }
+    const terms = [...uniqueTerms.values()].sort((a, b) => b.term.length - a.term.length);
+
+    type HighlightRange = { start: number; end: number; bgColor: string; textColor: string };
+    const occupied: boolean[] = Array(example.sentence.length).fill(false);
+    const ranges: HighlightRange[] = [];
+
+    for (const termDef of terms) {
+      const regex = new RegExp(escapeRegex(termDef.term), 'gi');
+      let match: RegExpExecArray | null = regex.exec(example.sentence);
+      while (match) {
+        const start = match.index;
+        const end = start + match[0].length;
+        const hasOverlap = occupied.slice(start, end).some(Boolean);
+        if (!hasOverlap) {
+          ranges.push({
+            start,
+            end,
+            bgColor: termDef.bgColor,
+            textColor: termDef.textColor,
+          });
+          for (let i = start; i < end; i++) occupied[i] = true;
+        }
+        match = regex.exec(example.sentence);
+      }
+    }
+
+    ranges.sort((a, b) => a.start - b.start);
+
+    const pieces: Array<{
+      text: string;
+      highlighted: boolean;
+      bgColor?: string;
+      textColor?: string;
+    }> = [];
+    let cursor = 0;
+    for (const range of ranges) {
+      if (range.start > cursor) {
+        pieces.push({ text: example.sentence.slice(cursor, range.start), highlighted: false });
+      }
+      pieces.push({
+        text: example.sentence.slice(range.start, range.end),
+        highlighted: true,
+        bgColor: range.bgColor,
+        textColor: range.textColor,
+      });
+      cursor = range.end;
+    }
+    if (cursor < example.sentence.length) {
+      pieces.push({ text: example.sentence.slice(cursor), highlighted: false });
+    }
+
+    return (
+      <Text style={{ fontSize: 14, color: colors.text.primary, marginBottom: 8, lineHeight: 22 }}>
+        {'"'}
+        {pieces.map((piece, index) => (
+          <Text
+            key={`piece-${index}`}
+            style={piece.highlighted ? {
+              backgroundColor: piece.bgColor,
+              color: piece.textColor,
+              fontWeight: '600',
+              borderRadius: 8,
+              paddingHorizontal: 4,
+              paddingVertical: 1,
+              overflow: 'hidden',
+            } : undefined}
+          >
+            {piece.text}
+          </Text>
+        ))}
+        {'"'}
+      </Text>
+    );
+  };
+
+  const currentVoiceHelpExample = VOICE_HELP_EXAMPLES[voiceHelpExampleIndex] || VOICE_HELP_EXAMPLES[0];
+  const currentVoiceHelpCategoryStyle = VOICE_HELP_CATEGORY_STYLES[currentVoiceHelpExample.category];
+  const goToNextVoiceHelpExample = () => {
+    setVoiceHelpExampleIndex((prev) => (prev + 1) % VOICE_HELP_EXAMPLES.length);
+  };
+  const goToPreviousVoiceHelpExample = () => {
+    setVoiceHelpExampleIndex((prev) => (prev - 1 + VOICE_HELP_EXAMPLES.length) % VOICE_HELP_EXAMPLES.length);
+  };
+  const voiceHelpSwipeResponder = PanResponder.create({
+    onMoveShouldSetPanResponder: (_evt, gestureState) =>
+      Math.abs(gestureState.dx) > 12 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy),
+    onPanResponderRelease: (_evt, gestureState) => {
+      const SWIPE_THRESHOLD = 35;
+      if (gestureState.dx <= -SWIPE_THRESHOLD) {
+        goToNextVoiceHelpExample();
+      } else if (gestureState.dx >= SWIPE_THRESHOLD) {
+        goToPreviousVoiceHelpExample();
+      }
+    },
+  });
+
   if (!chat) {
     return (
       <View style={{
@@ -2980,26 +3921,39 @@ export default function ChatConversation({
       
       {/* ===== INDICATEUR OFFLINE ===== */}
       <OfflineIndicator />
-      
-      {/* ===== HEADER UNIFIÉ ===== */}
-      <UnifiedHeader
-        title={chat?.title || 'Conversation'}
-        onBack={onGoBack}
-        onFarmSelector={onFarmSelector}
-        showBackButton={!!onGoBack}
-      />
 
       {/* ===== ZONE DES MESSAGES ===== */}
+      <View style={{ flex: 1, position: 'relative' }}>
       <ScrollView 
         ref={scrollViewRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ 
           paddingHorizontal: Platform.select({ web: spacing.sm, default: spacing.md }),
           paddingTop: spacing.sm,
-          paddingBottom: spacing.lg 
+          paddingBottom: spacing.lg,
+          ...(isLoadingMessages && messages.length === 0 ? { flex: 1, justifyContent: 'center' } : {})
         }}
         showsVerticalScrollIndicator={false}
       >
+
+        {/* Indicateur de chargement des messages */}
+        {isLoadingMessages && messages.length === 0 && (
+          <View style={{ 
+            flex: 1, 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            paddingVertical: spacing.xl * 2,
+          }}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={{ 
+              marginTop: spacing.md, 
+              color: colors.text.secondary,
+              fontSize: 16,
+            }}>
+              Chargement des messages...
+            </Text>
+          </View>
+        )}
 
         {/* Bouton Charger plus (anciens messages) */}
         {hasMoreMessages && (
@@ -3046,38 +4000,55 @@ export default function ChatConversation({
             );
           }
 
-          // Messages IA avec actions - nouveau design cards
-          if (message.isAI && (message.hasActions || (message.actions && message.actions.length > 0))) {
+          // Messages IA avec actions (ou raccourci help "Aller à...")
+          if (message.isAI && (message.hasActions || (message.actions && message.actions.length > 0) || message.helpShortcut)) {
             return (
               <AIResponseWithActions
                 key={message.id}
                 message={message.text}
                 actions={message.actions || []}
+                helpShortcut={message.helpShortcut}
+                onNavigateToHelp={(screen) => {
+                  navigation.navigateToTab('Profil');
+                  navigation.navigateToScreen(screen as ScreenName);
+                }}
+                onNavigate={(screen, params) => {
+                  navigation.navigateToTab('Profil');
+                  navigation.navigateToScreen(screen as ScreenName, params);
+                }}
                 confidence={message.confidence || 0.8}
                 onValidateAction={async (index, action) => {
                   console.log('✅ [VALIDATE] Action validée:', index, action);
-                  
+
+                  // Les actions sont déjà créées par le pipeline server-side
+                  // On détecte via record_id pour éviter les doublons
+                  if (action.record_id) {
+                    console.log('ℹ️ [VALIDATE] Action déjà créée par le pipeline:', action.record_id);
+                    Alert.alert('✅ Succès', 'Action déjà enregistrée.');
+                    return;
+                  }
+
+                  // Fallback: création manuelle si record_id absent (cas rare)
                   if (!activeFarm?.farm_id || !currentUserId) {
                     Alert.alert('Erreur', 'Impossible de valider: ferme ou utilisateur non identifié');
                     return;
                   }
-                  
+
                   try {
-                    // Créer la tâche ou observation selon le type
                     if (action.action_type === 'observation') {
-                      const obsId = await AIChatService.createObservationFromAction(
+                      await AIChatService.createObservationFromAction(
                         action as AnalyzedAction,
                         activeFarm.farm_id,
                         currentUserId
                       );
-                      Alert.alert('✅ Succès', `Observation créée avec succès !`);
-                    } else {
-                      const taskId = await AIChatService.createTaskFromAction(
+                      Alert.alert('✅ Succès', 'Observation créée avec succès !');
+                    } else if (['task_done', 'task_planned', 'harvest'].includes(action.action_type || '')) {
+                      await AIChatService.createTaskFromAction(
                         action as AnalyzedAction,
                         activeFarm.farm_id,
                         currentUserId
                       );
-                      Alert.alert('✅ Succès', `Tâche créée avec succès !`);
+                      Alert.alert('✅ Succès', 'Tâche créée avec succès !');
                     }
                   } catch (error: any) {
                     console.error('❌ [VALIDATE] Erreur création:', error);
@@ -3086,7 +4057,9 @@ export default function ChatConversation({
                 }}
                 onEditAction={async (index, action) => {
                   console.log('✏️ [EDIT] Action modifiée:', index, action);
-                  
+
+                  const isTempId = action.id?.startsWith?.('temp_');
+
                   if (!action.id) {
                     console.error('❌ [EDIT] Action sans ID, impossible de sauvegarder');
                     Alert.alert('Erreur', 'Impossible de modifier cette action');
@@ -3094,35 +4067,39 @@ export default function ChatConversation({
                   }
 
                   try {
-                    // Mettre à jour l'action dans la base de données
-                    const updateData = {
-                      action_type: action.action_type,
-                      action_data: {
-                        original_text: action.original_text,
-                        decomposed_text: action.decomposed_text,
-                        extracted_data: action.extracted_data,
-                        context: action.matched_entities || {}
-                      },
-                      confidence_score: action.confidence || 0.8,
-                      user_status: 'modified'
-                    };
+                    if (!isTempId) {
+                      const updateData = {
+                        action_type: action.action_type,
+                        action_data: {
+                          original_text: action.original_text,
+                          decomposed_text: action.decomposed_text,
+                          extracted_data: action.extracted_data,
+                          context: action.matched_entities || {}
+                        },
+                        confidence_score: action.confidence || 0.8,
+                        user_status: 'modified'
+                      };
 
-                    await DirectSupabaseService.directUpdate(
-                      'chat_analyzed_actions',
-                      updateData,
-                      [{ column: 'id', value: action.id }]
-                    );
+                      const { error } = await DirectSupabaseService.directUpdate(
+                        'chat_analyzed_actions',
+                        updateData,
+                        [{ column: 'id', value: action.id }]
+                      );
 
-                    console.log('✅ [EDIT] Action mise à jour en DB:', action.id);
+                      if (error) throw error;
+                      console.log('✅ [EDIT] Action mise à jour en DB:', action.id);
+                    } else {
+                      console.log('ℹ️ [EDIT] ID temporaire - mise à jour locale uniquement (manage_* déjà persisté)');
+                    }
 
                     // Mettre à jour l'état local pour refléter les changements
                     setMessages(prev => prev.map(msg => {
                       if (msg.actions && msg.actions.length > 0) {
-                        // Chercher le message qui contient cette action
-                        const actionExists = msg.actions.some(a => a.id === action.id);
+                        const matchId = (a: any) => a.id === action.id || String(a.id) === String(action.id);
+                        const actionExists = msg.actions.some(matchId);
                         if (actionExists) {
                           const updatedActions = msg.actions.map(a => 
-                            a.id === action.id ? action : a
+                            matchId(a) ? action : a
                           );
                           console.log('🔄 [EDIT] Message mis à jour localement:', msg.id);
                           
@@ -3144,10 +4121,11 @@ export default function ChatConversation({
                 }}
                 onRejectAction={async (index, action) => {
                   console.log('❌ [REJECT] Action rejetée:', index, action);
-                  
+
+                  const isTempId = action.id?.startsWith?.('temp_');
+
                   try {
-                    // Soft delete: marquer comme rejetée par l'utilisateur
-                    if (action.id) {
+                    if (action.id && !isTempId) {
                       await DirectSupabaseService.directUpdate(
                         'chat_analyzed_actions',
                         { user_status: 'rejected' },
@@ -3175,9 +4153,10 @@ export default function ChatConversation({
             // Vérifier aussi si le message a un analysis_id dans metadata (analysé mais réponse pas juste après)
             const messageMetadata = (message as any).metadata;
             const hasAnalysisMetadata = messageMetadata?.analysis_id || messageMetadata?.analyzed;
+            const isHelpRequest = messageMetadata?.is_help_request === true;
             
-            // Vérifier si le message nécessiterait une analyse
-            const couldBeAnalyzed = message.text.length >= 10 && !message.hasAttachments;
+            // Vérifier si le message nécessiterait une analyse (mais pas si c'est une demande d'aide)
+            const couldBeAnalyzed = message.text.length >= 10 && !message.hasAttachments && !isHelpRequest;
             
             return (
               <View
@@ -3324,6 +4303,202 @@ export default function ChatConversation({
           </View>
         )}
       </ScrollView>
+      {showVoiceHelpOverlay && isRecording && (
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 20,
+            backgroundColor: 'rgba(255,255,255,0.97)',
+            borderTopWidth: 1,
+            borderTopColor: colors.border.primary,
+            paddingHorizontal: Platform.select({ web: spacing.md, default: spacing.md }),
+            paddingTop: spacing.md,
+            paddingBottom: spacing.sm,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: spacing.sm,
+            }}
+          >
+            <View style={{ flex: 1, paddingRight: spacing.sm }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text.primary }}>
+                Aide saisie vocale
+              </Text>
+              <Text style={{ fontSize: 13, color: colors.text.secondary }}>
+                Minimum à dire : action + culture + durée
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setShowVoiceHelpOverlay(false)}
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 15,
+                backgroundColor: colors.gray[100],
+                borderWidth: 1,
+                borderColor: colors.border.primary,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Ionicons name="close" size={16} color={colors.text.secondary} />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              activeOpacity={0.95}
+              onPress={goToNextVoiceHelpExample}
+            >
+              <View
+                {...voiceHelpSwipeResponder.panHandlers}
+                style={{
+                  backgroundColor: colors.background.secondary,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: colors.border.primary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  marginBottom: spacing.sm,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontSize: 12, color: colors.text.secondary, fontWeight: '600' }}>
+                      Exemple {voiceHelpExampleIndex + 1}/{VOICE_HELP_EXAMPLES.length}
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: currentVoiceHelpCategoryStyle.inactiveBg,
+                        borderColor: currentVoiceHelpCategoryStyle.inactiveBorder,
+                        borderWidth: 1,
+                        borderRadius: 999,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: '700',
+                          color: currentVoiceHelpCategoryStyle.inactiveText,
+                        }}
+                      >
+                        {currentVoiceHelpCategoryStyle.label}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: colors.text.tertiary }}>
+                    Touchez ou glissez ← →
+                  </Text>
+                </View>
+
+                {renderHighlightedVoiceHelpSentence(currentVoiceHelpExample)}
+
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 4 }}>
+                  Essentiels
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
+                  {currentVoiceHelpExample.essentials.map((tag, tagIndex) =>
+                    renderVoiceHelpTag(tag, `ess-${voiceHelpExampleIndex}-${tagIndex}`)
+                  )}
+                </View>
+
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 4 }}>
+                  Optionnels
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {currentVoiceHelpExample.optional.length > 0 ? (
+                    currentVoiceHelpExample.optional.map((tag, tagIndex) =>
+                      renderVoiceHelpTag(tag, `opt-${voiceHelpExampleIndex}-${tagIndex}`)
+                    )
+                  ) : (
+                    <Text style={{ fontSize: 12, color: colors.text.tertiary }}>
+                      Aucun pour cet exemple
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </TouchableOpacity>
+
+            <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+              {VOICE_HELP_EXAMPLES.map((_, idx) => (
+                <View
+                  key={`dot-${idx}`}
+                  style={{
+                    width: idx === voiceHelpExampleIndex ? 16 : 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor:
+                      idx === voiceHelpExampleIndex ? colors.primary[500] : colors.gray[300],
+                  }}
+                />
+              ))}
+            </View>
+
+            <View style={{ marginTop: spacing.sm }}>
+              <Text style={{ fontSize: 11, color: colors.text.tertiary, marginBottom: 6 }}>
+                Raccourcis exemples
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  justifyContent: 'space-between',
+                }}
+              >
+                {VOICE_HELP_EXAMPLES.map((example, idx) => (
+                  <TouchableOpacity
+                    key={`shortcut-${idx}`}
+                    onPress={() => setVoiceHelpExampleIndex(idx)}
+                    style={{
+                      width: '31.5%',
+                      marginBottom: 6,
+                      backgroundColor: idx === voiceHelpExampleIndex
+                        ? VOICE_HELP_CATEGORY_STYLES[example.category].activeBg
+                        : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveBg,
+                      borderColor: idx === voiceHelpExampleIndex
+                        ? VOICE_HELP_CATEGORY_STYLES[example.category].activeBorder
+                        : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveBorder,
+                      borderWidth: idx === voiceHelpExampleIndex ? 1.5 : 1,
+                      borderRadius: 10,
+                      paddingHorizontal: 8,
+                      paddingVertical: 6,
+                      minHeight: 34,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text
+                      numberOfLines={2}
+                      style={{
+                        fontSize: 11,
+                        lineHeight: 13,
+                        textAlign: 'center',
+                        fontWeight: '600',
+                        color: idx === voiceHelpExampleIndex
+                          ? VOICE_HELP_CATEGORY_STYLES[example.category].activeText
+                          : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveText,
+                      }}
+                    >
+                      {example.shortcutLabel}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+      </View>
 
       {/* ===== PIÈCES JOINTES ===== */}
       <AttachmentPreview
@@ -3341,91 +4516,258 @@ export default function ChatConversation({
           paddingBottom: Platform.OS === 'ios' ? spacing.md : spacing.lg,
           paddingTop: spacing.sm,
         }}>
-          {/* Container horizontal comme ChatGPT */}
-          {isRecording ? (
-            // Interface d'enregistrement
+          {/* Sélecteur Audio / Dictée : visible si dictée disponible, ou toujours sur mobile */}
+          {!isRecording && (webSpeech.isDictationAvailable || Platform.OS !== 'web') && (
             <View style={{
               flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
+              justifyContent: 'flex-end',
+              marginBottom: spacing.xs,
             }}>
-              {/* Bouton Delete à gauche */}
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('🗑️ [BUTTON] Bouton suppression audio pressé:', {
-                    platform: Platform.OS,
-                    isRecording,
-                    hasRecording: !!recording.current,
-                    hasMediaRecorder: !!mediaRecorderRef.current,
-                  });
-                  cancelRecording();
-                }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: colors.semantic.error,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <Ionicons 
-                  name="trash" 
-                  size={18} 
-                  color={colors.text.inverse}
-                />
-              </TouchableOpacity>
-
-              {/* SoundWave au centre */}
               <View style={{
-                flex: 1,
+                flexDirection: 'row',
                 backgroundColor: colors.background.secondary,
-                borderRadius: 20,
-                borderWidth: 1.5,
+                borderRadius: 12,
+                borderWidth: 1,
                 borderColor: colors.border.primary,
-                height: 40,
-                justifyContent: 'center',
-                alignItems: 'center',
-                paddingHorizontal: 16,
+                overflow: 'hidden',
               }}>
-                <SoundWave 
-                  color={colors.primary[500]}
-                  barCount={5}
-                  minHeight={8}
-                  maxHeight={24}
-                  width={3}
-                  spacing={4}
-                />
+                <TouchableOpacity
+                  onPress={() => setInputMode('vocal_direct')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: 4,
+                    backgroundColor: inputMode === 'vocal_direct' ? colors.primary[500] : 'transparent',
+                    gap: 4,
+                  }}
+                >
+                  <Ionicons
+                    name="mic"
+                    size={14}
+                    color={inputMode === 'vocal_direct' ? colors.text.inverse : colors.text.secondary}
+                  />
+                  <Text style={{
+                    fontSize: 12,
+                    color: inputMode === 'vocal_direct' ? colors.text.inverse : colors.text.secondary,
+                    fontWeight: inputMode === 'vocal_direct' ? '600' : '400',
+                  }}>
+                    Audio
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!webSpeech.isDictationAvailable) {
+                      Alert.alert(
+                        'Dictée non disponible',
+                        Platform.OS !== 'web'
+                          ? 'La dictée nécessite un development build (npx expo run:android / run:ios). Utilisez le mode Audio pour enregistrer puis transcrire.'
+                          : 'La dictée en temps réel nécessite Chrome ou Edge.',
+                        [{ text: 'OK' }]
+                      );
+                      return;
+                    }
+                    setInputMode('dictation');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingHorizontal: spacing.sm,
+                    paddingVertical: 4,
+                    backgroundColor: inputMode === 'dictation' ? colors.primary[500] : 'transparent',
+                    gap: 4,
+                    opacity: webSpeech.isDictationAvailable ? 1 : 0.7,
+                  }}
+                >
+                  <Ionicons
+                    name="text"
+                    size={14}
+                    color={inputMode === 'dictation' ? colors.text.inverse : colors.text.secondary}
+                  />
+                  <Text style={{
+                    fontSize: 12,
+                    color: inputMode === 'dictation' ? colors.text.inverse : colors.text.secondary,
+                    fontWeight: inputMode === 'dictation' ? '600' : '400',
+                  }}>
+                    Dictée
+                  </Text>
+                </TouchableOpacity>
               </View>
+            </View>
+          )}
+          {/* Container horizontal comme ChatGPT */}
+          {isRecording ? (
+            // Interface d'enregistrement (vocal direct OU dictée)
+            inputMode === 'dictation' ? (
+              // Mode dictée en cours : input avec texte en live
+              <View style={{ gap: 8 }}>
+                {/* Texte interim affiché au-dessus du vrai input */}
+                {webSpeechInterim.length > 0 && (
+                  <View style={{
+                    backgroundColor: colors.primary[50] || '#f0f7ff',
+                    borderRadius: 12,
+                    paddingHorizontal: 14,
+                    paddingVertical: 8,
+                    borderWidth: 1,
+                    borderColor: colors.primary[200] || '#bfdbfe',
+                  }}>
+                    <Text style={{
+                      fontSize: 14,
+                      color: colors.primary[500],
+                      fontStyle: 'italic',
+                    }}>
+                      {webSpeechInterim}
+                    </Text>
+                  </View>
+                )}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  gap: 8,
+                }}>
+                  {/* Indicateur d'écoute active — fixé en haut */}
+                  <View style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: colors.semantic.error,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginTop: 2,
+                  }}>
+                    <ActivityIndicator size="small" color={colors.text.inverse} />
+                  </View>
 
-              {/* Bouton Send à droite */}
-              <TouchableOpacity
-                onPress={() => {
-                  console.log('✅ [BUTTON] Bouton envoi audio pressé:', {
-                    platform: Platform.OS,
-                    isRecording,
-                    hasRecording: !!recording.current,
-                    hasMediaRecorder: !!mediaRecorderRef.current,
-                    mediaRecorderState: mediaRecorderRef.current?.state,
-                  });
-                  sendAudioMessage();
-                }}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: colors.semantic.success,
+                  {/* Texte finalisé — grandit librement avec le contenu */}
+                  <View style={{
+                    flex: 1,
+                    backgroundColor: colors.background.secondary,
+                    borderRadius: 20,
+                    borderWidth: 1.5,
+                    borderColor: colors.primary[400] || '#60a5fa',
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    minHeight: MIN_INPUT_HEIGHT,
+                  }}>
+                    <Text style={{
+                      fontSize: 16,
+                      color: inputText ? colors.text.primary : colors.gray[400],
+                      lineHeight: LINE_HEIGHT,
+                      flexShrink: 1,
+                    }}>
+                      {inputText || 'Dictez votre message...'}
+                    </Text>
+                  </View>
+
+                  {/* Bouton Stop dictée — fixé en haut */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log('🛑 [BUTTON] Stop dictée pressé');
+                      stopDictation();
+                    }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: colors.semantic.success,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      marginTop: 2,
+                    }}
+                  >
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={20}
+                      color={colors.text.inverse}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              // Mode vocal direct en cours
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                {/* Bouton Delete à gauche */}
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('🗑️ [BUTTON] Bouton suppression audio pressé:', {
+                      platform: Platform.OS,
+                      isRecording,
+                      hasRecording: !!recording.current,
+                      hasMediaRecorder: !!mediaRecorderRef.current,
+                    });
+                    cancelRecording();
+                  }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: colors.semantic.error,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Ionicons 
+                    name="trash" 
+                    size={18} 
+                    color={colors.text.inverse}
+                  />
+                </TouchableOpacity>
+
+                {/* SoundWave au centre */}
+                <View style={{
+                  flex: 1,
+                  backgroundColor: colors.background.secondary,
+                  borderRadius: 20,
+                  borderWidth: 1.5,
+                  borderColor: colors.border.primary,
+                  height: 40,
                   justifyContent: 'center',
                   alignItems: 'center',
-                }}
-              >
-                <Ionicons 
-                  name="checkmark-circle" 
-                  size={20} 
-                  color={colors.text.inverse}
-                />
-              </TouchableOpacity>
-            </View>
+                  paddingHorizontal: 16,
+                }}>
+                  <SoundWave 
+                    color={colors.primary[500]}
+                    barCount={5}
+                    minHeight={8}
+                    maxHeight={24}
+                    width={3}
+                    spacing={4}
+                  />
+                </View>
+
+                {/* Bouton Send à droite */}
+                <TouchableOpacity
+                  onPress={() => {
+                    console.log('✅ [BUTTON] Bouton envoi audio pressé:', {
+                      platform: Platform.OS,
+                      isRecording,
+                      hasRecording: !!recording.current,
+                      hasMediaRecorder: !!mediaRecorderRef.current,
+                      mediaRecorderState: mediaRecorderRef.current?.state,
+                    });
+                    sendAudioMessage();
+                  }}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: colors.semantic.success,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Ionicons 
+                    name="checkmark-circle" 
+                    size={20} 
+                    color={colors.text.inverse}
+                  />
+                </TouchableOpacity>
+              </View>
+            )
           ) : (
             // Interface normale (input + boutons)
             <View style={{
@@ -3483,7 +4825,9 @@ export default function ChatConversation({
                   placeholder="Message Thomas..."
                   placeholderTextColor={colors.gray[400]}
                   value={inputText}
-                  onChangeText={setInputText}
+                  onChangeText={(text) => {
+                    setInputText(text);
+                  }}
                   onContentSizeChange={(event) => {
                     const { height } = event.nativeEvent.contentSize;
                     // Calculer la hauteur totale : hauteur du contenu + padding vertical (16px)
@@ -3498,17 +4842,20 @@ export default function ChatConversation({
                 />
               </View>
 
-              {/* Bouton vocal/envoi À L'EXTÉRIEUR à droite - Style accordé avec + */}
+              {/* Bouton vocal/envoi À L'EXTÉRIEUR à droite */}
               <TouchableOpacity
                 onPress={() => {
                   const hasText = inputText.trim() || draftAttachments.length > 0;
                   console.log('🔘 [BUTTON] Bouton pressé:', { 
                     hasText, 
-                    action: hasText ? 'sendMessage' : 'startRecording',
-                    platform: Platform.OS 
+                    action: hasText ? 'sendMessage' : (inputMode === 'dictation' ? 'startDictation' : 'startRecording'),
+                    platform: Platform.OS,
+                    inputMode,
                   });
                   if (hasText) {
                     sendMessage();
+                  } else if (inputMode === 'dictation') {
+                    startDictation();
                   } else {
                     startRecording();
                   }
@@ -3523,7 +4870,7 @@ export default function ChatConversation({
                 }}
               >
                 <Ionicons 
-                  name={(inputText.trim() || draftAttachments.length > 0) ? "arrow-up" : "mic"} 
+                  name={(inputText.trim() || draftAttachments.length > 0) ? "arrow-up" : (inputMode === 'dictation' ? "text" : "mic")} 
                   size={20} 
                   color={colors.text.inverse}
                 />
@@ -3570,6 +4917,7 @@ export default function ChatConversation({
         }}
         onSave={handleActionSave}
       />
+
     </View>
   );
 }

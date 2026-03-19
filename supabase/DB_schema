@@ -1,6 +1,45 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.agent_method_comparisons (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  user_id uuid NOT NULL,
+  message text NOT NULL,
+  method1_intent character varying,
+  method1_actions jsonb,
+  method1_confidence numeric CHECK (method1_confidence >= 0::numeric AND method1_confidence <= 1::numeric),
+  method1_processing_ms integer CHECK (method1_processing_ms >= 0),
+  method1_success boolean,
+  method1_error text,
+  method2_intent character varying,
+  method2_actions jsonb,
+  method2_confidence numeric CHECK (method2_confidence >= 0::numeric AND method2_confidence <= 1::numeric),
+  method2_processing_ms integer CHECK (method2_processing_ms >= 0),
+  method2_success boolean,
+  method2_error text,
+  methods_agree boolean,
+  user_validated_method character varying CHECK (user_validated_method::text = ANY (ARRAY['method1'::character varying, 'method2'::character varying, 'neither'::character varying, 'both'::character varying]::text[])),
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT agent_method_comparisons_pkey PRIMARY KEY (id),
+  CONSTRAINT agent_method_comparisons_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT agent_method_comparisons_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.amortization_culture_targets (
+  amortization_id uuid NOT NULL,
+  culture_id integer NOT NULL,
+  CONSTRAINT amortization_culture_targets_pkey PRIMARY KEY (amortization_id, culture_id),
+  CONSTRAINT amortization_culture_targets_amortization_id_fkey FOREIGN KEY (amortization_id) REFERENCES public.farm_amortizations(id),
+  CONSTRAINT amortization_culture_targets_culture_id_fkey FOREIGN KEY (culture_id) REFERENCES public.cultures(id)
+);
+CREATE TABLE public.amortization_plot_targets (
+  amortization_id uuid NOT NULL,
+  plot_id integer NOT NULL,
+  CONSTRAINT amortization_plot_targets_pkey PRIMARY KEY (amortization_id, plot_id),
+  CONSTRAINT amortization_plot_targets_amortization_id_fkey FOREIGN KEY (amortization_id) REFERENCES public.farm_amortizations(id),
+  CONSTRAINT amortization_plot_targets_plot_id_fkey FOREIGN KEY (plot_id) REFERENCES public.plots(id)
+);
 CREATE TABLE public.audio_files (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   farm_id integer NOT NULL,
@@ -21,6 +60,51 @@ CREATE TABLE public.audio_files (
   CONSTRAINT audio_files_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
   CONSTRAINT audio_files_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT audio_files_chat_message_id_fkey FOREIGN KEY (chat_message_id) REFERENCES public.chat_messages(id)
+);
+CREATE TABLE public.charges_fixes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  nom_produit character varying NOT NULL,
+  categorie character varying NOT NULL CHECK (categorie::text = ANY (ARRAY['pots'::character varying, 'plaques_semis'::character varying, 'baches'::character varying, 'etiquetage'::character varying, 'irrigation'::character varying, 'protection'::character varying, 'substrats'::character varying, 'autre'::character varying]::text[])),
+  description text,
+  prix_achat numeric NOT NULL CHECK (prix_achat >= 0::numeric),
+  quantite_achetee numeric NOT NULL CHECK (quantite_achetee > 0::numeric),
+  unite_achat character varying NOT NULL,
+  prix_unitaire numeric NOT NULL DEFAULT 0,
+  unite_unitaire character varying NOT NULL DEFAULT ''::character varying,
+  fournisseur character varying,
+  reference_produit character varying,
+  date_achat date,
+  date_livraison date,
+  stock_initial numeric,
+  stock_actuel numeric,
+  unite_stock character varying,
+  seuil_alerte numeric,
+  consommation_estimee_mensuelle numeric,
+  duree_vie_estimee_mois integer,
+  marque character varying,
+  modele character varying,
+  couleur character varying,
+  dimensions character varying,
+  materiau character varying,
+  facture_url text,
+  facture_analysee boolean NOT NULL DEFAULT false,
+  notes text,
+  qualite_notes text,
+  is_active boolean NOT NULL DEFAULT true,
+  is_consommable boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  invoice_line_id uuid,
+  source character varying NOT NULL DEFAULT 'manual'::character varying CHECK (source::text = ANY (ARRAY['manual'::character varying, 'message'::character varying, 'invoice_scan'::character varying]::text[])),
+  quantite_par_conditionnement numeric,
+  unite_base character varying,
+  parent_charge_id uuid,
+  is_derived boolean NOT NULL DEFAULT false,
+  CONSTRAINT charges_fixes_pkey PRIMARY KEY (id),
+  CONSTRAINT charges_fixes_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT charges_fixes_invoice_line_id_fkey FOREIGN KEY (invoice_line_id) REFERENCES public.invoice_lines(id),
+  CONSTRAINT charges_fixes_parent_charge_id_fkey FOREIGN KEY (parent_charge_id) REFERENCES public.charges_fixes(id)
 );
 CREATE TABLE public.chat_agent_executions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -106,7 +190,13 @@ CREATE TABLE public.chat_prompts (
   metadata jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT chat_prompts_pkey PRIMARY KEY (id)
+  parent_version_id uuid,
+  is_default boolean DEFAULT false,
+  usage_count integer DEFAULT 0 CHECK (usage_count >= 0),
+  success_rate numeric CHECK (success_rate >= 0::numeric AND success_rate <= 100::numeric),
+  avg_confidence numeric CHECK (avg_confidence >= 0::numeric AND avg_confidence <= 1::numeric),
+  CONSTRAINT chat_prompts_pkey PRIMARY KEY (id),
+  CONSTRAINT chat_prompts_parent_version_id_fkey FOREIGN KEY (parent_version_id) REFERENCES public.chat_prompts(id)
 );
 CREATE TABLE public.chat_sessions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -124,6 +214,97 @@ CREATE TABLE public.chat_sessions (
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT chat_sessions_pkey PRIMARY KEY (id),
   CONSTRAINT chat_sessions_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.climate_zones (
+  code text NOT NULL,
+  label text NOT NULL,
+  CONSTRAINT climate_zones_pkey PRIMARY KEY (code)
+);
+CREATE TABLE public.commune_climate (
+  commune_insee character varying NOT NULL,
+  commune_name text,
+  climate_zone_code text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT commune_climate_pkey PRIMARY KEY (commune_insee),
+  CONSTRAINT commune_climate_climate_zone_code_fkey FOREIGN KEY (climate_zone_code) REFERENCES public.climate_zones(code)
+);
+CREATE TABLE public.communities (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name character varying NOT NULL CHECK (char_length(name::text) >= 2 AND char_length(name::text) <= 100),
+  description text,
+  address text,
+  city character varying,
+  postal_code character varying,
+  region character varying,
+  department character varying,
+  country character varying NOT NULL DEFAULT 'France'::character varying,
+  contact_email character varying CHECK (contact_email IS NULL OR contact_email::text ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'::text),
+  contact_phone character varying,
+  website_url text,
+  logo_url text,
+  status USER-DEFINED NOT NULL DEFAULT 'active'::community_status,
+  join_policy USER-DEFINED NOT NULL DEFAULT 'approval_required'::community_join_policy,
+  requires_approval boolean NOT NULL DEFAULT true,
+  max_members integer CHECK (max_members IS NULL OR max_members > 0),
+  join_message text,
+  created_by uuid NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT communities_pkey PRIMARY KEY (id),
+  CONSTRAINT communities_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.community_invitations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  community_id uuid NOT NULL,
+  invited_by uuid NOT NULL,
+  email character varying NOT NULL CHECK (email::text ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'::text),
+  role USER-DEFINED NOT NULL DEFAULT 'farmer'::community_role,
+  invitation_token character varying NOT NULL DEFAULT (gen_random_uuid())::text UNIQUE,
+  status USER-DEFINED NOT NULL DEFAULT 'pending'::community_invitation_status,
+  message text,
+  expires_at timestamp with time zone NOT NULL DEFAULT (now() + '7 days'::interval),
+  accepted_at timestamp with time zone,
+  accepted_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT community_invitations_pkey PRIMARY KEY (id),
+  CONSTRAINT community_invitations_community_id_fkey FOREIGN KEY (community_id) REFERENCES public.communities(id),
+  CONSTRAINT community_invitations_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id),
+  CONSTRAINT community_invitations_accepted_by_fkey FOREIGN KEY (accepted_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.community_join_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  community_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  role USER-DEFINED NOT NULL DEFAULT 'farmer'::community_role,
+  message text,
+  status USER-DEFINED NOT NULL DEFAULT 'pending'::community_join_request_status,
+  approved_at timestamp with time zone,
+  approved_by uuid,
+  rejected_at timestamp with time zone,
+  rejected_by uuid,
+  rejection_reason text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT community_join_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT community_join_requests_community_id_fkey FOREIGN KEY (community_id) REFERENCES public.communities(id),
+  CONSTRAINT community_join_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id),
+  CONSTRAINT community_join_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.profiles(id),
+  CONSTRAINT community_join_requests_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.community_members (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  community_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  role USER-DEFINED NOT NULL DEFAULT 'farmer'::community_role,
+  is_active boolean NOT NULL DEFAULT true,
+  notes text,
+  joined_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT community_members_pkey PRIMARY KEY (id),
+  CONSTRAINT community_members_community_id_fkey FOREIGN KEY (community_id) REFERENCES public.communities(id),
+  CONSTRAINT community_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.containers (
   id integer NOT NULL DEFAULT nextval('containers_id_seq'::regclass),
@@ -144,6 +325,94 @@ CREATE TABLE public.containers (
   is_active boolean DEFAULT true,
   CONSTRAINT containers_pkey PRIMARY KEY (id),
   CONSTRAINT containers_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.crop_cost_allocations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  culture_id integer NOT NULL,
+  variety_id integer,
+  input_item_id uuid,
+  quantity numeric NOT NULL CHECK (quantity > 0::numeric),
+  reference_unit character varying NOT NULL CHECK (reference_unit::text = ANY (ARRAY['pied'::character varying, 'm2'::character varying, 'ml'::character varying, 'planche'::character varying, 'ha'::character varying, 'parcelle'::character varying]::text[])),
+  reference_plot_id integer,
+  reference_surface_unit_id integer,
+  cost_per_ref_unit numeric,
+  source character varying NOT NULL DEFAULT 'manual'::character varying CHECK (source::text = ANY (ARRAY['manual'::character varying, 'task'::character varying, 'invoice'::character varying]::text[])),
+  task_id uuid,
+  notes text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  production_phase character varying DEFAULT 'entretien'::character varying CHECK (production_phase::text = ANY (ARRAY['preparation_sol'::character varying, 'preparation_plant'::character varying, 'entretien'::character varying, 'recolte_packaging'::character varying]::text[])),
+  cost_nature character varying DEFAULT 'consommable'::character varying CHECK (cost_nature::text = ANY (ARRAY['consommable'::character varying, 'amortissement'::character varying]::text[])),
+  amortization_id uuid,
+  CONSTRAINT crop_cost_allocations_pkey PRIMARY KEY (id),
+  CONSTRAINT crop_cost_allocations_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT crop_cost_allocations_culture_id_fkey FOREIGN KEY (culture_id) REFERENCES public.cultures(id),
+  CONSTRAINT crop_cost_allocations_variety_id_fkey FOREIGN KEY (variety_id) REFERENCES public.culture_varieties(id),
+  CONSTRAINT crop_cost_allocations_input_item_id_fkey FOREIGN KEY (input_item_id) REFERENCES public.crop_input_items(id),
+  CONSTRAINT crop_cost_allocations_reference_plot_id_fkey FOREIGN KEY (reference_plot_id) REFERENCES public.plots(id),
+  CONSTRAINT crop_cost_allocations_reference_surface_unit_id_fkey FOREIGN KEY (reference_surface_unit_id) REFERENCES public.surface_units(id),
+  CONSTRAINT crop_cost_allocations_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT crop_cost_allocations_amortization_id_fkey FOREIGN KEY (amortization_id) REFERENCES public.farm_amortizations(id)
+);
+CREATE TABLE public.crop_density_config (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  culture_id integer NOT NULL,
+  variety_id integer,
+  plants_per_m2 numeric,
+  plants_per_ml numeric,
+  plants_per_bed numeric,
+  default_bed_length_m numeric,
+  default_bed_width_m numeric,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  plant_method character varying DEFAULT 'semis_direct'::character varying CHECK (plant_method::text = ANY (ARRAY['semis_direct'::character varying, 'production_plant'::character varying, 'achat_plant'::character varying]::text[])),
+  CONSTRAINT crop_density_config_pkey PRIMARY KEY (id),
+  CONSTRAINT crop_density_config_culture_id_fkey FOREIGN KEY (culture_id) REFERENCES public.cultures(id),
+  CONSTRAINT crop_density_config_variety_id_fkey FOREIGN KEY (variety_id) REFERENCES public.culture_varieties(id),
+  CONSTRAINT crop_density_config_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.crop_input_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  name character varying NOT NULL,
+  category character varying NOT NULL CHECK (category::text = ANY (ARRAY['semences'::character varying, 'terreau'::character varying, 'fertilisation'::character varying, 'amendement'::character varying, 'phyto'::character varying, 'paillage'::character varying, 'plants'::character varying, 'pot_godet'::character varying, 'palissage'::character varying, 'protection'::character varying, 'irrigation'::character varying, 'eau'::character varying, 'packaging'::character varying, 'consommables'::character varying, 'autre'::character varying]::text[])),
+  unit_price numeric NOT NULL CHECK (unit_price >= 0::numeric),
+  price_unit character varying NOT NULL,
+  supplier_id uuid,
+  invoice_line_id uuid,
+  phyto_product_amm text,
+  description text,
+  marque character varying,
+  notes text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT crop_input_items_pkey PRIMARY KEY (id),
+  CONSTRAINT crop_input_items_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT crop_input_items_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.suppliers(id),
+  CONSTRAINT crop_input_items_invoice_line_id_fkey FOREIGN KEY (invoice_line_id) REFERENCES public.invoice_lines(id),
+  CONSTRAINT crop_input_items_phyto_product_amm_fkey FOREIGN KEY (phyto_product_amm) REFERENCES public.phytosanitary_products(amm)
+);
+CREATE TABLE public.crops (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  type text NOT NULL CHECK (type = ANY (ARRAY['Légume-fruit'::text, 'Légume-feuille'::text, 'Légume-racine'::text, 'Légume-graine'::text, 'Aromatique'::text, 'Fleur comestible'::text])),
+  image_url text,
+  emoji text,
+  weeks_between_sowing_and_planting integer NOT NULL DEFAULT 0,
+  weeks_between_planting_and_harvest integer NOT NULL DEFAULT 0,
+  weeks_between_harvest_and_destruction integer,
+  sowing_weeks ARRAY NOT NULL DEFAULT '{}'::integer[],
+  planting_weeks ARRAY NOT NULL DEFAULT '{}'::integer[],
+  planting_method text NOT NULL CHECK (planting_method = ANY (ARRAY['serre'::text, 'plein_champ'::text, 'both'::text])),
+  user_id text NOT NULL DEFAULT 'system'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT crops_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.culture_varieties (
   id integer NOT NULL DEFAULT nextval('culture_varieties_id_seq'::regclass),
@@ -176,6 +445,28 @@ CREATE TABLE public.cultures (
   CONSTRAINT cultures_pkey PRIMARY KEY (id),
   CONSTRAINT cultures_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
 );
+CREATE TABLE public.customers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  company_name character varying NOT NULL,
+  contact_name character varying,
+  address text,
+  postal_code character varying,
+  city character varying,
+  country character varying DEFAULT 'France'::character varying,
+  siret character varying,
+  siren character varying,
+  vat_number character varying,
+  email character varying,
+  phone character varying,
+  notes text,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  delivery_addresses jsonb DEFAULT '[]'::jsonb,
+  CONSTRAINT customers_pkey PRIMARY KEY (id),
+  CONSTRAINT customers_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
 CREATE TABLE public.documents (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   farm_id integer NOT NULL,
@@ -195,6 +486,46 @@ CREATE TABLE public.documents (
   CONSTRAINT documents_pkey PRIMARY KEY (id),
   CONSTRAINT documents_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
   CONSTRAINT documents_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.farm_agent_config (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL UNIQUE,
+  agent_method character varying NOT NULL DEFAULT 'simple'::character varying CHECK (agent_method::text = ANY (ARRAY['simple'::character varying, 'pipeline'::character varying]::text[])),
+  simple_success_count integer DEFAULT 0 CHECK (simple_success_count >= 0),
+  simple_total_count integer DEFAULT 0 CHECK (simple_total_count >= 0),
+  pipeline_success_count integer DEFAULT 0 CHECK (pipeline_success_count >= 0),
+  pipeline_total_count integer DEFAULT 0 CHECK (pipeline_total_count >= 0),
+  config_reason text,
+  switched_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farm_agent_config_pkey PRIMARY KEY (id),
+  CONSTRAINT farm_agent_config_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.farm_amortizations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  material_id integer,
+  name character varying NOT NULL,
+  category character varying NOT NULL CHECK (category::text = ANY (ARRAY['batiment'::character varying, 'vehicule'::character varying, 'tracteur'::character varying, 'machine_recolte'::character varying, 'machine_culture'::character varying, 'irrigation'::character varying, 'protection'::character varying, 'paillage'::character varying, 'chambre_froide'::character varying, 'autre'::character varying]::text[])),
+  purchase_cost numeric NOT NULL CHECK (purchase_cost > 0::numeric),
+  residual_value numeric NOT NULL DEFAULT 0 CHECK (residual_value >= 0::numeric),
+  lifespan_years numeric NOT NULL CHECK (lifespan_years > 0::numeric),
+  annual_cost numeric,
+  scope character varying NOT NULL DEFAULT 'ferme'::character varying CHECK (scope::text = ANY (ARRAY['ferme'::character varying, 'parcelle'::character varying, 'culture'::character varying]::text[])),
+  purchase_date date,
+  notes text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  amortization_method character varying NOT NULL DEFAULT 'lineaire_annuel'::character varying CHECK (amortization_method::text = ANY (ARRAY['lineaire_annuel'::character varying, 'par_cycles'::character varying, 'par_surface'::character varying]::text[])),
+  cycles_per_year numeric,
+  cost_per_cycle numeric,
+  covered_surface_m2 numeric,
+  cost_per_m2_per_year numeric,
+  CONSTRAINT farm_amortizations_pkey PRIMARY KEY (id),
+  CONSTRAINT farm_amortizations_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT farm_amortizations_material_id_fkey FOREIGN KEY (material_id) REFERENCES public.materials(id)
 );
 CREATE TABLE public.farm_invitations (
   id integer NOT NULL DEFAULT nextval('farm_invitations_id_seq'::regclass),
@@ -225,6 +556,23 @@ CREATE TABLE public.farm_members (
   CONSTRAINT farm_members_pkey PRIMARY KEY (id),
   CONSTRAINT farm_members_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
 );
+CREATE TABLE public.farm_standard_charges (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  name character varying NOT NULL,
+  category character varying NOT NULL,
+  production_phase character varying NOT NULL DEFAULT 'entretien'::character varying,
+  unit_price numeric NOT NULL CHECK (unit_price >= 0::numeric),
+  price_unit character varying NOT NULL DEFAULT 'planche'::character varying,
+  default_quantity numeric NOT NULL DEFAULT 1,
+  reference_unit character varying NOT NULL DEFAULT 'planche'::character varying CHECK (reference_unit::text = ANY (ARRAY['pied'::character varying, 'm2'::character varying, 'ml'::character varying, 'planche'::character varying, 'ha'::character varying, 'parcelle'::character varying]::text[])),
+  notes text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farm_standard_charges_pkey PRIMARY KEY (id),
+  CONSTRAINT farm_standard_charges_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
 CREATE TABLE public.farms (
   id integer NOT NULL DEFAULT nextval('farms_id_seq'::regclass),
   name character varying NOT NULL CHECK (char_length(name::text) >= 2 AND char_length(name::text) <= 100),
@@ -241,7 +589,83 @@ CREATE TABLE public.farms (
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   photo_url text,
+  commune_insee character varying,
+  climate_zone text,
   CONSTRAINT farms_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.invoice_lines (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  invoice_id uuid NOT NULL,
+  product_id uuid,
+  product_name character varying NOT NULL,
+  quantity numeric NOT NULL,
+  unit character varying NOT NULL,
+  unit_price_ht numeric NOT NULL,
+  vat_rate numeric NOT NULL,
+  total_ht numeric DEFAULT round((quantity * unit_price_ht), 2),
+  total_vat numeric DEFAULT round((((quantity * unit_price_ht) * vat_rate) / (100)::numeric), 2),
+  total_ttc numeric DEFAULT round(((quantity * unit_price_ht) * ((1)::numeric + (vat_rate / (100)::numeric))), 2),
+  line_order integer DEFAULT 0,
+  notes text,
+  charge_category character varying,
+  is_charge boolean NOT NULL DEFAULT false,
+  CONSTRAINT invoice_lines_pkey PRIMARY KEY (id),
+  CONSTRAINT invoice_lines_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.invoices(id),
+  CONSTRAINT invoice_lines_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
+);
+CREATE TABLE public.invoices (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  user_id uuid NOT NULL,
+  invoice_number character varying NOT NULL DEFAULT ''::character varying,
+  document_type character varying NOT NULL CHECK (document_type::text = ANY (ARRAY['invoice'::character varying, 'delivery_note'::character varying, 'invoice_with_delivery'::character varying]::text[])),
+  direction character varying NOT NULL CHECK (direction::text = ANY (ARRAY['outgoing'::character varying, 'incoming'::character varying]::text[])),
+  customer_id uuid,
+  supplier_id uuid,
+  invoice_date date NOT NULL DEFAULT CURRENT_DATE,
+  delivery_date date,
+  delivery_location text,
+  payment_due_date date,
+  total_ht numeric NOT NULL DEFAULT 0,
+  total_vat numeric NOT NULL DEFAULT 0,
+  total_ttc numeric NOT NULL DEFAULT 0,
+  status character varying NOT NULL DEFAULT 'draft'::character varying CHECK (status::text = ANY (ARRAY['draft'::character varying, 'sent'::character varying, 'paid'::character varying, 'cancelled'::character varying]::text[])),
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  document_url text,
+  CONSTRAINT invoices_pkey PRIMARY KEY (id),
+  CONSTRAINT invoices_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT invoices_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT invoices_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.suppliers(id)
+);
+CREATE TABLE public.itineraries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  culture_name text NOT NULL,
+  name text NOT NULL,
+  mode text NOT NULL CHECK (mode = ANY (ARRAY['direct'::text, 'pepiniere'::text])),
+  spacing text,
+  weeks_between_sowing_and_planting integer NOT NULL DEFAULT 0,
+  weeks_between_planting_and_harvest integer NOT NULL DEFAULT 0,
+  weeks_between_harvest_and_destruction integer,
+  user_id text NOT NULL DEFAULT 'system'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  base_crop_id uuid,
+  CONSTRAINT itineraries_pkey PRIMARY KEY (id),
+  CONSTRAINT itineraries_base_crop_id_fkey FOREIGN KEY (base_crop_id) REFERENCES public.crops(id)
+);
+CREATE TABLE public.itinerary_context_windows (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  itinerary_id uuid NOT NULL,
+  climate_zone text NOT NULL,
+  environment text NOT NULL CHECK (environment = ANY (ARRAY['serre'::text, 'plein_champ'::text, 'both'::text])),
+  sowing_weeks ARRAY NOT NULL DEFAULT '{}'::integer[],
+  planting_weeks ARRAY NOT NULL DEFAULT '{}'::integer[],
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT itinerary_context_windows_pkey PRIMARY KEY (id),
+  CONSTRAINT itinerary_context_windows_itinerary_id_fkey FOREIGN KEY (itinerary_id) REFERENCES public.itineraries(id)
 );
 CREATE TABLE public.materials (
   id integer NOT NULL DEFAULT nextval('materials_id_seq'::regclass),
@@ -297,7 +721,7 @@ CREATE TABLE public.observations (
   farm_id integer NOT NULL,
   user_id uuid NOT NULL,
   title character varying NOT NULL,
-  category character varying DEFAULT 'autre'::character varying,
+  category character varying DEFAULT 'autre'::character varying CHECK (category::text = ANY (ARRAY['ravageurs'::character varying, 'maladies'::character varying, 'carences'::character varying, 'degats_climatiques'::character varying, 'degats_materiel'::character varying, 'humain'::character varying, 'problemes_sol'::character varying, 'croissance'::character varying, 'maturation'::character varying, 'autre'::character varying]::text[])),
   nature text NOT NULL,
   crop character varying,
   plot_ids ARRAY DEFAULT '{}'::integer[],
@@ -306,6 +730,7 @@ CREATE TABLE public.observations (
   created_at timestamp with time zone DEFAULT now(),
   is_active boolean DEFAULT true,
   audio_file_id uuid,
+  severity character varying DEFAULT 'moyen'::character varying CHECK (severity::text = ANY (ARRAY['basse'::character varying, 'moyen'::character varying, 'haute'::character varying]::text[])),
   CONSTRAINT observations_pkey PRIMARY KEY (id),
   CONSTRAINT observations_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
   CONSTRAINT observations_audio_file_id_fkey FOREIGN KEY (audio_file_id) REFERENCES public.audio_files(id)
@@ -333,6 +758,7 @@ CREATE TABLE public.phytosanitary_products (
   farm_id integer,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  speech_aliases ARRAY NOT NULL DEFAULT '{}'::text[],
   CONSTRAINT phytosanitary_products_pkey PRIMARY KEY (amm),
   CONSTRAINT fk_phytosanitary_farm FOREIGN KEY (farm_id) REFERENCES public.farms(id)
 );
@@ -365,6 +791,50 @@ CREATE TABLE public.phytosanitary_usages (
   CONSTRAINT phytosanitary_usages_pkey PRIMARY KEY (id),
   CONSTRAINT fk_phytosanitary_usage_product FOREIGN KEY (amm) REFERENCES public.phytosanitary_products(amm)
 );
+CREATE TABLE public.plans (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  crop_id uuid,
+  crop_name text NOT NULL,
+  quantity integer NOT NULL DEFAULT 1 CHECK (quantity > 0),
+  planting_week integer NOT NULL CHECK (planting_week >= 1 AND planting_week <= 52),
+  sowing_week integer NOT NULL CHECK (sowing_week >= 1 AND sowing_week <= 52),
+  notes text,
+  sowing_done boolean NOT NULL DEFAULT false,
+  planting_done boolean NOT NULL DEFAULT false,
+  user_id text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  custom_nursery_weeks integer,
+  custom_culture_weeks integer,
+  custom_harvest_weeks integer,
+  variety_id uuid,
+  itinerary_id uuid,
+  surface_unit_id integer,
+  climate_zone text,
+  environment text CHECK (environment = ANY (ARRAY['serre'::text, 'plein_champ'::text, 'both'::text])),
+  plot_id integer,
+  sowing_date date,
+  planting_date date,
+  quantity_is_manual boolean NOT NULL DEFAULT false,
+  bed_length_m numeric CHECK (bed_length_m IS NULL OR bed_length_m > 0::numeric),
+  bed_width_m numeric CHECK (bed_width_m IS NULL OR bed_width_m > 0::numeric),
+  occupancy_pct numeric CHECK (occupancy_pct IS NULL OR occupancy_pct > 0::numeric AND occupancy_pct <= 100::numeric),
+  edge_margin_cm numeric CHECK (edge_margin_cm IS NULL OR edge_margin_cm >= 0::numeric),
+  inter_plant_cm numeric CHECK (inter_plant_cm IS NULL OR inter_plant_cm > 0::numeric),
+  inter_row_cm numeric CHECK (inter_row_cm IS NULL OR inter_row_cm >= 0::numeric),
+  row_count integer CHECK (row_count IS NULL OR row_count > 0),
+  plants_per_row integer CHECK (plants_per_row IS NULL OR plants_per_row >= 0),
+  computed_quantity integer CHECK (computed_quantity IS NULL OR computed_quantity >= 0),
+  density_plants_m2 numeric CHECK (density_plants_m2 IS NULL OR density_plants_m2 >= 0::numeric),
+  density_plants_per_row_meter numeric CHECK (density_plants_per_row_meter IS NULL OR density_plants_per_row_meter >= 0::numeric),
+  density_plants_per_bed_meter numeric CHECK (density_plants_per_bed_meter IS NULL OR density_plants_per_bed_meter >= 0::numeric),
+  CONSTRAINT plans_pkey PRIMARY KEY (id),
+  CONSTRAINT plans_surface_unit_id_fkey FOREIGN KEY (surface_unit_id) REFERENCES public.surface_units(id),
+  CONSTRAINT plans_plot_id_fkey FOREIGN KEY (plot_id) REFERENCES public.plots(id),
+  CONSTRAINT plans_crop_id_fkey FOREIGN KEY (crop_id) REFERENCES public.crops(id),
+  CONSTRAINT plans_variety_id_fkey FOREIGN KEY (variety_id) REFERENCES public.varieties(id),
+  CONSTRAINT plans_itinerary_id_fkey FOREIGN KEY (itinerary_id) REFERENCES public.itineraries(id)
+);
 CREATE TABLE public.plots (
   id integer NOT NULL DEFAULT nextval('plots_id_seq'::regclass),
   farm_id integer NOT NULL,
@@ -384,8 +854,42 @@ END,
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   aliases ARRAY DEFAULT '{}'::text[],
   llm_keywords ARRAY DEFAULT '{}'::text[],
+  standard_bed_width numeric CHECK (standard_bed_width IS NULL OR standard_bed_width > 0::numeric),
+  edge_safety_margin_cm numeric CHECK (edge_safety_margin_cm IS NULL OR edge_safety_margin_cm >= 0::numeric),
   CONSTRAINT plots_pkey PRIMARY KEY (id),
   CONSTRAINT plots_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.prix_vente (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  culture_id integer NOT NULL,
+  canal_de_vente character varying NOT NULL,
+  prix numeric NOT NULL CHECK (prix > 0::numeric),
+  unite_prix character varying NOT NULL,
+  pourcentage_vente numeric DEFAULT 0 CHECK (pourcentage_vente >= 0::numeric AND pourcentage_vente <= 100::numeric),
+  notes text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT prix_vente_pkey PRIMARY KEY (id),
+  CONSTRAINT prix_vente_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT prix_vente_culture_id_fkey FOREIGN KEY (culture_id) REFERENCES public.cultures(id)
+);
+CREATE TABLE public.products (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  name character varying NOT NULL,
+  description text,
+  culture_id integer,
+  unit character varying NOT NULL,
+  default_price_ht numeric,
+  default_vat_rate numeric DEFAULT 5.5,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT products_pkey PRIMARY KEY (id),
+  CONSTRAINT products_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT products_culture_id_fkey FOREIGN KEY (culture_id) REFERENCES public.cultures(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,
@@ -407,8 +911,95 @@ END,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   latest_active_farm_id integer,
+  weekly_work_hours integer DEFAULT 35,
+  primary_role character varying NOT NULL DEFAULT 'farmer'::character varying CHECK (primary_role::text = ANY (ARRAY['farmer'::character varying, 'advisor'::character varying, 'admin'::character varying, 'other'::character varying]::text[])),
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_latest_active_farm_id_fkey FOREIGN KEY (latest_active_farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.recurring_task_templates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  user_id uuid NOT NULL,
+  name character varying NOT NULL CHECK (char_length(name::text) >= 2 AND char_length(name::text) <= 200),
+  duration_minutes integer NOT NULL CHECK (duration_minutes > 0),
+  action character varying,
+  category character varying NOT NULL CHECK (category::text = ANY (ARRAY['production'::character varying, 'marketing'::character varying, 'administratif'::character varying, 'general'::character varying]::text[])),
+  culture character varying,
+  number_of_people integer NOT NULL DEFAULT 1 CHECK (number_of_people > 0),
+  notes text,
+  plot_ids ARRAY DEFAULT '{}'::integer[],
+  surface_unit_ids ARRAY DEFAULT '{}'::integer[],
+  material_ids ARRAY DEFAULT '{}'::integer[],
+  start_month integer CHECK (start_month IS NULL OR start_month >= 1 AND start_month <= 12),
+  end_month integer CHECK (end_month IS NULL OR end_month >= 1 AND end_month <= 12),
+  start_day integer CHECK (start_day IS NULL OR start_day >= 1 AND start_day <= 31),
+  end_day integer CHECK (end_day IS NULL OR end_day >= 1 AND end_day <= 31),
+  is_permanent boolean NOT NULL DEFAULT false,
+  day_of_week integer NOT NULL CHECK (day_of_week >= 0 AND day_of_week <= 6),
+  frequency_type character varying NOT NULL CHECK (frequency_type::text = ANY (ARRAY['weekly'::character varying, 'biweekly'::character varying, 'monthly'::character varying]::text[])),
+  frequency_interval integer NOT NULL DEFAULT 1 CHECK (frequency_interval > 0),
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT recurring_task_templates_pkey PRIMARY KEY (id),
+  CONSTRAINT recurring_task_templates_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT recurring_task_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.seller_info (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL UNIQUE,
+  user_id uuid,
+  company_name character varying NOT NULL,
+  legal_status character varying,
+  address text,
+  postal_code character varying,
+  city character varying,
+  country character varying DEFAULT 'France'::character varying,
+  siret character varying,
+  siren character varying,
+  vat_number character varying,
+  email character varying,
+  phone character varying,
+  logo_url text,
+  vat_not_applicable boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT seller_info_pkey PRIMARY KEY (id),
+  CONSTRAINT seller_info_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.semences (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  culture character varying NOT NULL,
+  variete character varying NOT NULL,
+  prix numeric NOT NULL,
+  unite_prix character varying NOT NULL,
+  pmg numeric,
+  prix_pour_1000_graines numeric,
+  traitement character varying,
+  traitement_libre text,
+  fournisseur character varying,
+  reference_produit character varying,
+  lot_numero character varying,
+  date_achat date,
+  date_peremption date,
+  annee_recolte integer,
+  facture_url text,
+  facture_analysee boolean DEFAULT false,
+  notes text,
+  quantite_stock numeric,
+  unite_stock character varying,
+  stock_disponible numeric,
+  unite_stock_disponible character varying,
+  nb_graines_estimees bigint,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  graines_par_sachet integer,
+  invoice_line_id uuid,
+  CONSTRAINT semences_pkey PRIMARY KEY (id),
+  CONSTRAINT semences_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
+  CONSTRAINT semences_invoice_line_id_fkey FOREIGN KEY (invoice_line_id) REFERENCES public.invoice_lines(id)
 );
 CREATE TABLE public.spatial_ref_sys (
   srid integer NOT NULL CHECK (srid > 0 AND srid <= 998999),
@@ -417,6 +1008,27 @@ CREATE TABLE public.spatial_ref_sys (
   srtext character varying,
   proj4text character varying,
   CONSTRAINT spatial_ref_sys_pkey PRIMARY KEY (srid)
+);
+CREATE TABLE public.suppliers (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  company_name character varying NOT NULL,
+  contact_name character varying,
+  address text,
+  postal_code character varying,
+  city character varying,
+  country character varying DEFAULT 'France'::character varying,
+  siret character varying,
+  siren character varying,
+  vat_number character varying,
+  email character varying,
+  phone character varying,
+  notes text,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT suppliers_pkey PRIMARY KEY (id),
+  CONSTRAINT suppliers_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
 );
 CREATE TABLE public.surface_units (
   id integer NOT NULL DEFAULT nextval('surface_units_id_seq'::regclass),
@@ -467,9 +1079,11 @@ CREATE TABLE public.tasks (
   quantity_converted_unit character varying,
   audio_file_id uuid,
   phytosanitary_product_amm text,
+  recurring_template_id uuid,
   CONSTRAINT tasks_pkey PRIMARY KEY (id),
   CONSTRAINT tasks_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
   CONSTRAINT tasks_audio_file_id_fkey FOREIGN KEY (audio_file_id) REFERENCES public.audio_files(id),
+  CONSTRAINT tasks_recurring_template_id_fkey FOREIGN KEY (recurring_template_id) REFERENCES public.recurring_task_templates(id),
   CONSTRAINT tasks_phytosanitary_product_amm_fkey FOREIGN KEY (phytosanitary_product_amm) REFERENCES public.phytosanitary_products(amm)
 );
 CREATE TABLE public.user_conversion_units (
@@ -512,4 +1126,29 @@ CREATE TABLE public.user_phytosanitary_preferences (
   CONSTRAINT user_phytosanitary_preferences_pkey PRIMARY KEY (id),
   CONSTRAINT fk_phyto_pref_user FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT fk_phyto_pref_farm FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.user_preferences (
+  user_id text NOT NULL,
+  has_greenhouse boolean NOT NULL DEFAULT false,
+  direct_sowing boolean NOT NULL DEFAULT false,
+  year_long_crops ARRAY DEFAULT '{}'::text[],
+  excluded_crops ARRAY DEFAULT '{}'::text[],
+  excluded_crop_names ARRAY DEFAULT '{}'::text[],
+  winter_cultivation text NOT NULL DEFAULT 'no'::text CHECK (winter_cultivation = ANY (ARRAY['yes'::text, 'little'::text, 'no'::text])),
+  season_extension text NOT NULL DEFAULT 'none'::text CHECK (season_extension = ANY (ARRAY['early'::text, 'late'::text, 'both'::text, 'none'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  climate_zone text DEFAULT 'atlantic'::text,
+  CONSTRAINT user_preferences_pkey PRIMARY KEY (user_id)
+);
+CREATE TABLE public.varieties (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  culture_name text NOT NULL,
+  name text NOT NULL,
+  itinerary_id uuid NOT NULL,
+  user_id text NOT NULL DEFAULT 'system'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT varieties_pkey PRIMARY KEY (id),
+  CONSTRAINT varieties_itinerary_id_fkey FOREIGN KEY (itinerary_id) REFERENCES public.itineraries(id)
 );

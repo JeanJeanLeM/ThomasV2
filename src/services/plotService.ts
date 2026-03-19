@@ -132,6 +132,7 @@ export class PlotService {
           area: plot.surface_area ? Number((plot.surface_area / 10000).toFixed(4)) : 0, // Conversion m² -> ha
           unit: 'ha' as const,
           description: plot.description || '',
+          is_active: plot.is_active !== false,
           status: plot.is_active ? 'active' : 'inactive',
           slug: plot.aliases?.[0] || '',
           aliases: plot.aliases || [],

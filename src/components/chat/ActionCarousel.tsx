@@ -90,7 +90,7 @@ export const ActionCarousel: React.FC<ActionCarouselProps> = ({
       >
         {actions.map((action, index) => (
           <View
-            key={action.id}
+            key={action.id ? `action-${action.id}-${index}` : `action-${index}`}
             style={{
               width: cardWidth,
               paddingHorizontal: spacing.xs
@@ -151,7 +151,7 @@ export const ActionCarousel: React.FC<ActionCarouselProps> = ({
 
             return (
               <View
-                key={action.id}
+                key={action.id ? `action-${action.id}-${index}` : `action-${index}`}
                 style={{
                   backgroundColor: currentIndex === index 
                     ? colors.primary[100] 

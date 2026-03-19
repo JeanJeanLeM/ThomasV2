@@ -696,7 +696,11 @@ const MaterialFormScreen: React.FC<MaterialFormScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
 
   const updateFormData = (field: keyof MaterialFormValues, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Optimisation : ne mettre à jour que si la valeur change réellement
+    setFormData((prev) => {
+      if (prev[field] === value) return prev;
+      return { ...prev, [field]: value };
+    });
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }));
     }

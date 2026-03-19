@@ -5,9 +5,7 @@ import { spacing } from '../design-system/spacing';
 import { 
   BellIcon, 
   ClockIcon,
-  CalendarDaysIcon,
-  CheckIcon,
-  XMarkIcon
+  CalendarIcon,
 } from '../design-system/icons';
 import { Text, Button, Card, TextInput, TimePicker } from '../design-system/components';
 import { FormScreen } from '../design-system/components/FormScreen';
@@ -40,7 +38,7 @@ const QUICK_PRESETS = [
 ];
 
 export default function CreateNotificationScreen({ onNavigate, editData }: CreateNotificationScreenProps) {
-  const { currentFarm } = useFarm();
+  const { activeFarm } = useFarm();
   const isEditing = !!editData;
   
   const [formData, setFormData] = useState({
@@ -79,7 +77,7 @@ export default function CreateNotificationScreen({ onNavigate, editData }: Creat
   };
 
   const handleSubmit = async () => {
-    if (!validateForm() || !currentFarm) return;
+    if (!validateForm() || !activeFarm) return;
 
     try {
       setLoading(true);
@@ -100,7 +98,7 @@ export default function CreateNotificationScreen({ onNavigate, editData }: Creat
           message: formData.message.trim(),
           reminder_time: formData.reminder_time,
           selected_days: formData.selected_days,
-          farm_id: currentFarm.id,
+          farm_id: activeFarm.farm_id,
         };
         
         await NotificationService.createNotification(createData);
@@ -168,7 +166,7 @@ export default function CreateNotificationScreen({ onNavigate, editData }: Creat
       primaryAction={{
         title: isEditing ? 'Sauvegarder' : 'Créer la notification',
         onPress: handleSubmit,
-        loading: isLoading,
+        loading: loading,
         disabled: !formData.title.trim() || !formData.message.trim() || formData.selected_days.length === 0,
       }}
       secondaryAction={{
@@ -346,23 +344,24 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   presetButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: 16,
-    backgroundColor: colors.neutral[100],
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[300],
   },
   presetButtonActive: {
-    backgroundColor: colors.primary[50],
+    backgroundColor: colors.primary[600],
     borderColor: colors.primary[600],
   },
   presetButtonText: {
-    color: colors.neutral[600],
+    color: colors.neutral[800],
+    fontWeight: '500',
   },
   presetButtonTextActive: {
-    color: colors.primary[600],
-    fontWeight: '600',
+    color: colors.white,
+    fontWeight: '700',
   },
   daysContainer: {
     flexDirection: 'row',
@@ -373,9 +372,9 @@ const styles = StyleSheet.create({
     flex: 1,
     aspectRatio: 1,
     borderRadius: 8,
-    backgroundColor: colors.neutral[100],
-    borderWidth: 1,
-    borderColor: colors.neutral[200],
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.neutral[300],
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -384,11 +383,14 @@ const styles = StyleSheet.create({
     borderColor: colors.primary[600],
   },
   dayButtonText: {
-    color: colors.neutral[600],
-    fontWeight: '600',
+    color: colors.neutral[800],
+    fontWeight: '700',
+    fontSize: 12,
   },
   dayButtonTextActive: {
     color: colors.white,
+    fontWeight: '700',
+    fontSize: 12,
   },
   errorText: {
     color: colors.semantic.error,

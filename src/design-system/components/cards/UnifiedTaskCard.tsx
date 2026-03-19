@@ -5,13 +5,8 @@ import { colors } from '../../colors';
 import { spacing } from '../../spacing';
 import { 
   CalendarIcon,
-  EditIcon,
   TrashIcon,
-  CheckCircleIcon,
   ClockIcon,
-  UserIcon,
-  MapIcon,
-  SproutIcon
 } from '../../icons';
 import { TaskData } from './TaskCard';
 
@@ -112,6 +107,9 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
 
   const config = getTaskConfig();
 
+  // Durée totale à afficher sur la ligne du titre (durée × nombre de personnes, ou durée seule si 1 personne)
+  const totalDurationMinutes = (task.duration_minutes ?? 0) * Math.max(1, task.number_of_people ?? 1);
+
   // Format de date
   const formatDate = (date: Date | string) => {
     const dateObj = date instanceof Date ? date : new Date(date);
@@ -151,14 +149,14 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
         activeOpacity={0.7}
         disabled={isDeleting} // Disable interactions during animation
       >
-      {/* En-tête avec titre à gauche et actions à droite */}
+      {/* En-tête : titre à gauche, durée + supprimer à droite */}
       <View style={{
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: spacing.md
       }}>
-        {/* Titre principal - Aligné en haut à gauche */}
+        {/* Titre principal */}
         <View style={{ flex: 1, marginRight: spacing.sm }}>
           <Text variant="body" numberOfLines={2} weight="semibold" style={{
             fontSize: 17,
@@ -169,65 +167,50 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
           </Text>
         </View>
 
-        {/* Actions */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {onEdit && (
-            <TouchableOpacity
-              onPress={() => onEdit(task)}
-              style={{
-                padding: spacing.xs,
-                borderRadius: 6,
-                backgroundColor: colors.primary[100],
-                marginRight: spacing.xs,
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <EditIcon size={14} color={colors.primary[600]} />
-            </TouchableOpacity>
-          )}
-          
-          {onDelete && (
-            <TouchableOpacity
-              onPress={() => onDelete(task)}
-              style={{
-                padding: spacing.xs,
-                borderRadius: 6,
-                backgroundColor: colors.semantic.error + '15',
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <TrashIcon size={14} color={colors.semantic.error} />
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* Capsule durée totale sur la ligne du titre (durée × personnes) */}
+        {totalDurationMinutes > 0 && (
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#dbeafe',
+            paddingHorizontal: spacing.sm,
+            paddingVertical: 6,
+            borderRadius: 20,
+            marginRight: spacing.sm,
+          }}>
+            <Text style={{ fontSize: 12, marginRight: 4 }}>⏱️</Text>
+            <Text variant="caption" style={{ color: '#1e40af', fontWeight: '600', fontSize: 13 }}>
+              {totalDurationMinutes >= 60
+                ? (totalDurationMinutes % 60 === 0
+                    ? `${Math.floor(totalDurationMinutes / 60)}h`
+                    : `${Math.floor(totalDurationMinutes / 60)}h${totalDurationMinutes % 60}`)
+                : `${totalDurationMinutes} min`}
+            </Text>
+          </View>
+        )}
+
+        {/* Bouton supprimer uniquement */}
+        {onDelete && (
+          <TouchableOpacity
+            onPress={() => onDelete(task)}
+            style={{
+              padding: spacing.xs,
+              borderRadius: 6,
+              backgroundColor: colors.semantic.error + '15',
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <TrashIcon size={14} color={colors.semantic.error} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Capsules informatiques - Format chat */}
+      {/* Capsules informatiques (sans action ni culture, déjà dans le titre) */}
       <View style={{
         flexDirection: 'row',
         flexWrap: 'wrap',
         marginBottom: spacing.sm
       }}>
-        {/* Action principale comme capsule */}
-        {task.action && (
-          <Tag 
-            icon="🔧" 
-            text={task.action} 
-            bgColor={config.bgColor} 
-            textColor={config.color} 
-          />
-        )}
-
-        {/* Cultures (plants) */}
-        {task.plants && task.plants.length > 0 && (
-          <Tag 
-            icon="🌱" 
-            text={task.plants.join(', ')} 
-            bgColor="#f0fdf4" 
-            textColor="#166534" 
-          />
-        )}
-
         {/* Parcelles (plots) */}
         {task.plot_ids && task.plot_ids.length > 0 && (
           <Tag 
@@ -288,16 +271,6 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
           />
         )}
 
-        {/* Durée */}
-        {task.duration_minutes && task.duration_minutes > 0 && (
-          <Tag 
-            icon="⏱️" 
-            text={`${task.duration_minutes} min`} 
-            bgColor="#dbeafe" 
-            textColor="#1e40af" 
-          />
-        )}
-
         {/* Nombre de personnes */}
         {task.number_of_people && task.number_of_people > 1 && (
           <Tag 
@@ -307,25 +280,35 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
             textColor="#7c3aed" 
           />
         )}
-
-        {/* Date comme capsule */}
-        <Tag 
-          icon="📅" 
-          text={formatDate(task.date)} 
-          bgColor="#f0fdf4" 
-          textColor="#166534" 
-        />
       </View>
 
-      {/* Badge de type en bas à droite */}
+      {/* Dernière ligne : Date à gauche, Type (effectuée/planifiée) à droite */}
       <View style={{
         flexDirection: 'row',
-        justifyContent: 'flex-end'
+        alignItems: 'center',
+        justifyContent: 'space-between'
       }}>
+        {/* Date alignée à gauche */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#f0fdf4',
+          paddingHorizontal: spacing.sm,
+          paddingVertical: 6,
+          borderRadius: 20,
+          alignSelf: 'flex-start',
+        }}>
+          <Text style={{ fontSize: 12, marginRight: 6 }}>📅</Text>
+          <Text variant="caption" style={{ color: '#166534', fontWeight: '600', fontSize: 13 }}>
+            {formatDate(task.date)}
+          </Text>
+        </View>
+
+        {/* Badge type (EFFECTUÉE / PLANIFIÉE) à droite */}
         <View style={{
           backgroundColor: config.color + '20',
           paddingHorizontal: spacing.sm,
-          paddingVertical: 4,
+          paddingVertical: 6,
           borderRadius: 12,
         }}>
           <Text 

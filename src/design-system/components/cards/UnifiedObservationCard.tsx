@@ -3,13 +3,7 @@ import { View, TouchableOpacity, ViewStyle, Animated } from 'react-native';
 import { Text } from '../Text';
 import { colors } from '../../colors';
 import { spacing } from '../../spacing';
-import { 
-  CalendarIcon,
-  EditIcon,
-  TrashIcon,
-  AlertTriangleIcon,
-  EyeIcon
-} from '../../icons';
+import { TrashIcon } from '../../icons';
 import { ObservationData } from './ObservationCard';
 import { formatObservationTitle } from '../../../utils/observationFormatters';
 
@@ -173,14 +167,14 @@ export const UnifiedObservationCard: React.FC<UnifiedObservationCardProps> = ({
         activeOpacity={0.7}
         disabled={isDeleting} // Disable interactions during animation
       >
-      {/* En-tête avec titre à gauche et actions à droite */}
+      {/* En-tête : titre à gauche, sévérité + supprimer à droite */}
       <View style={{
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: spacing.md
       }}>
-        {/* Titre principal - Aligné en haut à gauche */}
+        {/* Titre principal */}
         <View style={{ flex: 1, marginRight: spacing.sm }}>
           <Text variant="body" numberOfLines={2} weight="semibold" style={{
             fontSize: 17,
@@ -191,63 +185,44 @@ export const UnifiedObservationCard: React.FC<UnifiedObservationCardProps> = ({
           </Text>
         </View>
 
-        {/* Actions */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          {onEdit && (
-            <TouchableOpacity
-              onPress={() => onEdit(observation)}
-              style={{
-                padding: spacing.xs,
-                borderRadius: 6,
-                backgroundColor: colors.primary[100],
-                marginRight: spacing.xs,
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <EditIcon size={14} color={colors.primary[600]} />
-            </TouchableOpacity>
-          )}
-          
-          {onDelete && (
-            <TouchableOpacity
-              onPress={() => onDelete(observation)}
-              style={{
-                padding: spacing.xs,
-                borderRadius: 6,
-                backgroundColor: colors.semantic.error + '15',
-              }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <TrashIcon size={14} color={colors.semantic.error} />
-            </TouchableOpacity>
-          )}
+        {/* Capsule sévérité sur la ligne du titre */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: severityConfig.bg,
+          paddingHorizontal: spacing.sm,
+          paddingVertical: 6,
+          borderRadius: 20,
+          marginRight: spacing.sm,
+        }}>
+          <Text style={{ fontSize: 12, marginRight: 4 }}>{severityConfig.icon}</Text>
+          <Text variant="caption" style={{ color: severityConfig.color, fontWeight: '600', fontSize: 13 }}>
+            {severityConfig.text}
+          </Text>
         </View>
+
+        {/* Bouton supprimer uniquement */}
+        {onDelete && (
+          <TouchableOpacity
+            onPress={() => onDelete(observation)}
+            style={{
+              padding: spacing.xs,
+              borderRadius: 6,
+              backgroundColor: colors.semantic.error + '15',
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <TrashIcon size={14} color={colors.semantic.error} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Capsules informatiques - Format chat */}
+      {/* Capsules informatiques (sans issue/cultures, déjà dans le titre) */}
       <View style={{
         flexDirection: 'row',
         flexWrap: 'wrap',
         marginBottom: spacing.sm
       }}>
-        {/* Problème comme capsule principale */}
-        {observation.issue && (
-          <Tag 
-            icon="⚠️" 
-            text={observation.issue} 
-            bgColor="#fef2f2" 
-            textColor="#991b1b" 
-          />
-        )}
-
-        {/* Sévérité */}
-        <Tag 
-          icon={severityConfig.icon} 
-          text={severityConfig.text} 
-          bgColor={severityConfig.bg} 
-          textColor={severityConfig.color} 
-        />
-
         {/* Catégorie */}
         <Tag 
           icon={categoryConfig.icon} 
@@ -255,35 +230,35 @@ export const UnifiedObservationCard: React.FC<UnifiedObservationCardProps> = ({
           bgColor={categoryConfig.bg} 
           textColor={categoryConfig.color} 
         />
-
-        {/* Cultures affectées */}
-        {observation.crops && observation.crops.length > 0 && (
-          <Tag 
-            icon="🌱" 
-            text={observation.crops.join(', ')} 
-            bgColor="#f0fdf4" 
-            textColor="#166534" 
-          />
-        )}
-
-        {/* Date comme capsule */}
-        <Tag 
-          icon="📅" 
-          text={formatDate(observation.date)} 
-          bgColor="#f0fdf4" 
-          textColor="#166534" 
-        />
       </View>
 
-      {/* Badge de type "OBSERVATION" en bas à droite */}
+      {/* Dernière ligne : Date à gauche, Type OBSERVATION à droite */}
       <View style={{
         flexDirection: 'row',
-        justifyContent: 'flex-end'
+        alignItems: 'center',
+        justifyContent: 'space-between'
       }}>
+        {/* Date alignée à gauche */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#f0fdf4',
+          paddingHorizontal: spacing.sm,
+          paddingVertical: 6,
+          borderRadius: 20,
+          alignSelf: 'flex-start',
+        }}>
+          <Text style={{ fontSize: 12, marginRight: 6 }}>📅</Text>
+          <Text variant="caption" style={{ color: '#166534', fontWeight: '600', fontSize: 13 }}>
+            {formatDate(observation.date)}
+          </Text>
+        </View>
+
+        {/* Badge type OBSERVATION à droite */}
         <View style={{
           backgroundColor: observationConfig.color + '20',
           paddingHorizontal: spacing.sm,
-          paddingVertical: 4,
+          paddingVertical: 6,
           borderRadius: 12,
         }}>
           <Text 

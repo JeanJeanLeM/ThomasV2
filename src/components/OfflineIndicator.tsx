@@ -15,10 +15,17 @@ import { SyncService } from '../services/SyncService';
 
 export function OfflineIndicator() {
   const networkStatus = useNetworkStatus();
-  const { stats } = useOfflineQueue();
+  const { stats, removeFailedMessages } = useOfflineQueue();
   const [isSyncing, setIsSyncing] = React.useState(false);
+  const [isRemovingFailed, setIsRemovingFailed] = React.useState(false);
 
-  // Si online et pas d'éléments en attente, ne rien afficher
+  // Ne rien afficher si:
+  // - Le statut réseau est encore en cours de détermination (éviter faux "hors ligne")
+  // - On est en ligne et pas d'éléments en attente
+  if (networkStatus.isLoading) {
+    return null;
+  }
+  
   if (networkStatus.isConnected && stats.pending === 0 && stats.failed === 0) {
     return null;
   }
@@ -40,6 +47,20 @@ export function OfflineIndicator() {
       console.error('❌ Erreur synchronisation:', error);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleRemoveFailed = async () => {
+    if (isRemovingFailed || stats.failed === 0) {
+      return;
+    }
+    setIsRemovingFailed(true);
+    try {
+      await removeFailedMessages();
+    } catch (error) {
+      console.error('❌ Erreur suppression des échoués:', error);
+    } finally {
+      setIsRemovingFailed(false);
     }
   };
 
@@ -79,40 +100,82 @@ export function OfflineIndicator() {
       </View>
 
       {networkStatus.isConnected && (stats.pending > 0 || stats.failed > 0) && (
-        <TouchableOpacity
-          onPress={handleSync}
-          disabled={isSyncing}
-          style={{
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.xs,
-            backgroundColor: colors.white,
-            borderRadius: 4,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          {isSyncing ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <>
-              <Ionicons
-                name="sync-outline"
-                size={16}
-                color={colors.primary}
-                style={{ marginRight: spacing.xs }}
-              />
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontSize: 12,
-                  fontWeight: '600',
-                }}
-              >
-                Synchroniser
-              </Text>
-            </>
+        <View style={{ flexDirection: 'column', alignItems: 'flex-end', gap: spacing.xs }}>
+          <TouchableOpacity
+            onPress={handleSync}
+            disabled={isSyncing}
+            style={{
+              paddingHorizontal: spacing.md,
+              paddingVertical: spacing.xs,
+              backgroundColor: colors.white,
+              borderRadius: 4,
+              flexDirection: 'row',
+              alignItems: 'center',
+              minWidth: 140,
+              justifyContent: 'center',
+            }}
+          >
+            {isSyncing ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons
+                  name="sync-outline"
+                  size={16}
+                  color={colors.primary}
+                  style={{ marginRight: spacing.xs }}
+                />
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: '600',
+                  }}
+                >
+                  Synchroniser
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          {stats.failed > 0 && (
+            <TouchableOpacity
+              onPress={handleRemoveFailed}
+              disabled={isRemovingFailed}
+              style={{
+                paddingHorizontal: spacing.sm,
+                paddingVertical: spacing.xs,
+                backgroundColor: 'rgba(255,255,255,0.9)',
+                borderRadius: 4,
+                flexDirection: 'row',
+                alignItems: 'center',
+                minWidth: 140,
+                justifyContent: 'center',
+              }}
+            >
+              {isRemovingFailed ? (
+                <ActivityIndicator size="small" color={colors.error} />
+              ) : (
+                <>
+                  <Ionicons
+                    name="trash-outline"
+                    size={16}
+                    color={colors.error}
+                    style={{ marginRight: spacing.xs }}
+                  />
+                  <Text
+                    style={{
+                      color: colors.error,
+                      fontSize: 12,
+                      fontWeight: '600',
+                    }}
+                  >
+                    Supprimer les échoués
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+        </View>
       )}
     </View>
   );

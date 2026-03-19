@@ -5,6 +5,7 @@ import { Text, Card } from '../../design-system/components';
 import { colors } from '../../design-system/colors';
 import { spacing } from '../../design-system/spacing';
 import { AnalyzedAction, AIChatService } from '../../services/aiChatService';
+import { hasQuantityData, sanitizeQuantityType } from '../../utils/quantityUtils';
 
 interface ActionCardProps {
   action: AnalyzedAction;
@@ -32,6 +33,8 @@ export const ActionCard: React.FC<ActionCardProps> = ({
       case 'task_planned': return 'calendar-outline';
       case 'config': return 'settings-outline';
       case 'help': return 'help-circle-outline';
+      case 'sale': return 'trending-up-outline';
+      case 'purchase': return 'trending-down-outline';
       default: return 'document-text-outline';
     }
   };
@@ -43,6 +46,8 @@ export const ActionCard: React.FC<ActionCardProps> = ({
       case 'task_planned': return colors.primary[600];
       case 'config': return colors.purple[600];
       case 'help': return colors.gray[600];
+      case 'sale': return colors.success[600];
+      case 'purchase': return colors.primary[600];
       default: return colors.gray[500];
     }
   };
@@ -54,6 +59,8 @@ export const ActionCard: React.FC<ActionCardProps> = ({
       case 'task_planned': return 'Tâche planifiée';
       case 'config': return 'Configuration';
       case 'help': return 'Aide';
+      case 'sale': return 'Vente enregistrée';
+      case 'purchase': return 'Achat enregistré';
       default: return 'Action';
     }
   };
@@ -282,8 +289,8 @@ export const ActionCard: React.FC<ActionCardProps> = ({
         </View>
       )}
 
-      {/* Affichage quantité utilisateur, quantity_nature et quantity_type pour toutes les actions */}
-      {(action.extracted_data?.quantity || action.extracted_data?.quantity_nature || action.extracted_data?.quantity_type || action.extracted_data?.quantity_converted) && (
+      {/* Affichage quantité (garde-fou: section affichée seulement si quantité réelle) */}
+      {hasQuantityData(action.extracted_data) && (
         <View style={{
           backgroundColor: colors.gray[50],
           borderRadius: 8,
@@ -320,9 +327,9 @@ export const ActionCard: React.FC<ActionCardProps> = ({
             </View>
           )}
           
-          {action.extracted_data.quantity_type && (
+          {sanitizeQuantityType(action.extracted_data) && (
             <View style={{ flexDirection: 'row', marginBottom: 4 }}>
-              <Text variant="caption" weight="medium">{action.extracted_data.quantity_type}</Text>
+              <Text variant="caption" weight="medium">{sanitizeQuantityType(action.extracted_data)}</Text>
             </View>
           )}
         </View>

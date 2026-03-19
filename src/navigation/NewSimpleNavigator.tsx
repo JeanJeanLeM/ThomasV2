@@ -1,11 +1,15 @@
 import React from 'react';
-import { View, TouchableOpacity, Platform } from 'react-native';
+import { View, TouchableOpacity, Platform, Switch } from 'react-native';
 import { Text, UnifiedHeader, FarmSelectorModal } from '@/design-system/components';
 import { colors } from '@/design-system/colors';
 import { spacing } from '@/design-system/spacing';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useFarmSelector } from '../hooks/useFarmSelector';
+import { useFarm } from '../contexts/FarmContext';
+import { supabase } from '../utils/supabase';
+import OnboardingModal from '../components/onboarding/OnboardingModal';
+import OnboardingService from '../services/OnboardingService';
 
 // Import des écrans
 import DashboardScreen from '@/screens/DashboardScreen';
@@ -19,6 +23,7 @@ import MaterialsSettingsScreen from '@/screens/MaterialsSettingsScreen';
 import ConversionsSettingsScreen from '@/screens/ConversionsSettingsScreen';
 import CulturesListSettingsScreen from '@/screens/CulturesListSettingsScreen';
 import PhytosanitaryProductsSettingsScreen from '@/screens/PhytosanitaryProductsSettingsScreen';
+import RecurringTasksSettingsScreen from '@/screens/RecurringTasksSettingsScreen';
 import { FarmMembersScreen } from '@/screens/FarmMembersScreen';
 import { MyInvitationsScreen } from '@/screens/MyInvitationsScreen';
 import FarmEditScreen from '@/screens/FarmEditScreen';
@@ -26,6 +31,22 @@ import FarmListScreen from '@/screens/FarmListScreen';
 import AideEtSupportScreen from '@/screens/AideEtSupportScreen';
 import AProposScreen from '@/screens/AProposScreen';
 import DocumentsScreen from '@/screens/DocumentsScreen';
+import FarmSettingsScreen from '@/screens/FarmSettingsScreen';
+import ProfileAndFarmSettingsScreen from '@/screens/ProfileAndFarmSettingsScreen';
+import InvoicesListScreen from '@/screens/InvoicesListScreen';
+import InvoiceCreateScreen from '@/screens/InvoiceCreateScreen';
+import InvoiceDetailsScreen from '@/screens/InvoiceDetailsScreen';
+import CustomersListScreen from '@/screens/CustomersListScreen';
+import CustomerEditScreen from '@/screens/CustomerEditScreen';
+import SellerInfoSettingsScreen from '@/screens/SellerInfoSettingsScreen';
+import CommerceScreen from '@/screens/CommerceScreen';
+import ProductsListScreen from '@/screens/ProductsListScreen';
+import CommunityListScreen from '@/screens/CommunityListScreen';
+import CommunityDetailScreen from '@/screens/CommunityDetailScreen';
+import CommunityCreateScreen from '@/screens/CommunityCreateScreen';
+import CommunitySettingsScreen from '@/screens/CommunitySettingsScreen';
+import NotificationsScreen from '@/screens/NotificationsScreen';
+import CreateNotificationScreen from '@/screens/CreateNotificationScreen';
 
 import type { TabName, ScreenName } from '../contexts/NavigationContext';
 
@@ -48,7 +69,26 @@ const tabs: Tab[] = [
 const NewSimpleNavigator: React.FC = () => {
   const navigation = useNavigation();
   const farmSelector = useFarmSelector();
+  const { activeFarm } = useFarm();
   const [farmEditId, setFarmEditId] = React.useState<number | null>(null);
+  const [agentMethod, setAgentMethod] = React.useState<'simple' | 'pipeline' | null>(null);
+  const [showOnboarding, setShowOnboarding] = React.useState(false);
+
+  // Vérifier si l'onboarding doit s'afficher au premier lancement
+  React.useEffect(() => {
+    OnboardingService.hasSeenOnboarding().then((seen) => {
+      if (!seen) setShowOnboarding(true);
+    });
+  }, []);
+
+  const handleCloseOnboarding = React.useCallback(() => {
+    setShowOnboarding(false);
+    OnboardingService.markOnboardingSeen();
+  }, []);
+
+  const handleStartTutorial = React.useCallback(() => {
+    setShowOnboarding(true);
+  }, []);
 
   // Réinitialiser farmEditId quand on quitte FarmEdit
   React.useEffect(() => {
@@ -56,6 +96,35 @@ const NewSimpleNavigator: React.FC = () => {
       setFarmEditId(null);
     }
   }, [navigation.currentScreen]);
+
+  // Charger la méthode agent depuis DB quand on est sur l'écran Chat
+  React.useEffect(() => {
+    const loadAgentMethod = async () => {
+      if (navigation.activeTab === 'Chat' && activeFarm?.farm_id) {
+        try {
+          const { data, error } = await supabase
+            .from('farm_agent_config')
+            .select('agent_method')
+            .eq('farm_id', activeFarm.farm_id)
+            .single();
+
+          if (!error && data) {
+            setAgentMethod(data.agent_method);
+            console.log('🔀 [HEADER] Agent method chargée:', data.agent_method);
+          } else {
+            setAgentMethod('simple'); // Fallback
+          }
+        } catch (err) {
+          console.error('❌ [HEADER] Erreur chargement agent method:', err);
+          setAgentMethod('simple');
+        }
+      } else {
+        setAgentMethod(null);
+      }
+    };
+
+    loadAgentMethod();
+  }, [navigation.activeTab, activeFarm?.farm_id]);
 
   // Configuration des écrans
   const getScreenConfig = (screen: ScreenName) => {
@@ -106,6 +175,13 @@ const NewSimpleNavigator: React.FC = () => {
         showTabs: false,
         component: SettingsScreen 
       },
+      ProfileAndFarmSettings: {
+        title: 'Profil et ferme',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: ProfileAndFarmSettingsScreen
+      },
       PlotsSettings: { 
         title: 'Gestion des parcelles', 
         showBack: true, 
@@ -141,6 +217,13 @@ const NewSimpleNavigator: React.FC = () => {
         showTabs: false,
         component: PhytosanitaryProductsSettingsScreen 
       },
+      RecurringTasksSettings: { 
+        title: 'Tâches récurrentes', 
+        showBack: true, 
+        showFarmSelector: false, 
+        showTabs: false,
+        component: RecurringTasksSettingsScreen 
+      },
       FarmMembers: { 
         title: 'Membres de la ferme', 
         showBack: true, 
@@ -169,12 +252,12 @@ const NewSimpleNavigator: React.FC = () => {
         showTabs: false,
         component: FarmListScreen 
       },
-      AideEtSupport: { 
-        title: 'Aide et Support', 
-        showBack: true, 
-        showFarmSelector: false, 
+      AideEtSupport: {
+        title: 'Aide et Support',
+        showBack: true,
+        showFarmSelector: false,
         showTabs: false,
-        component: AideEtSupportScreen 
+        component: AideEtSupportScreen,
       },
       APropos: { 
         title: 'À propos', 
@@ -183,12 +266,118 @@ const NewSimpleNavigator: React.FC = () => {
         showTabs: false,
         component: AProposScreen 
       },
-      Documents: { 
-        title: 'Documents', 
-        showBack: true, 
-        showFarmSelector: false, 
+      Documents: {
+        title: 'Documents',
+        showBack: true,
+        showFarmSelector: false,
         showTabs: false,
-        component: DocumentsScreen 
+        component: DocumentsScreen
+      },
+      FarmSettings: {
+        title: 'Assistant IA',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: FarmSettingsScreen
+      },
+      InvoicesList: {
+        title: 'Factures',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: InvoicesListScreen
+      },
+      InvoiceCreate: {
+        title: 'Créer facture',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: InvoiceCreateScreen
+      },
+      InvoiceDetails: {
+        title: 'Détail facture',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: InvoiceDetailsScreen
+      },
+      CustomersList: {
+        title: 'Clients & Fournisseurs',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: CustomersListScreen
+      },
+      CustomerEdit: {
+        title: 'Client',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: CustomerEditScreen
+      },
+      SellerInfoSettings: {
+        title: 'Vos informations',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: SellerInfoSettingsScreen
+      },
+      Commerce: {
+        title: 'Ventes & Achats',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: CommerceScreen
+      },
+      ProductsList: {
+        title: 'Produits & Prix',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: ProductsListScreen
+      },
+      CommunityList: {
+        title: 'Communauté',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: CommunityListScreen
+      },
+      CommunityDetail: {
+        title: 'Détail communauté',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: CommunityDetailScreen
+      },
+      CommunityCreate: {
+        title: 'Créer une communauté',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: CommunityCreateScreen
+      },
+      CommunitySettings: {
+        title: 'Paramètres communauté',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: CommunitySettingsScreen
+      },
+      Notifications: {
+        title: 'Notifications',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        component: NotificationsScreen
+      },
+      CreateNotification: {
+        title: 'Nouvelle notification',
+        showBack: true,
+        showFarmSelector: false,
+        showTabs: false,
+        hideHeader: true,
+        component: CreateNotificationScreen
       },
     };
     
@@ -254,20 +443,62 @@ const NewSimpleNavigator: React.FC = () => {
   const tabTextColor = (isActive: boolean) => 
     isActive ? colors.primary?.[600] || '#16A34A' : colors.text?.secondary || '#6B7280';
 
-  // Afficher le header : pour Chat uniquement en vue liste ; pour les autres si non hideHeader
+  // Afficher le header : pour Chat toujours (liste ou conversation) ; pour les autres si non hideHeader
+  const isChatConversation =
+    navigation.currentScreen === 'Chat' && navigation.chatState === 'conversation';
   const showHeader =
     (currentConfig as any).hideHeader !== true ||
-    (navigation.currentScreen === 'Chat' && navigation.chatState === 'list');
+    navigation.currentScreen === 'Chat';
+  const headerTitle =
+    isChatConversation
+      ? (navigation.currentChatTitle || 'Conversation')
+      : currentConfig.title;
+  const headerShowBack = currentConfig.showBack || isChatConversation;
+  const headerOnBack =
+    isChatConversation
+      ? () => navigation.setChatState('list')
+      : (currentConfig.showBack ? handleBack : undefined);
+  const headerRightSlot = isChatConversation ? (
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.background?.secondary || '#F9FAFB',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border?.primary || '#E5E7EB',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    }}>
+      <Ionicons
+        name={navigation.voiceHelpEnabled ? 'help-circle' : 'help-circle-outline'}
+        size={14}
+        color={navigation.voiceHelpEnabled ? colors.primary?.[600] || '#16A34A' : colors.gray?.[500] || '#6B7280'}
+      />
+      <Switch
+        value={navigation.voiceHelpEnabled}
+        onValueChange={navigation.setVoiceHelpEnabled}
+        trackColor={{
+          false: colors.gray?.[300] || '#D1D5DB',
+          true: colors.primary?.[300] || '#86EFAC',
+        }}
+        thumbColor={navigation.voiceHelpEnabled ? colors.primary?.[600] || '#16A34A' : '#f4f3f4'}
+      />
+    </View>
+  ) : undefined;
 
   return (
     <View style={containerStyle}>
-      {/* Header - Pour Chat affiché en vue liste ; pour conversation géré par ChatConversation */}
+      {/* Header unique : pour Chat avec flèche retour en vue conversation */}
       {showHeader && (
         <UnifiedHeader
-          title={currentConfig.title}
-          onBack={currentConfig.showBack ? handleBack : undefined}
+          title={headerTitle}
+          onBack={headerOnBack}
           onFarmSelector={currentConfig.showFarmSelector ? handleFarmSelectorPress : undefined}
-          showBackButton={currentConfig.showBack}
+          showBackButton={headerShowBack}
+          agentMethod={navigation.activeTab === 'Chat' ? agentMethod : null}
+          rightSlot={headerRightSlot}
+          sideContentWidth={isChatConversation ? 84 : 48}
         />
       )}
 
@@ -275,9 +506,17 @@ const NewSimpleNavigator: React.FC = () => {
       <View style={contentStyle}>
         {navigation.currentScreen === 'Profil' ? (
           <CurrentComponent 
+            onProfileAndFarmPress={() => {
+              console.log('👤 [NAVIGATION] Profile and farm pressed');
+              navigation.navigateToScreen('ProfileAndFarmSettings');
+            }}
             onSettingsPress={() => {
               console.log('🔧 [NAVIGATION] Settings pressed');
               navigation.navigateToScreen('Settings');
+            }}
+            onAgentSettingsPress={() => {
+              console.log('🤖 [NAVIGATION] Agent Settings pressed');
+              navigation.navigateToScreen('FarmSettings');
             }}
             onFarmMembersPress={() => {
               console.log('👥 [NAVIGATION] Farm members pressed');
@@ -303,11 +542,40 @@ const NewSimpleNavigator: React.FC = () => {
               console.log('📄 [NAVIGATION] Documents pressed');
               navigation.navigateToScreen('Documents');
             }}
+            onCommercePress={() => {
+              console.log('🛒 [NAVIGATION] Commerce pressed');
+              navigation.navigateToScreen('Commerce');
+            }}
+            onCommunityPress={() => {
+              console.log('👥 [NAVIGATION] Community pressed');
+              navigation.navigateToScreen('CommunityList');
+            }}
+            onNotificationsPress={() => {
+              console.log('🔔 [NAVIGATION] Notifications pressed');
+              navigation.navigateToScreen('Notifications');
+            }}
+            openEditProfileFromNav={navigation.navigationParams?.openEditProfile === true}
+            onClearOpenEditProfile={() => navigation.setNavigationParams(prev => ({ ...prev, openEditProfile: false }))}
+          />
+        ) : navigation.currentScreen === 'ProfileAndFarmSettings' ? (
+          <ProfileAndFarmSettingsScreen
+            navigation={{ goBack: handleBack }}
+            onEditProfile={() => navigation.navigateToScreen('Profil', { openEditProfile: true })}
+            onFarmEdit={() => navigation.navigateToScreen('FarmList')}
+            onFarmMembers={() => navigation.navigateToScreen('FarmMembers')}
+            onMyInvitations={() => navigation.navigateToScreen('MyInvitations')}
           />
         ) : navigation.currentScreen === 'Settings' ? (
           <CurrentComponent 
             onNavigate={(screen: any) => {
               console.log('🔧 [NAVIGATION] Navigating to:', screen);
+              navigation.navigateToScreen(screen);
+            }}
+          />
+        ) : navigation.currentScreen === 'Commerce' ? (
+          <CommerceScreen
+            onNavigate={(screen: any) => {
+              console.log('🛒 [NAVIGATION] Commerce navigating to:', screen);
               navigation.navigateToScreen(screen);
             }}
           />
@@ -328,13 +596,93 @@ const NewSimpleNavigator: React.FC = () => {
             navigation={{ goBack: handleBack }}
             farmId={farmEditId}
           />
+        ) : navigation.currentScreen === 'InvoiceDetails' ? (
+          <InvoiceDetailsScreen
+            navigation={{ goBack: handleBack }}
+            invoiceId={(navigation.navigationParams?.invoiceId as string) ?? ''}
+            onNavigate={navigation.navigateToScreen}
+          />
+        ) : navigation.currentScreen === 'CustomerEdit' ? (
+          <CustomerEditScreen
+            navigation={{ goBack: handleBack }}
+            customerId={(navigation.navigationParams?.customerId as string) ?? undefined}
+            mode={(navigation.navigationParams?.mode as 'customer' | 'supplier') ?? 'customer'}
+            onNavigate={navigation.navigateToScreen}
+          />
+        ) : navigation.currentScreen === 'InvoicesList' ? (
+          <InvoicesListScreen
+            navigation={{ goBack: handleBack }}
+            onNavigate={navigation.navigateToScreen}
+          />
+        ) : navigation.currentScreen === 'InvoiceCreate' ? (
+          <InvoiceCreateScreen
+            navigation={{ goBack: handleBack }}
+            onNavigate={navigation.navigateToScreen}
+          />
+        ) : navigation.currentScreen === 'CustomersList' ? (
+          <CustomersListScreen
+            navigation={{ goBack: handleBack }}
+            onNavigate={navigation.navigateToScreen}
+          />
+        ) : navigation.currentScreen === 'SellerInfoSettings' ? (
+          <SellerInfoSettingsScreen
+            navigation={{ goBack: handleBack }}
+          />
+        ) : navigation.currentScreen === 'ProductsList' ? (
+          <ProductsListScreen
+            navigation={{ goBack: handleBack }}
+          />
+        ) : navigation.currentScreen === 'CommunityList' ? (
+          <CommunityListScreen
+            navigation={{ goBack: handleBack }}
+            onNavigate={(screen, params) => navigation.navigateToScreen(screen as ScreenName, params)}
+          />
+        ) : navigation.currentScreen === 'CommunityDetail' ? (
+          <CommunityDetailScreen
+            navigation={{ goBack: handleBack }}
+            communityId={(navigation.navigationParams?.communityId as string) ?? ''}
+            onNavigate={(screen, params) => navigation.navigateToScreen(screen as ScreenName, params)}
+          />
+        ) : navigation.currentScreen === 'CommunityCreate' ? (
+          <CommunityCreateScreen
+            navigation={{ goBack: handleBack }}
+            onNavigate={(screen, params) => navigation.navigateToScreen(screen as ScreenName, params)}
+          />
+        ) : navigation.currentScreen === 'CommunitySettings' ? (
+          <CommunitySettingsScreen
+            navigation={{ goBack: handleBack }}
+            communityId={(navigation.navigationParams?.communityId as string) ?? ''}
+            onNavigate={(screen, params) => navigation.navigateToScreen(screen as ScreenName, params)}
+          />
+        ) : navigation.currentScreen === 'AideEtSupport' ? (
+          <AideEtSupportScreen onStartTutorial={handleStartTutorial} />
+        ) : navigation.currentScreen === 'Notifications' ? (
+          <NotificationsScreen
+            onNavigate={(screen, data) => {
+              if (screen === 'CreateNotification') {
+                navigation.navigateToScreen('CreateNotification');
+              } else if (screen === 'EditNotification') {
+                navigation.navigateToScreen('CreateNotification', { editNotification: data?.notification });
+              }
+            }}
+          />
+        ) : navigation.currentScreen === 'CreateNotification' ? (
+          <CreateNotificationScreen
+            onNavigate={() => navigation.goBack()}
+            editData={
+              navigation.navigationParams?.editNotification
+                ? { notification: navigation.navigationParams.editNotification as any }
+                : undefined
+            }
+          />
         ) : (
-          <CurrentComponent 
+          <CurrentComponent
             chatState={navigation.chatState}
             setChatState={navigation.setChatState}
+            onStateChange={navigation.setChatState}
             onNavigate={navigation.navigateToScreen}
-            onTitleChange={(title) => {
-              // Optionnel: mettre à jour le titre dynamiquement
+            onTitleChange={(title: string) => {
+              navigation.setCurrentChatTitle(title);
             }}
             onBack={currentConfig.showBack ? handleBack : undefined}
           />
@@ -382,6 +730,12 @@ const NewSimpleNavigator: React.FC = () => {
         currentFarmId={farmSelector.activeFarm?.farm_id || null}
         onFarmSelect={handleFarmSelect}
         onCreateFarm={handleCreateFarm}
+      />
+
+      {/* Modal d'onboarding (premier lancement + relance depuis FAQ) */}
+      <OnboardingModal
+        visible={showOnboarding}
+        onClose={handleCloseOnboarding}
       />
     </View>
   );

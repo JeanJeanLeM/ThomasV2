@@ -6,6 +6,7 @@ Documentation du système de chat et de l'agent IA Thomas v2.0.
 
 ### **Architecture & Intégration**
 - **CHAT_INTEGRATION_ARCHITECTURE.md** ⭐ - Architecture complète du système
+- **CHAT_DESKTOP_REPLICATION_GUIDE.md** 🖥️ - Blueprint pour recréer le chat mobile sur desktop
 - **CHAT_DEPLOYMENT_GUIDE.md** - Guide déploiement chat
 - **REAL_CHAT_SYSTEM.md** - Système de chat réel en production
 

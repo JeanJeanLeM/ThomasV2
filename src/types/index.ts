@@ -160,6 +160,36 @@ export interface Task {
   updatedAt: string;
 }
 
+/** Template de tâche récurrente (dates relatives, ex: tous les samedis nov–fév) */
+export type RecurringTaskCategory = 'production' | 'marketing' | 'administratif' | 'general';
+export type RecurringTaskFrequencyType = 'weekly' | 'biweekly' | 'monthly';
+
+export interface RecurringTaskTemplate {
+  id: string;
+  farm_id: number;
+  name: string;
+  duration_minutes: number;
+  action?: string;
+  category: RecurringTaskCategory;
+  culture?: string;
+  number_of_people: number;
+  plot_ids: number[];
+  surface_unit_ids: number[];
+  material_ids: number[];
+  notes?: string;
+  start_month: number;
+  end_month: number;
+  start_day?: number;
+  end_day?: number;
+  is_permanent: boolean;
+  day_of_week: number;
+  frequency_type: RecurringTaskFrequencyType;
+  frequency_interval: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChatMessage {
   id: string;
   content: string;
@@ -299,6 +329,7 @@ export interface PhytosanitaryProduct {
   reference_product_name?: string | null;
   is_custom: boolean; // true si créé par l'utilisateur (non autorisé)
   farm_id?: number | null;
+  speech_aliases?: string[]; // Alias phonétiques pour la correction dictée Web Speech
   created_at?: string;
   updated_at?: string;
 }
@@ -339,5 +370,298 @@ export interface UserPhytosanitaryPreferences {
   culture_filter: string[]; // Filtres de culture actifs
   function_filter: string[]; // Filtres de fonction actifs (Insecticide, Fongicide, etc.)
   pest_filter?: string[]; // Filtres de ravageur/bioagresseur actifs
+  updated_at: string;
+}
+
+// === Facturation (ventes, achats, clients, fournisseurs) ===
+
+export interface SellerInfo {
+  id: string;
+  farm_id: number;
+  user_id?: string | null;
+  company_name: string;
+  legal_status?: 'EI' | 'EARL' | 'GAEC' | 'SCEA' | 'SARL' | 'SAS' | 'Other' | null;
+  address?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  country?: string | null;
+  siret?: string | null;
+  siren?: string | null;
+  vat_number?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  logo_url?: string | null;
+  vat_not_applicable?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Une adresse additionnelle (ex. livraison) pour un client */
+export interface CustomerAddress {
+  label: string;
+  address: string;
+  postal_code: string;
+  city: string;
+}
+
+export interface Customer {
+  id: string;
+  farm_id: number;
+  company_name: string;
+  contact_name?: string | null;
+  address?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  country?: string | null;
+  siret?: string | null;
+  siren?: string | null;
+  vat_number?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  delivery_addresses?: CustomerAddress[] | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Supplier {
+  id: string;
+  farm_id: number;
+  company_name: string;
+  contact_name?: string | null;
+  address?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  country?: string | null;
+  siret?: string | null;
+  siren?: string | null;
+  vat_number?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Product {
+  id: string;
+  farm_id: number;
+  name: string;
+  description?: string | null;
+  culture_id?: number | null;
+  unit: string;
+  default_price_ht?: number | null;
+  default_vat_rate?: number | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'cancelled';
+export type InvoiceDocumentType = 'invoice' | 'delivery_note' | 'invoice_with_delivery';
+export type InvoiceDirection = 'outgoing' | 'incoming';
+
+export interface Invoice {
+  id: string;
+  farm_id: number;
+  user_id: string;
+  invoice_number: string;
+  document_type: InvoiceDocumentType;
+  direction: InvoiceDirection;
+  customer_id?: string | null;
+  supplier_id?: string | null;
+  invoice_date: string;
+  delivery_date?: string | null;
+  delivery_location?: string | null;
+  payment_due_date?: string | null;
+  total_ht: number;
+  total_vat: number;
+  total_ttc: number;
+  status: InvoiceStatus;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvoiceLine {
+  id: string;
+  invoice_id: string;
+  product_id?: string | null;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  unit_price_ht: number;
+  vat_rate: number;
+  total_ht: number;
+  total_vat: number;
+  total_ttc: number;
+  line_order: number;
+  notes?: string | null;
+}
+
+// === Analyse IA de factures (contrat partagé web ↔ mobile) ===
+
+/**
+ * Charge category values matching the charges_fixes.categorie DB constraint.
+ */
+export type ChargeCategory =
+  | 'pots'
+  | 'plaques_semis'
+  | 'baches'
+  | 'etiquetage'
+  | 'irrigation'
+  | 'protection'
+  | 'substrats'
+  | 'autre';
+
+/**
+ * A single line returned by the AI invoice analysis endpoint.
+ * Mirrors the InvoiceAIOutput.lines[] schema from the web backend.
+ */
+export interface InvoiceAILine {
+  product_name: string;
+  quantity: number;
+  unit: string;
+  unit_price_ht: number;
+  vat_rate: number;
+  /** true → record in charges_fixes after ingestion */
+  is_charge: boolean;
+  charge_category?: ChargeCategory | null;
+  /** Packaging: e.g. box of 100 pots */
+  quantity_per_package?: number | null;
+  base_unit?: string | null;
+  /** true → record in semences after ingestion */
+  is_semence?: boolean;
+  culture?: string | null;
+  variete?: string | null;
+  pmg?: number | null;
+  graines_par_sachet?: number | null;
+  lot_numero?: string | null;
+  date_peremption?: string | null;
+  notes?: string | null;
+}
+
+/**
+ * Full response from POST /api/ai/analyze-invoice
+ * (web backend + Supabase Edge Function equivalent).
+ */
+export interface InvoiceAIOutput {
+  original_text: string;
+  confidence: number;
+  invoice: {
+    direction: InvoiceDirection;
+    invoice_number?: string | null;
+    invoice_date?: string | null;
+    delivery_date?: string | null;
+    payment_due_date?: string | null;
+    /** populated for direction=incoming */
+    supplier_name?: string | null;
+    /** populated for direction=outgoing */
+    customer_name?: string | null;
+    notes?: string | null;
+  };
+  lines: InvoiceAILine[];
+}
+
+/**
+ * Payload consumed by the ingestion service (ingestInvoice).
+ * The mobile passes this after user confirms the AI preview.
+ */
+export interface InvoiceIngestPayload {
+  farmId: number;
+  userId: string;
+  aiOutput: InvoiceAIOutput;
+  /** 'message' | 'invoice_scan' */
+  source: 'message' | 'invoice_scan';
+  /** Pass to update an existing invoice instead of creating */
+  existingInvoiceId?: string;
+}
+
+// === Communauté (conseiller / animateur) ===
+
+export type CommunityStatus = 'active' | 'inactive' | 'archived';
+export type CommunityJoinPolicy = 'open' | 'approval_required' | 'invite_only';
+export type CommunityRole = 'admin' | 'advisor' | 'farmer';
+export type CommunityInvitationStatus = 'pending' | 'accepted' | 'expired' | 'cancelled';
+export type CommunityJoinRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface Community {
+  id: string;
+  name: string;
+  description: string | null;
+  address: string | null;
+  city: string | null;
+  postal_code: string | null;
+  region: string | null;
+  department: string | null;
+  country: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  website_url: string | null;
+  logo_url: string | null;
+  status: CommunityStatus;
+  join_policy: CommunityJoinPolicy;
+  requires_approval: boolean;
+  max_members: number | null;
+  join_message: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  member_count?: number;
+}
+
+export interface CommunityMemberProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  avatar_url: string | null;
+  email: string;
+}
+
+export interface CommunityMember {
+  id: string;
+  community_id: string;
+  user_id: string;
+  role: CommunityRole;
+  is_active: boolean;
+  notes: string | null;
+  joined_at: string;
+  updated_at: string;
+  profile?: CommunityMemberProfile;
+  farm?: { id: number; name: string } | null;
+}
+
+export interface CommunityInvitation {
+  id: string;
+  community_id: string;
+  invited_by: string;
+  email: string;
+  role: CommunityRole;
+  invitation_token: string;
+  status: CommunityInvitationStatus;
+  message: string | null;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommunityJoinRequest {
+  id: string;
+  community_id: string;
+  user_id: string;
+  role: CommunityRole;
+  message: string | null;
+  status: CommunityJoinRequestStatus;
+  approved_at: string | null;
+  approved_by: string | null;
+  rejected_at: string | null;
+  rejected_by: string | null;
+  rejection_reason: string | null;
+  created_at: string;
   updated_at: string;
 }

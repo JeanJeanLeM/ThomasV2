@@ -5,6 +5,7 @@ import { colors } from '../design-system/colors';
 import ChatList, { Chat } from '../components/ChatList';
 import ChatConversation from '../components/ChatConversation';
 import { ChatCacheService } from '../services/ChatCacheService';
+import { useNavigation } from '../contexts/NavigationContext';
 
 // Layout constants
 const TABLET_SIDEBAR_WIDTH_RATIO = 0.35;
@@ -14,21 +15,32 @@ interface ChatScreenProps {
   onFarmSelector?: () => void;
 }
 
-export default function ChatScreen({ 
+export default function ChatScreen({
   onStateChange,
-  onFarmSelector 
+  onFarmSelector,
 }: ChatScreenProps = {}) {
-  console.log('🔍 [CHAT-SCREEN] Props received - onFarmSelector:', onFarmSelector ? 'Available' : 'Missing');
+  const navigation = useNavigation();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const screenWidth = Dimensions.get('window').width;
   const isTablet = screenWidth >= 768;
 
-  // Notifier l'état actuel
+  const setChatState = onStateChange ?? navigation.setChatState;
+
+  // Notifier l'état et le titre pour le header unique du navigateur
   useEffect(() => {
     const currentState = selectedChat ? 'conversation' : 'list';
-    onStateChange?.(currentState);
-  }, [selectedChat, onStateChange]);
+    setChatState(currentState);
+    navigation.setCurrentChatTitle(selectedChat?.title ?? null);
+  }, [selectedChat, setChatState, navigation]);
+
+  // Quand l'utilisateur tape "retour" dans le header (navigateur), revenir à la liste
+  useEffect(() => {
+    if (navigation.chatState === 'list' && selectedChat) {
+      setSelectedChatId(null);
+      setSelectedChat(null);
+    }
+  }, [navigation.chatState]);
 
   const handleCreateChat = (title: string) => {
     console.log('Chat créé:', title);

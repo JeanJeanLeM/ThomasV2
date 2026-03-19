@@ -3,6 +3,10 @@
     "name": "Thomas V2 - Assistant Agricole",
     "slug": "thomas-v2-mobile",
     "version": "2.0.0",
+    "runtimeVersion": "2.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/adbc05c2-38c2-484e-8f5d-90eda98c1ed1"
+    },
     "orientation": "portrait",
     "scheme": "thomasv2",
     "icon": "./assets/ThomasSmall.png",
@@ -33,7 +37,7 @@
         "backgroundColor": "#22c55e"
       },
       "package": "marketgardener.thomas.v2",
-      "versionCode": 39,
+      "versionCode": 42,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
@@ -42,12 +46,32 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.POST_NOTIFICATIONS"
       ]
     },
     "web": {
       "favicon": "./assets/LogoWhiteColorfull.png"
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/ThomasSmall.png",
+          "color": "#22c55e",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Thomas utilise le microphone pour la dictée vocale.",
+          "speechRecognitionPermission": "Thomas utilise la reconnaissance vocale pour la dictée."
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "adbc05c2-38c2-484e-8f5d-90eda98c1ed1"

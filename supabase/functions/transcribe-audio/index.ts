@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { agricultureGlossary, normalizeGlossaryTerms } from '../../../shared/agricultureGlossary.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +16,7 @@ serve(async (req) => {
   try {
     console.log('🎙️ [TRANSCRIBE] Démarrage transcription audio');
 
-    const { audioUrl, filePath, language = 'fr', productNames } = await req.json();
+    const { audioUrl, filePath, language = 'fr', productNames, vocabularyTerms } = await req.json();
 
     if (!audioUrl && !filePath) {
       throw new Error('audioUrl ou filePath est requis');
@@ -186,24 +187,35 @@ serve(async (req) => {
     formData.append('language', language);
     formData.append('response_format', 'json');
     
-    // Ajouter le prompt avec les noms de produits si fourni
-    // Le prompt Whisper améliore la reconnaissance des termes spécifiques
-    // Limite: 244 tokens (environ 1000 caractères)
-    if (productNames && Array.isArray(productNames) && productNames.length > 0) {
-      // Limiter à 50 produits max pour respecter la limite de tokens
-      const limitedProducts = productNames.slice(0, 50);
-      const whisperPrompt = `Produits phytosanitaires couramment utilisés: ${limitedProducts.join(', ')}`;
-      
-      // Vérifier que le prompt ne dépasse pas ~1000 caractères (limite approximative)
-      if (whisperPrompt.length <= 1000) {
-        formData.append('prompt', whisperPrompt);
-        console.log('✅ [TRANSCRIBE] Prompt Whisper ajouté avec', limitedProducts.length, 'produits');
-      } else {
-        // Tronquer intelligemment si trop long
-        const truncatedPrompt = whisperPrompt.substring(0, 1000);
-        formData.append('prompt', truncatedPrompt);
-        console.log('⚠️ [TRANSCRIBE] Prompt Whisper tronqué à 1000 caractères');
-      }
+    const normalizedProducts = Array.isArray(productNames)
+      ? normalizeGlossaryTerms(productNames).slice(0, 50)
+      : [];
+
+    const normalizedVocabulary = normalizeGlossaryTerms([
+      ...agricultureGlossary,
+      ...(Array.isArray(vocabularyTerms) ? vocabularyTerms : []),
+    ]);
+    const limitedVocabulary = normalizedVocabulary.slice(0, 80);
+
+    const promptSegments: string[] = [];
+    if (limitedVocabulary.length > 0) {
+      promptSegments.push(`Termes agricoles et techniques: ${limitedVocabulary.join(', ')}`);
+    }
+    if (normalizedProducts.length > 0) {
+      promptSegments.push(`Produits phytosanitaires: ${normalizedProducts.join(', ')}`);
+    }
+
+    if (promptSegments.length > 0) {
+      const combinedPrompt = promptSegments.join('. ');
+      const finalPrompt = combinedPrompt.length <= 1000
+        ? combinedPrompt
+        : `${combinedPrompt.substring(0, 997)}...`;
+      formData.append('prompt', finalPrompt);
+      console.log('✅ [TRANSCRIBE] Prompt Whisper ajouté', {
+        vocabularyCount: limitedVocabulary.length,
+        productsCount: normalizedProducts.length,
+        promptLength: finalPrompt.length,
+      });
     }
     
     console.log('✅ [TRANSCRIBE] FormData préparé:', {

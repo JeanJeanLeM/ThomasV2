@@ -105,7 +105,10 @@ export class PromptTemplateEngine {
    */
   private replaceFarmContext(template: string, farm: FarmContext): string {
     const farmContextFormatted = this.formatFarmContext(farm);
-    return template.replace(/\{\{farm_context\}\}/g, farmContextFormatted);
+    const farmContextSummary = `${farm.plots.length} parcelles, ${farm.materials.length} matériels, ${farm.conversions.length} conversions`;
+    let result = template.replace(/\{\{farm_context\}\}/g, farmContextFormatted);
+    result = result.replace(/\{\{farm_context_summary\}\}/g, farmContextSummary);
+    return result;
   }
 
   /**

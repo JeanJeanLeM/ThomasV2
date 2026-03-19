@@ -1,9 +1,10 @@
 import { DirectSupabaseService } from './DirectSupabaseService';
+import { sanitizeQuantityType } from '../utils/quantityUtils';
 
 export interface AnalyzedAction {
   id: string;
   analysis_id?: string;
-  action_type: 'help' | 'task_done' | 'task_planned' | 'observation' | 'config' | 'harvest';
+  action_type: 'help' | 'task_done' | 'task_planned' | 'observation' | 'config' | 'manage_plot' | 'manage_conversion' | 'manage_material';
   original_text: string;
   decomposed_text: string;
   
@@ -104,7 +105,8 @@ export class AIChatService {
   static async analyzeMessage(
     messageId: string,
     userMessage: string,
-    chatSessionId: string
+    chatSessionId: string,
+    farmId?: number
   ): Promise<AIAnalysisResult> {
     const startTime = Date.now();
     
@@ -113,6 +115,7 @@ export class AIChatService {
       console.log('📝 [AI-ANALYSIS] Message:', userMessage);
       console.log('🔍 [AI-ANALYSIS] Session:', chatSessionId);
       console.log('🆔 [AI-ANALYSIS] Message ID:', messageId);
+      console.log('🏠 [AI-ANALYSIS] Farm ID:', farmId);
 
       // Étape 1: Préparation de la requête
       console.log('⚡ [AI-ANALYSIS] Étape 1/4: Préparation requête Edge Function');
@@ -121,12 +124,15 @@ export class AIChatService {
         message_id: messageId,
         user_message: userMessage,
         chat_session_id: chatSessionId,
+        farm_id: farmId,
+        agent_method: 'auto', // Auto-detect from farm_agent_config
         timestamp: new Date().toISOString(),
         analysis_version: '2.0'
       };
 
       // Étape 2: Appel Edge Function via API direct (bypass client JS)
       console.log('🌐 [AI-ANALYSIS] Étape 2/4: Appel Edge Function analyze-message (DirectSupabaseService)');
+      console.log(`🔀 [AI-ANALYSIS] Mode routing: auto (détection depuis farm_agent_config)`);
       
       const { data, error } = await DirectSupabaseService.directEdgeFunction(
         'analyze-message',
@@ -337,12 +343,18 @@ export class AIChatService {
       }
       
       // Déterminer la date de la tâche
+      const isPlanned = action.action_type === 'task_planned' || data.task_type === 'planned';
       let taskDate: string;
-      if (data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) {
-        // Utiliser la date extraite si elle est en format ISO valide
+      
+      if (isPlanned && data.scheduled_date && /^\d{4}-\d{2}-\d{2}$/.test(data.scheduled_date)) {
+        // Pour les tâches planifiées, utiliser scheduled_date en priorité
+        taskDate = data.scheduled_date;
+        console.log(`📅 [CREATE-TASK] Tâche planifiée, utilisation scheduled_date: ${taskDate}`);
+      } else if (data.date && /^\d{4}-\d{2}-\d{2}$/.test(data.date)) {
+        // Sinon utiliser la date extraite si elle est en format ISO valide
         taskDate = data.date;
         console.log(`📅 [CREATE-TASK] Utilisation date extraite: ${taskDate}`);
-      } else if (action.action_type === 'task_planned') {
+      } else if (isPlanned) {
         // Pour les tâches planifiées sans date, utiliser demain par défaut
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -367,11 +379,11 @@ export class AIChatService {
         description: action.decomposed_text || action.original_text || title,
         action: data.action || action.action_type,
         category: this.mapActionToTaskCategory(action.action_type),
-        type: (action.action_type === 'task_done' || action.action_type === 'harvest') ? 'tache' : 'autre',
+        type: 'tache',
         date: taskDate,
         time: data.time || null,
         duration_minutes: durationMinutes,
-        status: (action.action_type === 'task_done' || action.action_type === 'harvest') ? 'terminee' : 'en_attente',
+        status: isPlanned ? 'en_attente' : 'terminee',
         priority: data.priority || 'moyenne',
         plot_ids: entities.plot_ids || [],
         surface_unit_ids: entities.surface_unit_ids || [],
@@ -382,7 +394,7 @@ export class AIChatService {
         quantity_value: data.quantity?.value || null,
         quantity_unit: data.quantity?.unit || null,
         quantity_nature: data.quantity_nature || null,
-        quantity_type: data.quantity_type || null,
+        quantity_type: sanitizeQuantityType(data) || null,
         quantity_converted_value: data.quantity_converted?.value || null,
         quantity_converted_unit: data.quantity_converted?.unit || null,
         notes: notesParts.join('\n'),
@@ -404,26 +416,30 @@ export class AIChatService {
       const createdTask = Array.isArray(result) ? result[0] : result;
       console.log('✅ [CREATE-SINGLE-TASK] Tâche créée:', createdTask.id);
 
-      // Mettre à jour l'action avec la référence vers la tâche créée
-      // Pour les actions multi-cultures divisées, utiliser l'ID original
+      // Mettre à jour l'action avec la référence vers la tâche créée (seulement si UUID réel)
       const actionIdToLink = action.original_action_id || action.id;
+      const isTempId = actionIdToLink?.startsWith?.('temp_');
       
-      console.log(`🔗 [CREATE-SINGLE-TASK] Liaison action "${actionIdToLink}" -> tâche "${createdTask.id}"`);
-      
-      const linkResult = await DirectSupabaseService.directUpdate(
-        'chat_analyzed_actions',
-        { 
-          created_record_id: createdTask.id,
-          created_record_type: 'task',
-          status: 'validated'
-        },
-        [{ column: 'id', value: actionIdToLink }]
-      );
+      if (!isTempId) {
+        console.log(`🔗 [CREATE-SINGLE-TASK] Liaison action "${actionIdToLink}" -> tâche "${createdTask.id}"`);
+        
+        const linkResult = await DirectSupabaseService.directUpdate(
+          'chat_analyzed_actions',
+          { 
+            created_record_id: createdTask.id,
+            created_record_type: 'task',
+            status: 'validated'
+          },
+          [{ column: 'id', value: actionIdToLink }]
+        );
 
-      if (linkResult.error) {
-        console.warn('⚠️ [CREATE-SINGLE-TASK] Échec liaison action-tâche:', linkResult.error);
+        if (linkResult.error) {
+          console.warn('⚠️ [CREATE-SINGLE-TASK] Échec liaison action-tâche:', linkResult.error);
+        } else {
+          console.log('✅ [CREATE-SINGLE-TASK] Action liée à la tâche');
+        }
       } else {
-        console.log('✅ [CREATE-SINGLE-TASK] Action liée à la tâche');
+        console.log('ℹ️ [CREATE-SINGLE-TASK] ID temporaire - pas de liaison en DB');
       }
 
       return createdTask.id;
@@ -494,16 +510,17 @@ export class AIChatService {
         notesParts.push(`Original: ${action.original_text}`);
       }
       
+      const isPlannedUpdate = action.action_type === 'task_planned' || data.task_type === 'planned';
       const taskData = {
         title: title,
         description: action.decomposed_text || action.original_text || title,
         action: data.action || action.action_type,
         category: this.mapActionToTaskCategory(action.action_type),
-        type: (action.action_type === 'task_done' || action.action_type === 'harvest') ? 'tache' : 'autre',
-        date: data.date || new Date().toISOString().split('T')[0],
+        type: 'tache',
+        date: (isPlannedUpdate && data.scheduled_date) ? data.scheduled_date : (data.date || new Date().toISOString().split('T')[0]),
         time: data.time || null,
         duration_minutes: durationMinutes,
-        status: (action.action_type === 'task_done' || action.action_type === 'harvest') ? 'terminee' : 'en_attente',
+        status: isPlannedUpdate ? 'en_attente' : 'terminee',
         priority: data.priority || 'moyenne',
         plot_ids: entities.plot_ids || [],
         surface_unit_ids: entities.surface_unit_ids || [],
@@ -513,7 +530,7 @@ export class AIChatService {
         quantity_value: data.quantity?.value || null,
         quantity_unit: data.quantity?.unit || null,
         quantity_nature: data.quantity_nature || null,
-        quantity_type: data.quantity_type || null,
+        quantity_type: sanitizeQuantityType(data) || null,
         quantity_converted_value: data.quantity_converted?.value || null,
         quantity_converted_unit: data.quantity_converted?.unit || null,
         notes: notesParts.join('\n'),
@@ -615,26 +632,30 @@ export class AIChatService {
       const createdObs = Array.isArray(result) ? result[0] : result;
       console.log('✅ [CREATE-OBS] Observation créée:', createdObs.id);
 
-      // Mettre à jour l'action avec la référence vers l'observation créée
-      // Pour les actions multi-cultures divisées, utiliser l'ID original
+      // Mettre à jour l'action avec la référence vers l'observation créée (seulement si UUID réel)
       const actionIdToLink = action.original_action_id || action.id;
+      const isTempId = actionIdToLink?.startsWith?.('temp_');
       
-      console.log(`🔗 [CREATE-OBS] Liaison action "${actionIdToLink}" -> observation "${createdObs.id}"`);
-      
-      const linkResult = await DirectSupabaseService.directUpdate(
-        'chat_analyzed_actions',
-        { 
-          created_record_id: createdObs.id,
-          created_record_type: 'observation',
-          status: 'validated'
-        },
-        [{ column: 'id', value: actionIdToLink }]
-      );
+      if (!isTempId) {
+        console.log(`🔗 [CREATE-OBS] Liaison action "${actionIdToLink}" -> observation "${createdObs.id}"`);
+        
+        const linkResult = await DirectSupabaseService.directUpdate(
+          'chat_analyzed_actions',
+          { 
+            created_record_id: createdObs.id,
+            created_record_type: 'observation',
+            status: 'validated'
+          },
+          [{ column: 'id', value: actionIdToLink }]
+        );
 
-      if (linkResult.error) {
-        console.warn('⚠️ [CREATE-OBS] Échec liaison action-observation:', linkResult.error);
+        if (linkResult.error) {
+          console.warn('⚠️ [CREATE-OBS] Échec liaison action-observation:', linkResult.error);
+        } else {
+          console.log('🔗 [CREATE-OBS] Action liée à l\'observation');
+        }
       } else {
-        console.log('🔗 [CREATE-OBS] Action liée à l\'observation');
+        console.log('ℹ️ [CREATE-OBS] ID temporaire - pas de liaison en DB');
       }
 
       return createdObs.id;
@@ -763,8 +784,11 @@ export class AIChatService {
       // Transformer les actions pour correspondre au format AnalyzedAction
       const transformedActions = (data || []).map((action: any) => {
         // Récupérer extracted_data depuis action_data
-        const extractedData = action.action_data?.extracted_data || action.extracted_data || {};
-        
+        let extractedData = action.action_data?.extracted_data || action.extracted_data || {};
+        if (action.action_data?.card_summary) {
+          extractedData = { ...extractedData, card_summary: action.action_data.card_summary };
+        }
+
         // Si la date est dans action_data.date mais pas dans extracted_data.date, l'ajouter
         // (car TaskPlannedTool stocke la date directement dans action_data.date)
         if (action.action_data?.date && !extractedData.date) {
@@ -823,8 +847,11 @@ export class AIChatService {
       // Transformer les actions pour correspondre au format AnalyzedAction
       const transformedActions = actions.map((action: any) => {
         // Récupérer extracted_data depuis action_data
-        const extractedData = action.action_data?.extracted_data || action.extracted_data || {};
-        
+        let extractedData = action.action_data?.extracted_data || action.extracted_data || {};
+        if (action.action_data?.card_summary) {
+          extractedData = { ...extractedData, card_summary: action.action_data.card_summary };
+        }
+
         // Si la date est dans action_data.date mais pas dans extracted_data.date, l'ajouter
         // (car TaskPlannedTool stocke la date directement dans action_data.date)
         if (action.action_data?.date && !extractedData.date) {

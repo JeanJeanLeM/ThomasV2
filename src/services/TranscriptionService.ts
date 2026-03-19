@@ -26,7 +26,10 @@ export class TranscriptionService {
     audioUrl: string,
     language: string = 'fr',
     filePath?: string,
-    productNames?: string[]
+    options?: {
+      productNames?: string[];
+      vocabularyTerms?: string[];
+    }
   ): Promise<TranscriptionResult> {
     try {
       console.log('🎙️ [TRANSCRIPTION] Démarrage transcription');
@@ -41,9 +44,16 @@ export class TranscriptionService {
         : { audioUrl, language }; // Fallback sur l'URL publique
       
       // Ajouter les noms de produits si fournis (pour améliorer la transcription Whisper)
+      const productNames = options?.productNames;
       if (productNames && productNames.length > 0) {
         params.productNames = productNames;
         console.log('🌿 [TRANSCRIPTION] Noms de produits ajoutés:', productNames.length);
+      }
+
+      const vocabularyTerms = options?.vocabularyTerms;
+      if (vocabularyTerms && vocabularyTerms.length > 0) {
+        params.vocabularyTerms = vocabularyTerms;
+        console.log('📚 [TRANSCRIPTION] Termes agricoles ajoutés:', vocabularyTerms.length);
       }
 
       console.log('📤 [TRANSCRIPTION] Paramètres envoyés à l\'Edge Function:', {
@@ -52,6 +62,8 @@ export class TranscriptionService {
         language,
         hasProductNames: !!productNames && productNames.length > 0,
         productNamesCount: productNames?.length || 0,
+        hasVocabularyTerms: !!vocabularyTerms && vocabularyTerms.length > 0,
+        vocabularyTermsCount: vocabularyTerms?.length || 0,
       });
 
       // Appeler l'Edge Function de transcription

@@ -227,4 +227,24 @@ export class OfflineQueueService {
       console.error('❌ [OFFLINE-QUEUE] Error removing message:', error);
     }
   }
+
+  /**
+   * Supprime tous les messages échoués de la queue
+   */
+  static async removeFailedMessages(): Promise<number> {
+    try {
+      const queue = await this.getPendingMessages();
+      const failedIds = queue.filter(msg => msg.status === 'failed').map(msg => msg.id);
+      if (failedIds.length === 0) {
+        return 0;
+      }
+      const filtered = queue.filter(msg => msg.status !== 'failed');
+      await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
+      console.log('🗑️ [OFFLINE-QUEUE] Messages échoués supprimés:', failedIds.length);
+      return failedIds.length;
+    } catch (error) {
+      console.error('❌ [OFFLINE-QUEUE] Error removing failed messages:', error);
+      return 0;
+    }
+  }
 }

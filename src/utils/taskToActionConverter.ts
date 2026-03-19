@@ -1,6 +1,7 @@
 import { TaskData } from '../design-system/components/cards/TaskCard';
 import { ObservationData } from '../design-system/components/cards/ObservationCard';
 import { ActionData } from '../components/chat/AIResponseWithActions';
+import { sanitizeQuantityType } from './quantityUtils';
 
 /**
  * Convertit une TaskData en ActionData pour utiliser ActionEditModal
@@ -166,7 +167,12 @@ export const convertActionToTask = (action: ActionData, originalTask?: TaskData)
     quantity: data.quantity || originalTask?.quantity,
     quantity_converted: data.quantity_converted || originalTask?.quantity_converted,
     quantity_nature: data.quantity_nature || originalTask?.quantity_nature,
-    quantity_type: data.quantity_type || originalTask?.quantity_type,
+    quantity_type: sanitizeQuantityType({
+      quantity: data.quantity || originalTask?.quantity,
+      quantity_nature: data.quantity_nature || originalTask?.quantity_nature,
+      quantity_converted: data.quantity_converted || originalTask?.quantity_converted,
+      quantity_type: data.quantity_type || originalTask?.quantity_type,
+    }),
     phytosanitary_product_amm: originalTask?.phytosanitary_product_amm || null,
     priority: data.priority || originalTask?.priority,
     notes: data.notes || originalTask?.notes,

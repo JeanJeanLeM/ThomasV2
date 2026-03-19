@@ -15,7 +15,7 @@ Guide de navigation express pour trouver rapidement ce que vous cherchez.
 → **[FARM_CONTEXT_USAGE.md](./FARM_CONTEXT_USAGE.md)** - Développement avec fermes
 
 ### **🤖 Comprendre l'Agent IA**
-→ **[THOMAS_AGENT_V2_COMPLETE.md](./THOMAS_AGENT_V2_COMPLETE.md)** ⭐ Document principal  
+→ **[agent/THOMAS_AGENT_V2_COMPLETE.md](./agent/THOMAS_AGENT_V2_COMPLETE.md)** ⭐ Document principal  
 → **[chat/](./chat/)** - Système chat complet (8 docs)
 
 ### **🎨 Utiliser le Design System**

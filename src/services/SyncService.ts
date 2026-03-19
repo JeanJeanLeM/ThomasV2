@@ -14,6 +14,8 @@ import { NetworkService } from './NetworkService';
 import { ChatServiceDirect } from './ChatServiceDirect';
 import { mediaService } from './MediaService';
 import { TranscriptionService } from './TranscriptionService';
+import { AgricultureGlossaryService } from './AgricultureGlossaryService';
+import { TranscriptionCorrectionService } from './TranscriptionCorrectionService';
 import { AIChatService } from './aiChatService';
 
 export interface SyncResult {
@@ -261,10 +263,20 @@ export class SyncService {
       console.log('✅ [SYNC] Audio uploadé:', uploadResult.filePath);
 
       // Transcrire l'audio
+      let vocabularyTerms: string[] = [];
+      try {
+        vocabularyTerms = await AgricultureGlossaryService.getCoreTerms();
+      } catch (error) {
+        console.warn('⚠️ [SYNC] Erreur chargement glossaire agricole:', error);
+      }
+
       const transcriptionResult = await TranscriptionService.transcribeFromUrl(
         uploadResult.fileUrl,
         'fr',
-        uploadResult.filePath
+        uploadResult.filePath,
+        {
+          vocabularyTerms: vocabularyTerms.length > 0 ? vocabularyTerms : undefined,
+        }
       );
 
       if (!transcriptionResult.success || !transcriptionResult.text) {
@@ -273,7 +285,19 @@ export class SyncService {
         );
       }
 
-      const transcribedText = transcriptionResult.text;
+      const rawTranscribedText = transcriptionResult.text;
+      const correctionOutcome = TranscriptionCorrectionService.apply(rawTranscribedText);
+      if (correctionOutcome.appliedCorrections.length > 0) {
+        console.log(
+          '🛠️ [SYNC] Corrections auto appliquées:',
+          correctionOutcome.appliedCorrections.map(c => `${c.id} x${c.occurrences}`).join(', ')
+        );
+        console.log('📝 [SYNC] Aperçu correction', {
+          before: rawTranscribedText.substring(0, 120),
+          after: correctionOutcome.correctedText.substring(0, 120),
+        });
+      }
+      const transcribedText = correctionOutcome.correctedText || rawTranscribedText;
       console.log('✅ [SYNC] Audio transcrit:', transcribedText.substring(0, 50) + '...');
 
       // Créer le message avec le texte transcrit
@@ -285,6 +309,14 @@ export class SyncService {
           audio_file_id: uploadResult.audioFileId,
           audio_url: uploadResult.fileUrl,
           transcription_duration: transcriptionResult.duration,
+          ...(correctionOutcome.appliedCorrections.length > 0 && {
+            transcription_corrections: correctionOutcome.appliedCorrections.map(c => ({
+              id: c.id,
+              occurrences: c.occurrences,
+              description: c.description,
+            })),
+            raw_transcription: rawTranscribedText !== transcribedText ? rawTranscribedText : undefined,
+          }),
         },
       });
 

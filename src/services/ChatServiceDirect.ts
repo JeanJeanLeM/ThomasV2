@@ -672,15 +672,19 @@ export class ChatServiceDirect {
   static async analyzeMessageDirect(
     messageId: string,
     userMessage: string,
-    chatSessionId: string
+    chatSessionId: string,
+    farmId?: number
   ): Promise<any> {
     try {
       console.log('🤖 [CHAT-DIRECT] Analyzing message with direct fetch:', userMessage);
+      console.log(`🔀 [CHAT-DIRECT] Farm ID: ${farmId} (pour routing méthode)`);
 
       const result = await DirectSupabaseService.directEdgeFunction('analyze-message', {
         message_id: messageId,
         user_message: userMessage,
-        chat_session_id: chatSessionId
+        chat_session_id: chatSessionId,
+        farm_id: farmId,
+        agent_method: 'auto' // Let analyze-message detect method from farm_agent_config
       });
 
       if (result.error) {

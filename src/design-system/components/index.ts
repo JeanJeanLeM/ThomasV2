@@ -26,6 +26,7 @@ export * from './cards/FarmCardDetailed';
 export * from './cards/ConversionCardMinimal';
 export * from './cards/MaterialCardStandard';
 export * from './cards/PlotCardStandard';
+export * from './cards/RecurringTaskCardStandard';
 
 // Member Management Cards
 export * from './cards/MemberCard';
@@ -52,6 +53,7 @@ export * from './UnifiedWhatSelector';
 // Container System
 export * from './ContainerDropdownSelector';
 export * from './modals/ContainerModal';
+export * from './modals/MaterialFormModal';
 
 // Confirmation Modal
 export * from './modals/ConfirmationModal';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, ScrollView, TouchableOpacity, StyleSheet, Alert, RefreshControl } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Text, Button, Modal } from '../design-system/components';
 import { supabase } from '../utils/supabase';
@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFarm, useFarmTasks } from '../contexts/FarmContext';
 import { TaskService } from '../services/TaskService';
 import { ObservationService } from '../services/ObservationService';
+import { ensureTasksForHorizon } from '../services/RecurringTaskGenerationService';
 import { UnifiedTaskCard } from '../design-system/components/cards/UnifiedTaskCard';
 import { UnifiedObservationCard } from '../design-system/components/cards/UnifiedObservationCard';
 import { CompactTaskCard } from '../design-system/components/cards/CompactTaskCard';
@@ -17,6 +18,7 @@ import { TaskData } from '../design-system/components/cards/TaskCard';
 import { ObservationData } from '../design-system/components/cards/ObservationCard';
 import { ActionData } from '../components/chat/AIResponseWithActions';
 import { convertTaskToAction, convertActionToTask, convertObservationToAction, convertActionToObservation } from '../utils/taskToActionConverter';
+import { sanitizeQuantityType } from '../utils/quantityUtils';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
 import { typography } from '../design-system/typography';
@@ -27,7 +29,8 @@ import {
   CalendarIcon,
   ViewListIcon,
   ViewGridIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  TrashIcon
 } from '../design-system/icons';
 
 // Layout constants
@@ -114,24 +117,30 @@ export default function TasksScreen() {
   }, [user, activeFarm, farmLoading, tasksLoading, farmTasks, selectedDate]);
   
   // Charger les données en arrière-plan au montage (sans bloquer l'affichage)
+  // Génère aussi les tâches récurrentes 6 mois en avance, puis rafraîchit les tâches
   useEffect(() => {
-    if (activeFarm?.farm_id) {
+    if (activeFarm?.farm_id && user?.id) {
       console.log('🔄 [TasksScreen] Rafraîchissement en arrière-plan des données au montage');
       
       // Charger les observations en arrière-plan sans bloquer
       loadObservations(true);
       
-      // Rafraîchir les tâches en arrière-plan sans bloquer l'affichage
       setIsRefreshing(true);
-      refreshFarmDataSilently(['tasks']).then(() => {
-        setIsRefreshing(false);
-        console.log('✅ [TasksScreen] Rafraîchissement en arrière-plan terminé');
-      }).catch((err) => {
-        setIsRefreshing(false);
-        console.warn('⚠️ [TasksScreen] Erreur rafraîchissement en arrière-plan:', err);
-      });
+      (async () => {
+        try {
+          const { created } = await ensureTasksForHorizon(activeFarm.farm_id, user.id, 6);
+          if (created > 0) console.log('✅ [TasksScreen] Tâches récurrentes générées:', created);
+        } catch (e) {
+          console.warn('⚠️ [TasksScreen] Génération tâches récurrentes:', e);
+        }
+        try {
+          await refreshFarmDataSilently(['tasks']);
+        } finally {
+          setIsRefreshing(false);
+        }
+      })();
     }
-  }, [activeFarm?.farm_id]);
+  }, [activeFarm?.farm_id, user?.id]);
 
   // Charger la préférence d'affichage compact au montage
   useEffect(() => {
@@ -160,6 +169,54 @@ export default function TasksScreen() {
     } catch (error) {
       console.error('Error saving compact view preference:', error);
     }
+  };
+
+  // Recharger les données (tâches + observations) - utilisé par le bouton et le pull-to-refresh
+  const handleRefresh = async () => {
+    if (!activeFarm?.farm_id) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refreshFarmDataSilently(['tasks']),
+        loadObservations(true),
+      ]);
+      console.log('✅ [TasksScreen] Données rechargées');
+    } catch (err) {
+      console.warn('⚠️ [TasksScreen] Erreur rechargement:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Supprimer toutes les tâches planifiées (en_attente, en_cours) de la ferme
+  const handleDeleteAllPlanned = () => {
+    if (!activeFarm?.farm_id) return;
+    Alert.alert(
+      'Supprimer les tâches planifiées',
+      'Seules les tâches en attente ou en cours seront supprimées. Les tâches déjà effectuées (terminées) ne sont jamais supprimées et restent affichées. Continuer ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            setIsRefreshing(true);
+            try {
+              const { deleted } = await TaskService.deleteAllPlannedTasksForFarm(activeFarm.farm_id);
+              await refreshFarmDataSilently(['tasks']);
+              if (deleted > 0) {
+                Alert.alert('Succès', `${deleted} tâche(s) planifiée(s) supprimée(s).`);
+              }
+            } catch (err) {
+              console.error('❌ [TasksScreen] Erreur suppression tâches planifiées:', err);
+              Alert.alert('Erreur', 'Impossible de supprimer les tâches planifiées.');
+            } finally {
+              setIsRefreshing(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Charger les observations depuis la base de données (les tâches viennent du FarmContext)
@@ -329,15 +386,26 @@ export default function TasksScreen() {
     return new Date();
   };
 
+  /** Retourne YYYY-MM-DD en date calendaire (évite décalage UTC de new Date("YYYY-MM-DD")). */
+  const toTaskDateYMD = (date: Date | string): string => {
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(date)) {
+      return date.slice(0, 10);
+    }
+    const d = normalizeDate(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
   // Filtrage des données par date et type
   const filteredData = () => {
     const selectedDateStr = selectedDate.toDateString();
-    
-    // Filtrer par date sélectionnée et exclure les éléments cachés
+    const selectedLocalYMD = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+
+    // Filtrer par date calendaire (YMD) pour éviter décalage fuseau avec new Date("YYYY-MM-DD")
     const tasksForDate = farmTasks.filter(task => {
-      const taskDate = normalizeDate(task.date);
-      return taskDate.toDateString() === selectedDateStr && !hiddenTasks.has(task.id);
+      const taskYMD = toTaskDateYMD(task.date);
+      return taskYMD === selectedLocalYMD && !hiddenTasks.has(task.id);
     });
+
     const observationsForDate = observations.filter(obs => {
       const obsDate = normalizeDate(obs.date);
       return obsDate.toDateString() === selectedDateStr && !hiddenObservations.has(obs.id);
@@ -375,12 +443,10 @@ export default function TasksScreen() {
     }
 
     const selectedDateStr = selectedDate.toDateString();
-    
-    // Compter seulement les éléments de la date sélectionnée
-    const tasksForDate = farmTasks.filter(task => {
-      const taskDate = normalizeDate(task.date);
-      return taskDate.toDateString() === selectedDateStr;
-    });
+    const selectedLocalYMD = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
+
+    // Compter seulement les éléments de la date sélectionnée (YMD pour tâches = pas de décalage fuseau)
+    const tasksForDate = farmTasks.filter(task => toTaskDateYMD(task.date) === selectedLocalYMD);
     const observationsForDate = observations.filter(obs => {
       const obsDate = normalizeDate(obs.date);
       return obsDate.toDateString() === selectedDateStr;
@@ -474,9 +540,12 @@ export default function TasksScreen() {
       if (updatedTask.quantity_nature) {
         taskUpdate.quantity_nature = updatedTask.quantity_nature;
       }
-      if (updatedTask.quantity_type) {
-        taskUpdate.quantity_type = updatedTask.quantity_type;
-      }
+      taskUpdate.quantity_type = sanitizeQuantityType({
+        quantity: updatedTask.quantity,
+        quantity_nature: updatedTask.quantity_nature,
+        quantity_converted: updatedTask.quantity_converted,
+        quantity_type: updatedTask.quantity_type,
+      });
       // Conserver l'AMM si présent (ne pas le modifier depuis l'UI)
       if (updatedTask.phytosanitary_product_amm !== undefined) {
         taskUpdate.phytosanitary_product_amm = updatedTask.phytosanitary_product_amm;
@@ -550,7 +619,7 @@ export default function TasksScreen() {
             quantity_converted_value: updatedAction.extracted_data?.quantity_converted?.value,
             quantity_converted_unit: updatedAction.extracted_data?.quantity_converted?.unit,
             quantity_nature: updatedAction.extracted_data?.quantity_nature,
-            quantity_type: updatedAction.extracted_data?.quantity_type,
+            quantity_type: sanitizeQuantityType(updatedAction.extracted_data),
             phytosanitary_product_amm: (updatedAction as any).phytosanitary_product_amm || null,
             notes: updatedAction.extracted_data?.notes
           };
@@ -913,6 +982,12 @@ export default function TasksScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+          />
+        }
       >
         {/* Section fixe - Navigation semaine */}
         <View style={styles.weekHeaderSection}>
@@ -1019,18 +1094,17 @@ export default function TasksScreen() {
                   month: 'long' 
                 })}
               </Text>
-              {/* Indicateur de rafraîchissement en arrière-plan */}
-              {isRefreshing && (
-                <View style={{ 
-                  padding: spacing.xs,
-                  opacity: 0.6
-                }}>
-                  <ArrowPathIcon 
-                    color={colors.primary[600]} 
-                    size={16}
-                  />
-                </View>
-              )}
+              {/* Bouton recharger les données */}
+              <TouchableOpacity
+                onPress={handleRefresh}
+                disabled={isRefreshing}
+                style={[styles.viewToggleButton, isRefreshing && { opacity: 0.6 }]}
+              >
+                <ArrowPathIcon 
+                  color={colors.primary[600]} 
+                  size={20}
+                />
+              </TouchableOpacity>
               {/* Bouton toggle vue compacte */}
               <TouchableOpacity
                 onPress={toggleCompactView}
@@ -1041,6 +1115,15 @@ export default function TasksScreen() {
                 ) : (
                   <ViewListIcon color={colors.primary[600]} size={20} />
                 )}
+              </TouchableOpacity>
+              {/* Supprimer toutes les tâches planifiées */}
+              <TouchableOpacity
+                onPress={handleDeleteAllPlanned}
+                disabled={isRefreshing}
+                style={[styles.viewToggleButton, isRefreshing && { opacity: 0.6 }]}
+                accessibilityLabel="Supprimer toutes les tâches planifiées"
+              >
+                <TrashIcon color={colors.semantic?.error ?? '#b91c1c'} size={20} />
               </TouchableOpacity>
             </View>
           </View>

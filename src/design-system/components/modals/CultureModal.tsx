@@ -53,6 +53,9 @@ export const CultureModal: React.FC<CultureModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    // Ne s'exécuter qu'à l'ouverture du modal pour éviter les re-renders
+    if (!visible) return;
+    
     if (culture) {
       setFormData({
         name: culture.name,
@@ -71,7 +74,8 @@ export const CultureModal: React.FC<CultureModalProps> = ({
       });
     }
     setErrors({});
-  }, [culture, visible]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]); // Uniquement lorsque le modal s'ouvre/ferme
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};

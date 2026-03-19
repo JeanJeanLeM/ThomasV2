@@ -1,157 +1,302 @@
-# 🤖 intent_classification v2.1
+# intent_classification v3.1
 
-**Version** : 2.1  
-**Statut** : ✅ Actif  
-**Date** : 05/01/2026  
-**Longueur** : 4765 caractères
-
----
-
-## 📋 **Contenu du Prompt**
-
-Classifie précisément l'intention de ce message agricole français.
-
-## 📤 Message
-"{{user_message}}"
-
-## 🎯 Classification d'Intention
-
-### 🔍 RÈGLE CRITIQUE - Discrimination "Observer"
-
-⚠️ **Le verbe "observer" a DEUX sens en français** :
-
-#### **CONSTATIF (→ observation_creation)**
-L'utilisateur **remarque/constate** un problème, symptôme, anomalie :
-- "J'ai **observé** des dégâts de mineuse" ✅ observation
-- "J'ai **vu** des pucerons sur les tomates" ✅ observation
-- "J'ai **remarqué** un jaunissement des feuilles" ✅ observation
-- "J'ai **constaté** un problème d'arrosage" ✅ observation
-
-**Indicateurs clés** : Mention d'un problème/symptôme/anomalie spécifique après le verbe
-
-#### **ACTIF (→ task_done)**
-L'utilisateur **effectue une action** de surveillance/inspection :
-- "J'ai **inspecté** les serres" ✅ task_done
-- "J'ai **fait une tournée** d'observation" ✅ task_done  
-- "J'ai **surveillé** les cultures pendant 2h" ✅ task_done
-- "J'ai **vérifié** l'état des plants" ✅ task_done
-
-**Indicateurs clés** : Action de surveillance générale, durée mentionnée, pas de problème spécifique
+**Version**: 3.1
+**Statut**: Proposition
+**Variables**: `{{user_message}}`, `{{farm_context_summary}}`
 
 ---
 
-### Intentions Principales:
+## Mission
 
-1. **observation_creation** - Constats terrain (passifs)
-   - **Focus** : PROBLÈME/SYMPTÔME détecté
-   - **Mots-clés principaux** : 
-     - Constats : "remarqué", "constaté", "vu", "trouvé"
-     - Problèmes : "dégâts", "maladie", "ravageur", "pucerons", "jaunissement", "flétrissement"
-     - Conditions : "stress hydrique", "carence", "brûlure"
-   - **Structure typique** : "J'ai [verbe constatif] [problème spécifique] sur [culture/parcelle]"
-   
-2. **task_done** - Actions réalisées (actives)
-   - **Focus** : TRAVAIL effectué avec durée/effort
-   - **Mots-clés principaux** : 
-     - Actions : "fait", "effectué", "réalisé", "accompli", "terminé"
-     - Travaux : "planté", "traité", "arrosé", "taillé", "désherbé", "paillé"
-     - Surveillance : "inspecté", "surveillé", "vérifié", "contrôlé", "fait le tour"
-   - **Structure typique** : "J'ai [action] [cible] [avec matériel/durée/quantité]"
-   
-3. **task_planned** - Actions futures  
-   - **Focus** : PLANIFICATION avec date future
-   - **Mots-clés** : "vais", "prévu", "demain", "lundi", "planifier", "programmer"
-   
-4. **harvest** - Récoltes spécialisées
-   - **Focus** : QUANTITÉS récoltées
-   - **Mots-clés** : "récolté", "ramassé", "cueilli" + quantités chiffrées
-   
-5. **management** - Gestion/Configuration
-   - **Focus** : CONFIGURATION système
-   - **Mots-clés** : "créer parcelle", "ajouter matériel", "configurer", "paramétrer"
-   
-6. **help** - Demandes d'aide
-   - **Focus** : QUESTION utilisateur
-   - **Mots-clés** : "comment", "où", "aide", "?", "expliquer", "qui peut"
+Classifier l'intention de messages agricoles français. Supporter le multi-intent et la reconstruction de contexte pour les fragments incomplets.
 
-## 🧪 Exemples de Discrimination
+Message: "{{user_message}}"
 
-### ✅ OBSERVATION (Constat)
-- "J'ai observé des dégâts de mineuse sur les tomates"
-  → Intent: observation_creation (problème spécifique détecté)
-  
-- "J'ai remarqué que les feuilles jaunissent dans la serre 1"
-  → Intent: observation_creation (symptôme physiologique)
+Contexte ferme: {{farm_context_summary}}
 
-- "J'ai vu des limaces sur les salades ce matin"
-  → Intent: observation_creation (ravageur identifié)
+---
 
-### ✅ TÂCHE EFFECTUÉE (Action)
-- "J'ai inspecté toutes les serres ce matin"
-  → Intent: task_done (action de surveillance sans problème)
-  
-- "J'ai fait le tour des parcelles pendant 1h"
-  → Intent: task_done (action avec durée)
+## Intentions (définitions concises)
 
-- "J'ai vérifié l'état des plants avec Jean"
-  → Intent: task_done (action collaborative)
+### observation
+Constat terrain: problème, symptôme, stade phénologique, dégât équipement/bâtiment, état d'une personne.
+Mots-clés: "vu", "observé", "remarqué", "constaté", "il y a", "problème de", "attaque de".
+Règle: Verbe constatif + élément observé (problème ou positif). Distinguer de task_done (action de surveillance sans constat).
 
-### ⚠️ CAS AMBIGUS
-Si le message contient "observé" mais **sans problème spécifique** :
-- "J'ai observé les cultures" → Intent: task_done (action générique)
-- "J'ai observé des pucerons" → Intent: observation_creation (problème précis)
+### task_done
+Action agricole réalisée au passé.
+Mots-clés: "j'ai [planté|semé|traité|désherbé|arrosé|inspecté|surveillé|biné|passé]".
+Règle: Verbe au passé composé + action concrète. "Récolté" SANS quantité explicite = task_done.
 
-**RÈGLE** : Si problème/symptôme/ravageur mentionné → observation_creation
-            Sinon → task_done
+### task_planned
+Action future planifiée.
+Mots-clés: "je vais", "demain", "prévu", "planifier", "il faut", "je dois".
+Règle: Futur ou intention explicite avec date/jour.
 
-## 📊 Format de Réponse JSON
+### manage_plot
+Configuration parcelle/serre/tunnel.
+Mots-clés: "créer parcelle", "ajouter serre", "nouvelle serre", "modifier parcelle", "planches", "planche".
+Règle: Création ou modification d'une parcelle ou unité de surface.
 
+### manage_conversion
+Configuration conversion unités (conteneur → kg/L).
+Mots-clés: "conversion", "1 caisse =", "panier fait", "configurer conversion", "caisse de tomates", "équivalent".
+Règle: Définition d'une équivalence (ex. 1 caisse = 6 kg de tomates).
+
+### manage_material
+Configuration matériel/équipement.
+Mots-clés: "ajouter matériel", "enregistrer tracteur", "nouveau tracteur", "ajouter herse", "modifier matériel".
+Règle: Création ou modification d'un matériel dans l'inventaire.
+
+### help
+Question ou demande d'assistance.
+Mots-clés: "comment", "où", "quand", "pourquoi", "quel", "?", "aide", "expliquer".
+
+---
+
+## Multi-intent et reconstruction de message
+
+Quand un message contient plusieurs actions reliées par "et", "puis", "ensuite", virgule:
+
+1. Découper en fragments (un par action)
+2. Pour chaque fragment, classifier l'intent
+3. Reconstruire les fragments incomplets avec le contexte des fragments précédents
+
+**Règle de reconstruction**: Si un fragment ne mentionne pas de culture, parcelle ou matériel alors que le fragment précédent en contient, inférer le sujet manquant.
+
+Exemple d'application:
 ```json
 {
-  "intent": "observation_creation",
-  "confidence": 0.95,
-  "reasoning": "L'utilisateur décrit un problème spécifique (dégâts de mineuse) observé sur une culture. C'est un CONSTAT, pas une action de surveillance.",
-  "discrimination_applied": "Le message contient un problème spécifique après 'observé', donc observation_creation et non task_done",
-  "entities_detected": {
-    "action_indicators": ["observé"],
-    "problem_indicators": ["dégâts", "mineuse"],
-    "location_indicators": ["serre 1"],
-    "crop_indicators": ["tomates"]
-  }
+  "message": "J'ai récolté des poivrons pendant 2 heures et j'ai vu des pucerons",
+  "fragments": [
+    {
+      "text_span": "J'ai récolté des poivrons pendant 2 heures",
+      "intent": "task_done",
+      "contexte_sortant": { "culture": "poivrons" }
+    },
+    {
+      "text_span": "j'ai vu des pucerons",
+      "intent": "observation",
+      "contexte_manquant": ["culture"],
+      "contexte_herité": { "culture": "poivrons", "source": "fragment_1" },
+      "reconstructed_message": "j'ai vu des pucerons sur les poivrons"
+    }
+  ]
 }
 ```
 
-## ⚡ Instructions Finales
-- **TOUJOURS** vérifier si un problème spécifique est mentionné après "observer/voir/remarquer"
-- **SI problème spécifique** → observation_creation
-- **SI action générique sans problème** → task_done
-- **En cas de doute** : privilégier observation_creation si symptôme/ravageur présent
+**Types de contexte à propager**: culture (crop), parcelle (plot), matériel (material). Le dernier mentionné dans un fragment précédent peut s'appliquer au fragment suivant si pertinent sémantiquement.
 
 ---
 
-## 📊 **Métadonnées**
+## Format de sortie JSON
 
-- **ID** : af014d3d-8f9e-4312-8eb9-a04a8ec7013d
-- **Créé le** : 2026-01-05T11:23:56.729303+01:00
-- **Mis à jour le** : 2026-01-05T11:23:56.729303+01:00
-- **Exemples** : Oui
-- **Metadata** : {
-  "category": "classification",
-  "variables": [
-    "user_message"
+Retourne UNIQUEMENT du JSON valide, sans texte avant ou après.
+
+### Cas single-intent
+
+```json
+{
+  "intents": [
+    {
+      "intent": "task_done",
+      "confidence": 0.95,
+      "text_span": "j'ai récolté 4 caisses de tomates",
+      "reconstructed_message": "j'ai récolté 4 caisses de tomates"
+    }
   ],
-  "created_by": "chat_ai_specialist_fix_2026_01_05",
-  "temperature": 0.1,
-  "improvements": [
-    "discrimination_observer",
-    "explicit_rules",
-    "more_examples"
-  ],
-  "output_format": "json"
+  "has_multiple_actions": false,
+  "reasoning": "Verbe récolté avec quantité explicite."
 }
+```
+
+### Cas multi-intent avec reconstruction
+
+```json
+{
+  "intents": [
+    {
+      "intent": "task_done",
+      "confidence": 0.95,
+      "text_span": "j'ai récolté des poivrons pendant 2 heures",
+      "reconstructed_message": "j'ai récolté des poivrons pendant 2 heures"
+    },
+    {
+      "intent": "observation",
+      "confidence": 0.95,
+      "text_span": "j'ai vu des pucerons",
+      "reconstructed_message": "j'ai vu des pucerons sur les poivrons",
+      "context_inferred": {
+        "subject_type": "culture",
+        "subject": "poivrons",
+        "source": "previous_fragment"
+      }
+    }
+  ],
+  "has_multiple_actions": true,
+  "reasoning": "Deux actions: récolte puis constat. Le fragment observation n'exprime pas la culture; 'poivrons' du fragment précédent est propagé."
+}
+```
+
+### Structure des champs
+
+```json
+{
+  "intents": [
+    {
+      "intent": "observation|task_done|harvest|task_planned|manage_plot|manage_conversion|manage_material|help",
+      "confidence": 0.0,
+      "text_span": "extrait du message pour cette action",
+      "reconstructed_message": "message complet avec contexte propagé si besoin",
+      "context_inferred": {
+        "subject_type": "culture|materiel|parcelle",
+        "subject": "valeur propagée",
+        "plots": ["..."],
+        "source": "previous_fragment"
+      }
+    }
+  ],
+  "has_multiple_actions": false,
+  "reasoning": "explication courte"
+}
+```
+
+reconstructed_message = input direct pour l'extraction par intent (observation_extraction, etc.). context_inferred = optionnel, présent si sujet propagé.
 
 ---
 
-**📁 Emplacement** : `docs/agent/prompts/current/`  
-**🔄 Export** : 07/01/2026 10:20:56  
-**📊 Statut** : ✅ Actif
+## Règles de classification
+
+1. Plusieurs verbes/actions dans le message → has_multiple_actions: true, un intent par action
+2. Problème/symptôme/constat spécifique après "vu/observé/remarqué" → observation
+3. "inspecté/surveillé/vérifié" sans problème spécifique → task_done
+4. Futur ou date planifiée → task_planned
+5. Mot interrogatif ou "?" → help
+6. Création/modification parcelle → manage_plot
+7. Configuration conversion (caisse = kg) → manage_conversion
+8. Création/modification matériel → manage_material
+
+---
+
+## Exemples JSON (single)
+
+**Message**: "J'ai désherbé la serre 1 pendant 1 heure"
+
+```json
+{
+  "intents": [
+    {
+      "intent": "task_done",
+      "confidence": 0.95,
+      "text_span": "J'ai désherbé la serre 1 pendant 1 heure",
+      "reconstructed_message": "J'ai désherbé la serre 1 pendant 1 heure"
+    }
+  ],
+  "has_multiple_actions": false,
+  "reasoning": "Action passée avec durée, pas de récolte."
+}
+```
+
+**Message**: "Comment créer une parcelle ?"
+
+```json
+{
+  "intents": [
+    {
+      "intent": "help",
+      "confidence": 1.0,
+      "text_span": "Comment créer une parcelle ?",
+      "reconstructed_message": "Comment créer une parcelle ?"
+    }
+  ],
+  "has_multiple_actions": false,
+  "reasoning": "Question explicite avec comment."
+}
+```
+
+**Message**: "J'ai récolté 8 kg de concombre en serre 2"
+
+```json
+{
+  "intents": [
+    {
+      "intent": "task_done",
+      "confidence": 0.95,
+      "text_span": "J'ai récolté 8 kg de concombre en serre 2",
+      "reconstructed_message": "J'ai récolté 8 kg de concombre en serre 2"
+    }
+  ],
+  "has_multiple_actions": false,
+  "reasoning": "Récolte avec quantité explicite."
+}
+```
+
+---
+
+## Exemples JSON (multi-intent)
+
+**Message**: "J'ai récolté des poivrons pendant 2 heures et j'ai vu des pucerons"
+
+```json
+{
+  "intents": [
+    {
+      "intent": "task_done",
+      "confidence": 0.9,
+      "text_span": "j'ai récolté des poivrons pendant 2 heures",
+      "reconstructed_message": "j'ai récolté des poivrons pendant 2 heures"
+    },
+    {
+      "intent": "observation",
+      "confidence": 0.95,
+      "text_span": "j'ai vu des pucerons",
+      "reconstructed_message": "j'ai vu des pucerons sur les poivrons",
+      "context_inferred": {
+        "subject_type": "culture",
+        "subject": "poivrons",
+        "source": "previous_fragment"
+      }
+    }
+  ],
+  "has_multiple_actions": true,
+  "reasoning": "Deux actions. Fragment 2 sans culture; poivrons propagé du fragment 1."
+}
+```
+
+**Message**: "J'ai planté des tomates en serre 1 puis j'ai remarqué des taches"
+
+```json
+{
+  "intents": [
+    {
+      "intent": "task_done",
+      "confidence": 0.95,
+      "text_span": "J'ai planté des tomates en serre 1",
+      "reconstructed_message": "J'ai planté des tomates en serre 1"
+    },
+    {
+      "intent": "observation",
+      "confidence": 0.9,
+      "text_span": "j'ai remarqué des taches",
+      "reconstructed_message": "j'ai remarqué des taches sur les tomates en serre 1",
+      "context_inferred": {
+        "subject_type": "culture",
+        "subject": "tomates",
+        "plots": ["serre 1"],
+        "source": "previous_fragment"
+      }
+    }
+  ],
+  "has_multiple_actions": true,
+  "reasoning": "Plantation puis constat. Culture et parcelle propagés au fragment observation."
+}
+```
+
+---
+
+## Instructions finales
+
+- Toujours retourner un array `intents` (même pour une seule action)
+- Appliquer la reconstruction de contexte quand un fragment est incomplet (sans culture/parcelle/matériel) et que le fragment précédent en contient
+- subject_type dans context_inferred: culture, materiel ou parcelle selon ce qui a été propagé
+- Pas de texte avant ou après le JSON

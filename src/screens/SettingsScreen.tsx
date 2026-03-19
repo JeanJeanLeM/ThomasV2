@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
-import { typography, textStyles } from '../design-system/typography';
+import { textStyles } from '../design-system/typography';
 import { 
   MapIcon, 
   WrenchScrewdriverIcon,
@@ -10,22 +10,19 @@ import {
   QuestionMarkCircleIcon,
   MicrophoneIcon,
   CogIcon,
-  PlusIcon,
   UserIcon,
   SproutIcon
 } from '../design-system/icons';
 import { Text } from '../design-system/components';
 import { useFarm } from '../contexts/FarmContext';
-import { useAuth } from '../contexts/AuthContext';
 import { ConversionService } from '../services/ConversionService';
 
 interface SettingsScreenProps {
-  onNavigate: (screen: 'PlotsSettings' | 'MaterialsSettings' | 'ConversionsSettings' | 'CulturesListSettings' | 'PhytosanitaryProductsSettings') => void;
+  onNavigate: (screen: 'PlotsSettings' | 'MaterialsSettings' | 'ConversionsSettings' | 'CulturesListSettings' | 'PhytosanitaryProductsSettings' | 'RecurringTasksSettings') => void;
 }
 
 export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const { activeFarm, farmData } = useFarm();
-  const { user } = useAuth();
   const [userConversions, setUserConversions] = useState<any[]>([]);
 
   // Charger les conversions de la ferme
@@ -120,7 +117,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
       subtitle: 'Configurez des tâches qui se répètent automatiquement',
       icon: <ClipboardDocumentListIcon color={colors.secondary.purple} size={28} />,
       borderColor: colors.secondary.purple,
-      onPress: () => console.log('Tâches récurrentes'),
+      onPress: () => onNavigate('RecurringTasksSettings'),
       hasVoiceAI: false,
       hasForm: true
     }
