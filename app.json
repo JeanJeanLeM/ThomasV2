@@ -53,7 +53,14 @@
       ]
     },
     "web": {
-      "favicon": "./assets/LogoWhiteColorfull.png"
+      "favicon": "./assets/LogoWhiteColorfull.png",
+      "bundler": "metro",
+      "output": "static",
+      "name": "Thomas — Assistant Agricole",
+      "shortName": "Thomas",
+      "description": "Votre assistant agricole intelligent. Gérez vos tâches, parcelles et cultures en quelques mots.",
+      "themeColor": "#22c55e",
+      "backgroundColor": "#f0fdf4"
     },
     "plugins": [
       [
