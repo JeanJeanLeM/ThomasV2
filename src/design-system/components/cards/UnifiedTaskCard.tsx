@@ -280,6 +280,16 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
             textColor="#7c3aed" 
           />
         )}
+
+        {/* Action standard normalisée */}
+        {task.standard_action && (
+          <Tag
+            icon="⚡"
+            text={task.standard_action.replace(/_/g, ' ')}
+            bgColor="#fef9c3"
+            textColor="#713f12"
+          />
+        )}
       </View>
 
       {/* Dernière ligne : Date à gauche, Type (effectuée/planifiée) à droite */}

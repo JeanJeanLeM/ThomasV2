@@ -19,39 +19,61 @@ import { DirectSupabaseService } from '../../../services/DirectSupabaseService';
 import { cultureService } from '../../../services/CultureService';
 import { PhytosanitaryProductService } from '../../../services/PhytosanitaryProductService';
 
-// Actions communes disponibles
+// Actions standard — codes alignés avec task_standard_actions (DB)
 const COMMON_ACTIONS: DropdownItem[] = [
-  // Actions de production
-  { id: 'recolter', label: 'Récolter', category: 'production', color: '#10b981' },
-  { id: 'planter', label: 'Planter', category: 'production', color: '#22c55e' },
-  { id: 'semer', label: 'Semer', category: 'production', color: '#16a34a' },
-  { id: 'transplanter', label: 'Transplanter', category: 'production', color: '#15803d' },
-  
-  // Actions d'entretien
-  { id: 'desherber', label: 'Désherber', category: 'entretien', color: '#eab308' },
-  { id: 'biner', label: 'Biner', category: 'entretien', color: '#ca8a04' },
-  { id: 'pailler', label: 'Pailler', category: 'entretien', color: '#a16207' },
-  { id: 'tailler', label: 'Tailler', category: 'entretien', color: '#92400e' },
-  
-  // Actions d'arrosage et traitement
-  { id: 'arroser', label: 'Arroser', category: 'irrigation', color: '#0ea5e9' },
-  { id: 'traiter', label: 'Traiter', category: 'traitement', color: '#dc2626' },
-  { id: 'fertiliser', label: 'Fertiliser', category: 'traitement', color: '#16a34a' },
-  
-  // Actions de préparation
-  { id: 'preparer_sol', label: 'Préparer le sol', category: 'preparation', color: '#8b5cf6' },
-  { id: 'labourer', label: 'Labourer', category: 'preparation', color: '#7c3aed' },
-  { id: 'amender', label: 'Amender', category: 'preparation', color: '#6d28d9' },
-  
-  // Actions de récolte et post-récolte
-  { id: 'nettoyer', label: 'Nettoyer', category: 'post_recolte', color: '#06b6d4' },
-  { id: 'trier', label: 'Trier', category: 'post_recolte', color: '#0891b2' },
-  { id: 'conditionner', label: 'Conditionner', category: 'post_recolte', color: '#0e7490' },
-  
-  // Actions générales
-  { id: 'observer', label: 'Observer', category: 'general', color: '#f59e0b' },
-  { id: 'mesurer', label: 'Mesurer', category: 'general', color: '#d97706' },
-  { id: 'photographier', label: 'Photographier', category: 'general', color: '#b45309' },
+  // Production — récolte
+  { id: 'recolter',         label: 'Récolter',               category: 'production',       color: '#10b981' },
+  { id: 'cueillir',         label: 'Cueillir',               category: 'production',       color: '#059669' },
+  // Production — plantation / semis
+  { id: 'planter',          label: 'Planter',                category: 'production',       color: '#22c55e' },
+  { id: 'semer',            label: 'Semer',                  category: 'production',       color: '#16a34a' },
+  // Production — préparation sol
+  { id: 'labourer',         label: 'Labourer',               category: 'production',       color: '#7c3aed' },
+  { id: 'fraiser',          label: 'Fraiser / préparer sol', category: 'production',       color: '#6d28d9' },
+  // Production — entretien
+  { id: 'desherber',        label: 'Désherber',              category: 'production',       color: '#eab308' },
+  { id: 'biner',            label: 'Biner',                  category: 'production',       color: '#ca8a04' },
+  { id: 'butter',           label: 'Butter',                 category: 'production',       color: '#a16207' },
+  { id: 'tailler',          label: 'Tailler',                category: 'production',       color: '#92400e' },
+  { id: 'eclaircir',        label: 'Éclaircir',              category: 'production',       color: '#78350f' },
+  { id: 'attacher',         label: 'Attacher / tuteurer',    category: 'production',       color: '#713f12' },
+  { id: 'arroser',          label: 'Arroser',                category: 'production',       color: '#0ea5e9' },
+  { id: 'irriguer',         label: 'Irriguer',               category: 'production',       color: '#0284c7' },
+  // Production — protection / traitement
+  { id: 'traiter',          label: 'Traiter',                category: 'production',       color: '#dc2626' },
+  { id: 'fertiliser',       label: 'Fertiliser',             category: 'production',       color: '#15803d' },
+  { id: 'amender',          label: 'Amender le sol',         category: 'production',       color: '#166534' },
+  { id: 'mulcher',          label: 'Pailler / mulcher',      category: 'production',       color: '#14532d' },
+  // Production — serre / nettoyage
+  { id: 'ouvrir_serre',     label: 'Ouvrir la serre',        category: 'production',       color: '#0891b2' },
+  { id: 'fermer_serre',     label: 'Fermer la serre',        category: 'production',       color: '#0e7490' },
+  { id: 'installer',        label: 'Installer / poser',      category: 'production',       color: '#155e75' },
+  { id: 'retirer',          label: 'Retirer / enlever',      category: 'production',       color: '#164e63' },
+  { id: 'nettoyer',         label: 'Nettoyer',               category: 'production',       color: '#06b6d4' },
+  { id: 'trier',            label: 'Trier',                  category: 'production',       color: '#0891b2' },
+  { id: 'composter',        label: 'Composter',              category: 'production',       color: '#047857' },
+  // Animaux
+  { id: 'nourrir',          label: 'Nourrir',                category: 'production',       color: '#f59e0b' },
+  { id: 'soigner',          label: 'Soigner',                category: 'production',       color: '#d97706' },
+  { id: 'recolter_oeufs',   label: 'Ramasser les œufs',      category: 'production',       color: '#b45309' },
+  { id: 'tondre',           label: 'Tondre',                 category: 'production',       color: '#92400e' },
+  { id: 'faucher',          label: 'Faucher',                category: 'production',       color: '#78350f' },
+  // Commercialisation
+  { id: 'preparer_commande',label: 'Préparer les commandes', category: 'commercialisation', color: '#8b5cf6' },
+  { id: 'livrer',           label: 'Livrer',                 category: 'commercialisation', color: '#7c3aed' },
+  { id: 'vendre',           label: 'Vendre',                 category: 'commercialisation', color: '#6d28d9' },
+  { id: 'conditionner',     label: 'Conditionner',           category: 'commercialisation', color: '#5b21b6' },
+  // Administratif
+  { id: 'facturer',         label: 'Facturer',               category: 'administratif',    color: '#3b82f6' },
+  { id: 'inventorier',      label: 'Inventorier',            category: 'administratif',    color: '#2563eb' },
+  { id: 'declarer',         label: 'Déclarer',               category: 'administratif',    color: '#1d4ed8' },
+  { id: 'planifier',        label: 'Planifier',              category: 'administratif',    color: '#1e40af' },
+  // Général
+  { id: 'reparer',          label: 'Réparer',                category: 'general',          color: '#6b7280' },
+  { id: 'entretenir',       label: 'Entretenir',             category: 'general',          color: '#4b5563' },
+  { id: 'transporter',      label: 'Transporter',            category: 'general',          color: '#374151' },
+  { id: 'surveiller',       label: 'Surveiller',             category: 'general',          color: '#1f2937' },
+  { id: 'autre',            label: 'Autre',                  category: 'general',          color: '#9ca3af' },
 ];
 
 // Cultures communes disponibles
@@ -136,6 +158,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
   const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<TaskData & {
     action: string;
+    standard_action: string | null;
     time: string;
     plot_ids: number[];
     surface_unit_ids: number[];
@@ -232,6 +255,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
       setFormData({
         ...task,
         action: task.title || '', // Utiliser le titre comme action par défaut
+        standard_action: (task as any).standard_action ?? null,
         time: '',
         crops: task.crops || [],
         plots: task.plots || [],
@@ -407,6 +431,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         id: task?.id || `task_${Date.now()}`,
         title: finalTitle,
         action: formData.action,
+        standard_action: formData.standard_action ?? null,
         type: formData.type || 'completed',
         date: formData.date || new Date(),
         duration: formData.duration,
@@ -567,6 +592,25 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
           onChangeText={(value) => updateFormData('action', value)}
           hint="Spécifiez l'action principale de cette tâche"
           required
+        />
+
+        <DropdownSelector
+          label="Action standard"
+          placeholder="Sélectionner une action normalisée…"
+          items={COMMON_ACTIONS}
+          selectedItems={formData.standard_action
+            ? COMMON_ACTIONS.filter(a => a.id === formData.standard_action)
+            : []}
+          onSelectionChange={(selected) =>
+            setFormData(prev => ({
+              ...prev,
+              standard_action: selected.length > 0 ? selected[0].id : null,
+            }))
+          }
+          multiSelect={false}
+          searchable
+          filterable
+          hint="Choix normalisé pour les statistiques et le filtrage"
         />
 
         <View>

@@ -519,6 +519,7 @@ export default function TasksScreen() {
         date: taskDate,
         status: updatedTask.dbStatus || updatedTask.status,
         action: updatedTask.action,
+        standard_action: (updatedTask as any).standard_action ?? null,
         duration_minutes: updatedTask.duration_minutes,
         number_of_people: updatedTask.number_of_people,
         plants: updatedTask.plants,

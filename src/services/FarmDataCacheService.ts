@@ -26,6 +26,7 @@ export interface TaskData {
   type: 'completed' | 'planned'; // Type pour l'affichage des cartes
   priority: 'basse' | 'moyenne' | 'haute' | 'urgente';
   action?: string; // Action principale (récolter, planter, traiter, etc.)
+  standard_action?: string | null; // Code action standard normalisé (réf. task_standard_actions)
   duration_minutes?: number; // Durée en minutes
   number_of_people?: number; // Nombre de personnes
   plants?: string[]; // Cultures/plantes
@@ -262,7 +263,7 @@ export class FarmDataCacheService {
     try {
       const tasksResult = await DirectSupabaseService.directSelect(
         'tasks',
-        'id,title,date,status,type,priority,action,duration_minutes,number_of_people,plants,plot_ids,material_ids,quantity_value,quantity_unit,quantity_converted_value,quantity_converted_unit,quantity_nature,quantity_type,phytosanitary_product_amm',
+        'id,title,date,status,type,priority,action,standard_action,duration_minutes,number_of_people,plants,plot_ids,material_ids,quantity_value,quantity_unit,quantity_converted_value,quantity_converted_unit,quantity_nature,quantity_type,phytosanitary_product_amm',
         [
           { column: 'farm_id', value: farmId },
           { column: 'is_active', value: true } // Filtrer uniquement les tâches actives
@@ -284,6 +285,7 @@ export class FarmDataCacheService {
           type: task.status === 'terminee' ? 'completed' : 'planned', // Mapper le status vers le type attendu par les cartes
           priority: task.priority,
           action: task.action, // Action principale
+          standard_action: task.standard_action || null, // Code action standard normalisé
           duration_minutes: task.duration_minutes, // Durée
           number_of_people: task.number_of_people, // Nombre de personnes
           plants: task.plants || [], // Cultures/plantes
