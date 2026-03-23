@@ -1,0 +1,76 @@
+# Configuration Apache — Thomas Web App (mobile.thomas-app.com)
+# Ce fichier sera déployé à la racine du sous-domaine sur OVH.
+# Il gère le routage SPA (Single Page Application) et les headers de sécurité.
+
+# ───────────────────────────────────────────────
+# 1. Activer le moteur de réécriture
+# ───────────────────────────────────────────────
+Options -MultiViews
+RewriteEngine On
+
+# ───────────────────────────────────────────────
+# 2. Forcer HTTPS (redirection HTTP → HTTPS)
+# ───────────────────────────────────────────────
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# ───────────────────────────────────────────────
+# 3. Fallback SPA : toutes les routes → index.html
+# Les fichiers statiques réels (js, css, images) passent normalement.
+# ───────────────────────────────────────────────
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ /index.html [L]
+
+# ───────────────────────────────────────────────
+# 4. Headers de sécurité
+# ───────────────────────────────────────────────
+<IfModule mod_headers.c>
+    # Protège contre le clickjacking
+    Header always set X-Frame-Options "SAMEORIGIN"
+    # Protège contre le sniffing MIME
+    Header always set X-Content-Type-Options "nosniff"
+    # Active la protection XSS du navigateur
+    Header always set X-XSS-Protection "1; mode=block"
+    # Politique de référant
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    # HTTPS strict (6 mois)
+    Header always set Strict-Transport-Security "max-age=15768000; includeSubDomains"
+    # Permissions pour micro (nécessaire pour l'audio)
+    Header always set Permissions-Policy "microphone=(self), camera=(self), geolocation=(self)"
+    # CORS pour les requêtes vers Supabase (si proxy nécessaire)
+    Header always set Access-Control-Allow-Origin "*"
+</IfModule>
+
+# ───────────────────────────────────────────────
+# 5. Cache des assets statiques
+# ───────────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+    # JS et CSS : 1 semaine (Expo génère des noms avec hash)
+    ExpiresByType text/javascript "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+    ExpiresByType text/css "access plus 1 week"
+    # Images : 1 mois
+    ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/jpg "access plus 1 month"
+    ExpiresByType image/jpeg "access plus 1 month"
+    ExpiresByType image/gif "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType image/webp "access plus 1 month"
+    # Fonts : 1 mois
+    ExpiresByType font/woff "access plus 1 month"
+    ExpiresByType font/woff2 "access plus 1 month"
+    # HTML : pas de cache (toujours frais)
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# ───────────────────────────────────────────────
+# 6. Compression Gzip
+# ───────────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain text/html text/css
+    AddOutputFilterByType DEFLATE application/javascript text/javascript
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
