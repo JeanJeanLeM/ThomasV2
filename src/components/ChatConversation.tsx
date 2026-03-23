@@ -783,19 +783,17 @@ export default function ChatConversation({
             throw new Error('MediaRecorder API non disponible dans ce navigateur');
           }
 
-          // Créer le MediaRecorder
-          const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
-            ? 'audio/webm' 
-            : MediaRecorder.isTypeSupported('audio/mp4')
-            ? 'audio/mp4'
-            : 'audio/webm'; // Fallback
+          // Sélectionner le meilleur format audio supporté par le navigateur.
+          // Ordre de priorité : webm (Chrome/Edge) → mp4 (Safari iOS 14.1+) → aac → laisser le navigateur choisir.
+          const MIME_CANDIDATES = ['audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg'];
+          const mimeType = MIME_CANDIDATES.find(t => MediaRecorder.isTypeSupported(t)) ?? '';
 
-          console.log('📹 [AUDIO] Création MediaRecorder avec type:', mimeType);
-          
-          const mediaRecorder = new MediaRecorder(stream, {
-            mimeType: mimeType,
-            audioBitsPerSecond: 128000,
-          });
+          console.log('📹 [AUDIO] Création MediaRecorder avec type:', mimeType || '(navigateur choisit)');
+
+          const recorderOptions: MediaRecorderOptions = { audioBitsPerSecond: 128000 };
+          if (mimeType) recorderOptions.mimeType = mimeType;
+
+          const mediaRecorder = new MediaRecorder(stream, recorderOptions);
 
           mediaRecorderRef.current = mediaRecorder;
           audioChunksRef.current = [];
@@ -1044,9 +1042,10 @@ export default function ChatConversation({
               return;
             }
             
-            // Créer le blob audio à partir des chunks
+            // Créer le blob audio — utiliser le mimeType réel du recorder (peut être vide si le navigateur a choisi)
+            const blobType = mediaRecorderRef.current?.mimeType || '';
             const audioBlob = new Blob(audioChunksRef.current, { 
-              type: mediaRecorderRef.current?.mimeType || 'audio/webm' 
+              type: blobType,
             });
             
             console.log('✅ [AUDIO] Blob créé:', audioBlob.size, 'bytes', audioBlob.type);
@@ -1084,7 +1083,7 @@ export default function ChatConversation({
           } else {
             // Si déjà arrêté, créer le blob immédiatement
             const audioBlob = new Blob(audioChunksRef.current, { 
-              type: mediaRecorderRef.current.mimeType || 'audio/webm' 
+              type: mediaRecorderRef.current.mimeType || '',
             });
             const audioUrl = URL.createObjectURL(audioBlob);
             
