@@ -18,6 +18,7 @@ export interface TaskData {
   id: string;
   title: string;
   action?: string; // Action principale (récolter, planter, traiter, etc.)
+  standard_action?: string | null; // Code action standard normalisé (réf. task_standard_actions)
   type: 'completed' | 'planned';
   date: Date | string;
   duration_minutes?: number; // Durée en minutes

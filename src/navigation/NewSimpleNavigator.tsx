@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '../contexts/NavigationContext';
 import { useFarmSelector } from '../hooks/useFarmSelector';
 import { useFarm } from '../contexts/FarmContext';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import OnboardingModal from '../components/onboarding/OnboardingModal';
 import OnboardingService from '../services/OnboardingService';
@@ -70,21 +71,31 @@ const NewSimpleNavigator: React.FC = () => {
   const navigation = useNavigation();
   const farmSelector = useFarmSelector();
   const { activeFarm } = useFarm();
+  const { user } = useAuth();
   const [farmEditId, setFarmEditId] = React.useState<number | null>(null);
   const [agentMethod, setAgentMethod] = React.useState<'simple' | 'pipeline' | null>(null);
   const [showOnboarding, setShowOnboarding] = React.useState(false);
 
-  // Vérifier si l'onboarding doit s'afficher au premier lancement
+  // Après profil + parcours ferme, l'utilisateur arrive ici : premier passage pour CE compte → onboarding
   React.useEffect(() => {
-    OnboardingService.hasSeenOnboarding().then((seen) => {
-      if (!seen) setShowOnboarding(true);
+    const userId = user?.id;
+    if (!userId) return;
+
+    let cancelled = false;
+    OnboardingService.hasSeenOnboarding(userId).then((seen) => {
+      if (!cancelled && !seen) setShowOnboarding(true);
     });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const handleCloseOnboarding = React.useCallback(() => {
     setShowOnboarding(false);
-    OnboardingService.markOnboardingSeen();
-  }, []);
+    if (user?.id) {
+      OnboardingService.markOnboardingSeen(user.id);
+    }
+  }, [user?.id]);
 
   const handleStartTutorial = React.useCallback(() => {
     setShowOnboarding(true);
@@ -97,7 +108,10 @@ const NewSimpleNavigator: React.FC = () => {
     }
   }, [navigation.currentScreen]);
 
-  // Charger la méthode agent depuis DB quand on est sur l'écran Chat
+  // Charger la méthode agent depuis DB quand on est sur l'écran Chat.
+  // Si aucune ligne n'existe encore pour cette ferme, on la crée immédiatement
+  // avec 'pipeline' pour éviter que le DB trigger ou un appel API ultérieur
+  // ne la crée avec l'ancien défaut 'simple'.
   React.useEffect(() => {
     const loadAgentMethod = async () => {
       if (navigation.activeTab === 'Chat' && activeFarm?.farm_id) {
@@ -112,11 +126,23 @@ const NewSimpleNavigator: React.FC = () => {
             setAgentMethod(data.agent_method);
             console.log('🔀 [HEADER] Agent method chargée:', data.agent_method);
           } else {
-            setAgentMethod('simple'); // Fallback
+            // Pas de config → créer la ligne avec 'pipeline' + mettre à jour le badge
+            console.log('🔀 [HEADER] Pas de config agent, création avec pipeline...');
+            await supabase
+              .from('farm_agent_config')
+              .upsert(
+                {
+                  farm_id: activeFarm.farm_id,
+                  agent_method: 'pipeline',
+                  config_reason: 'Configuration par défaut - première utilisation (pipeline)',
+                },
+                { onConflict: 'farm_id', ignoreDuplicates: true }
+              );
+            setAgentMethod('pipeline');
           }
         } catch (err) {
           console.error('❌ [HEADER] Erreur chargement agent method:', err);
-          setAgentMethod('simple');
+          setAgentMethod('pipeline');
         }
       } else {
         setAgentMethod(null);
@@ -288,7 +314,7 @@ const NewSimpleNavigator: React.FC = () => {
         component: InvoicesListScreen
       },
       InvoiceCreate: {
-        title: 'Créer facture',
+        title: navigation.navigationParams?.invoiceId ? 'Modifier facture' : 'Créer facture',
         showBack: true,
         showFarmSelector: false,
         showTabs: false,
@@ -618,6 +644,7 @@ const NewSimpleNavigator: React.FC = () => {
           <InvoiceCreateScreen
             navigation={{ goBack: handleBack }}
             onNavigate={navigation.navigateToScreen}
+            invoiceId={(navigation.navigationParams?.invoiceId as string) ?? undefined}
           />
         ) : navigation.currentScreen === 'CustomersList' ? (
           <CustomersListScreen

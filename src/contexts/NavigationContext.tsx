@@ -67,7 +67,11 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
   };
 
   const navigateToScreen = (screen: ScreenName, params?: NavigationParams) => {
-    console.log('🧭 [NAVIGATION] Navigate to screen:', screen, params);
+    if (params !== undefined && Object.keys(params).length > 0) {
+      console.log('🧭 [NAVIGATION] Navigate to screen:', screen, params);
+    } else {
+      console.log('🧭 [NAVIGATION] Navigate to screen:', screen);
+    }
     setNavigationParamsState(params ?? {});
     setCurrentScreen(screen);
     addToHistory(screen);

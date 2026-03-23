@@ -409,24 +409,61 @@ function matchConversionFlexible(term1: string, term2: string): boolean {
   return false;
 }
 
+/**
+ * Extract all numeric tokens from a string (e.g. "serre 52" → ["52"]).
+ */
+function extractNumbers(str: string): string[] {
+  return str.match(/\d+/g) || []
+}
+
+/**
+ * String similarity with a strict number-identity guard.
+ *
+ * Rule: if the mention contains numeric tokens AND the candidate also contains
+ * numeric tokens, ALL numbers must appear identically in both strings.
+ * Any mismatch (52 vs 2, 45 vs 5) immediately returns 0 so the fuzzy
+ * threshold is never reached, preventing "serre 52" → "Serre 2".
+ *
+ * Special case: if the mention is ONLY numbers (e.g. "20 planches" when
+ * "20" is a quantity) we still apply the guard so "20 planches" doesn't
+ * fuzzy-match "planches" with a false score.
+ */
 function calculateStringSimilarity(str1: string, str2: string): number {
   if (str1 === str2) return 1.0
   if (str1.length === 0 || str2.length === 0) return 0.0
-  
+
+  // --- Number-identity guard ---
+  const nums1 = extractNumbers(str1)
+  const nums2 = extractNumbers(str2)
+
+  if (nums1.length > 0 && nums2.length > 0) {
+    // Both sides carry numbers — they must all match (as sets, order-independent)
+    const set1 = new Set(nums1)
+    const set2 = new Set(nums2)
+    const allMatch = [...set1].every(n => set2.has(n)) && [...set2].every(n => set1.has(n))
+    if (!allMatch) return 0.0
+  } else if (nums1.length > 0 && nums2.length === 0) {
+    // Mention has a number but candidate has none → poor match, penalise heavily
+    return 0.0
+  }
+  // If nums1 is empty and nums2 has numbers: candidate is more specific than
+  // the mention — still let the generic similarity score decide (could be valid).
+
+  // --- Generic character similarity ---
   const longer = str1.length > str2.length ? str1 : str2
   const shorter = str1.length > str2.length ? str2 : str1
-  
+
   if (longer.includes(shorter)) {
     return shorter.length / longer.length
   }
-  
+
   let matches = 0
   for (let i = 0; i < Math.min(str1.length, str2.length); i++) {
     if (str1[i] === str2[i]) {
       matches++
     }
   }
-  
+
   return matches / Math.max(str1.length, str2.length)
 }
 
@@ -624,7 +661,12 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
       
       if (plot.name.toLowerCase().includes(mentionLower) || 
           mentionLower.includes(plot.name.toLowerCase())) {
-        if (0.9 > bestConfidence) {
+        // Guard: partial matches must not cross-match different numbers
+        const plotNums = extractNumbers(plot.name.toLowerCase())
+        const mentionNums = extractNumbers(mentionLower)
+        const numbersCompatible = (mentionNums.length === 0 || plotNums.length === 0) ||
+          (mentionNums.every((n: string) => plotNums.includes(n)) && plotNums.every((n: string) => mentionNums.includes(n)))
+        if (numbersCompatible && 0.9 > bestConfidence) {
           bestMatch = plot
           bestConfidence = 0.9
           matchType = 'partial'
@@ -1323,23 +1365,66 @@ Conversions: ${context.conversions?.map((c: any) => `${c.container_name} de ${c.
 
     console.log(`🔍 [EXTRACT] Extraction pour ${plan.tool_name} avec prompt ${promptName}`)
 
-    // Charger le prompt d'extraction
-    const { data: prompt, error: promptError } = await supabase
+    // Charger le prompt d'extraction (is_default = true en priorité, sinon is_active le plus récent)
+    let prompt: any = null
+    let promptError: any = null
+    const defaultResult = await supabase
       .from('chat_prompts')
       .select('*')
       .eq('name', promptName)
       .eq('is_active', true)
+      .eq('is_default', true)
       .single()
+    if (defaultResult.data) {
+      prompt = defaultResult.data
+    } else {
+      const fallbackResult = await supabase
+        .from('chat_prompts')
+        .select('*')
+        .eq('name', promptName)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      prompt = fallbackResult.data
+      promptError = fallbackResult.error
+    }
 
-    if (promptError || !prompt) {
-      console.warn(`⚠️ [EXTRACT] Prompt ${promptName} non trouvé, utilisation params tool_selection`)
+    if (!prompt) {
+      console.warn(`⚠️ [EXTRACT] Prompt ${promptName} non trouvé, utilisation params tool_selection`, promptError)
       return plan
     }
 
+    // Pour task_extraction : charger la liste des actions standard et injecter le catalogue
+    let validStandardActionCodes: Set<string> = new Set()
     const farmContextForPrompt = (promptMapping[plan.tool_name] === 'sale_extraction' || promptMapping[plan.tool_name] === 'purchase_extraction')
       ? farmContextCommercial
       : farmContextBase
-    const systemPrompt = prompt.content
+
+    let promptContent = prompt.content
+    if (promptName === 'task_extraction') {
+      const { data: standardActions } = await supabase
+        .from('task_standard_actions')
+        .select('code, label_fr, description, category')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('code', { ascending: true })
+
+      if (standardActions && standardActions.length > 0) {
+        validStandardActionCodes = new Set(standardActions.map((a: any) => a.code))
+        const catalog = standardActions
+          .map((a: any) => `- ${a.code} — ${a.label_fr}${a.description ? ` (${a.description})` : ''}`)
+          .join('\n')
+        promptContent = promptContent.replace('{{standard_actions_catalog}}', catalog)
+        console.log(`📋 [EXTRACT] ${standardActions.length} actions standard chargées`)
+      } else {
+        // Fallback : supprimer le placeholder si la table est vide
+        promptContent = promptContent.replace('{{standard_actions_catalog}}', '(liste non disponible — utiliser "autre")')
+        console.warn('⚠️ [EXTRACT] task_standard_actions vide ou inaccessible')
+      }
+    }
+
+    const systemPrompt = promptContent
       .replace('{{user_message}}', userMessage)
       .replace('{{farm_context}}', farmContextForPrompt)
       .replace('{{current_date}}', new Date().toLocaleDateString('fr-FR'))
@@ -1383,6 +1468,17 @@ Conversions: ${context.conversions?.map((c: any) => `${c.container_name} de ${c.
         } else {
           console.warn(`⚠️ [EXTRACT] Impossible de parser la réponse`)
           return plan
+        }
+      }
+
+      // Valider standard_action si présente (task_extraction uniquement)
+      if (promptName === 'task_extraction' && parsed.extracted_data?.standard_action != null) {
+        const rawCode = String(parsed.extracted_data.standard_action).trim()
+        if (validStandardActionCodes.size > 0 && !validStandardActionCodes.has(rawCode)) {
+          console.warn(`⚠️ [EXTRACT] standard_action invalide "${rawCode}" → null`)
+          parsed.extracted_data.standard_action = null
+        } else {
+          console.log(`✅ [EXTRACT] standard_action validé: "${rawCode}"`)
         }
       }
 
@@ -1780,7 +1876,8 @@ async function createTaskFromTool(
     material_ids: contextualized.context.material_ids || [],
     plants: params.crops?.length > 0 ? params.crops : (params.crop ? [params.crop] : []),
     number_of_people: params.number_of_people || 1,
-    ai_confidence: toolPlan.confidence || 0.9
+    ai_confidence: toolPlan.confidence || 0.9,
+    standard_action: (params.standard_action && String(params.standard_action).trim()) || null
   }
   
   console.log(`📦 [CREATE-TASK] Données tâche:`, JSON.stringify(taskData, null, 2))
