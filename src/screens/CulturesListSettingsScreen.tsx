@@ -7,16 +7,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { 
   PlusIcon,
   TrashIcon,
-  SearchIcon,
-  XIcon
+  SearchIcon
 } from '../design-system/icons';
 import { Text, Button, Input, Modal } from '../design-system/components';
 import { cultureService } from '../services/CultureService';
 import { userCulturePreferencesService } from '../services/UserCulturePreferencesService';
 import { FarmDataCacheService } from '../services/FarmDataCacheService';
-import { ProductService } from '../services/ProductService';
 import type { Culture, CultureProfileType, UserCulturePreferences } from '../types';
-import type { Product } from '../types';
 
 interface CulturesListSettingsScreenProps {
   onTitleChange?: (title: string | null) => void;
@@ -42,20 +39,6 @@ export default function CulturesListSettingsScreen({ onTitleChange, onBack }: Cu
   const [showCreateCultureModal, setShowCreateCultureModal] = useState(false);
   const [newCultureName, setNewCultureName] = useState('');
   const [newCultureType, setNewCultureType] = useState<string>('legume_fruit');
-  const [showCreateProductModal, setShowCreateProductModal] = useState(false);
-  const [productForCulture, setProductForCulture] = useState<Culture | null>(null);
-  const [newProductName, setNewProductName] = useState('');
-  const [newProductUnit, setNewProductUnit] = useState('kg');
-  const [newProductPrice, setNewProductPrice] = useState('');
-  const [productsByCulture, setProductsByCulture] = useState<Record<number, Product[]>>({});
-  const [expandedCultures, setExpandedCultures] = useState<Set<number>>(new Set());
-
-  // Édition produit
-  const [showEditProductModal, setShowEditProductModal] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editProductName, setEditProductName] = useState('');
-  const [editProductUnit, setEditProductUnit] = useState('');
-  const [editProductPrice, setEditProductPrice] = useState('');
 
   const availableProfiles = userCulturePreferencesService.getAvailableProfiles();
 
@@ -105,15 +88,19 @@ export default function CulturesListSettingsScreen({ onTitleChange, onBack }: Cu
 
     setIsLoading(true);
     try {
-      // Charger depuis le cache d'abord
-      const cachedPrefs = await FarmDataCacheService.getCachedUserCulturePreferences(user.id, activeFarm.farm_id);
-      
+      // Charger les cultures et le cache en parallèle pour réduire la latence initiale
+      const [cachedPrefs, allCulturesList] = await Promise.all([
+        FarmDataCacheService.getCachedUserCulturePreferences(user.id, activeFarm.farm_id),
+        cultureService.getCultures(activeFarm.farm_id),
+      ]);
+      setAllCultures(allCulturesList);
+
       if (cachedPrefs) {
         setPreferences(cachedPrefs);
         // Détecter les profils actifs à partir des cultureIds
         const activeProfiles = await detectActiveProfiles(cachedPrefs.cultureIds);
         setSelectedProfiles(activeProfiles);
-        await loadUserCultures(cachedPrefs.cultureIds);
+        setUserCultures(allCulturesList.filter(c => cachedPrefs.cultureIds.includes(c.id)));
       } else {
         // Charger depuis la DB
         const prefs = await userCulturePreferencesService.getUserPreferences(user.id, activeFarm.farm_id);
@@ -122,26 +109,14 @@ export default function CulturesListSettingsScreen({ onTitleChange, onBack }: Cu
           // Détecter les profils actifs à partir des cultureIds
           const activeProfiles = await detectActiveProfiles(prefs.cultureIds);
           setSelectedProfiles(activeProfiles);
-          await loadUserCultures(prefs.cultureIds);
+          setUserCultures(allCulturesList.filter(c => prefs.cultureIds.includes(c.id)));
           // Sauvegarder en cache
           await FarmDataCacheService.saveUserCulturePreferences(user.id, activeFarm.farm_id, prefs);
         } else {
           setSelectedProfiles([]);
+          setUserCultures([]);
         }
       }
-
-      // Charger toutes les cultures disponibles
-      const all = await cultureService.getCultures(activeFarm.farm_id);
-      setAllCultures(all);
-
-      // Charger les produits par culture
-      const cultureIds = (prefs || cachedPrefs)?.cultureIds ?? [];
-      const productsMap: Record<number, Product[]> = {};
-      for (const c of cultureIds) {
-        const prods = await ProductService.getProductsByCulture(c);
-        productsMap[c] = prods;
-      }
-      setProductsByCulture(productsMap);
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error);
       Alert.alert('Erreur', 'Impossible de charger les données');
@@ -427,102 +402,6 @@ export default function CulturesListSettingsScreen({ onTitleChange, onBack }: Cu
     }
   };
 
-  const handleCreateProduct = (culture: Culture) => {
-    setProductForCulture(culture);
-    setNewProductName(culture.name);
-    setNewProductUnit('kg');
-    setShowCreateProductModal(true);
-  };
-
-  const handleSaveProduct = async () => {
-    if (!activeFarm?.farm_id || !productForCulture || !newProductName.trim()) return;
-    try {
-      await ProductService.createProduct({
-        farm_id: activeFarm.farm_id,
-        name: newProductName.trim(),
-        unit: newProductUnit || 'kg',
-        culture_id: productForCulture.id,
-        default_price_ht: newProductPrice ? parseFloat(newProductPrice) : undefined,
-      });
-      setShowCreateProductModal(false);
-      setProductForCulture(null);
-      setNewProductName('');
-      setNewProductUnit('kg');
-      setNewProductPrice('');
-      Alert.alert('Succès', `Produit "${newProductName.trim()}" créé`);
-      await loadData();
-    } catch (error) {
-      console.error('Erreur création produit:', error);
-      Alert.alert('Erreur', 'Impossible de créer le produit');
-    }
-  };
-
-  const handleEditProduct = (product: Product) => {
-    setEditingProduct(product);
-    setEditProductName(product.name);
-    setEditProductUnit(product.unit);
-    setEditProductPrice(product.default_price_ht != null ? String(product.default_price_ht) : '');
-    setShowEditProductModal(true);
-  };
-
-  const handleUpdateProduct = async () => {
-    if (!editingProduct || !editProductName.trim()) return;
-    try {
-      await ProductService.updateProduct(editingProduct.id, {
-        name: editProductName.trim(),
-        unit: editProductUnit || 'kg',
-        default_price_ht: editProductPrice ? parseFloat(editProductPrice) : null,
-      });
-      setShowEditProductModal(false);
-      setEditingProduct(null);
-      Alert.alert('Succès', 'Produit mis à jour');
-      await loadData();
-    } catch (error) {
-      console.error('Erreur mise à jour produit:', error);
-      Alert.alert('Erreur', 'Impossible de mettre à jour le produit');
-    }
-  };
-
-  const handleDeleteProduct = (product: Product, cultureId: number) => {
-    Alert.alert(
-      'Supprimer le produit',
-      `Supprimer "${product.name}" ? Cette action est irréversible.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await ProductService.deactivateProduct(product.id);
-              setProductsByCulture((prev) => ({
-                ...prev,
-                [cultureId]: (prev[cultureId] ?? []).filter((p) => p.id !== product.id),
-              }));
-            } catch (error) {
-              console.error('Erreur suppression produit:', error);
-              Alert.alert('Erreur', 'Impossible de supprimer le produit');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const toggleExpandCulture = (cultureId: number) => {
-    setExpandedCultures((prev) => {
-      const next = new Set(prev);
-      if (next.has(cultureId)) next.delete(cultureId);
-      else next.add(cultureId);
-      return next;
-    });
-  };
-
-  const getProfileLabel = (profileType: CultureProfileType): string => {
-    const profile = availableProfiles.find(p => p.type === profileType);
-    return profile?.label || profileType;
-  };
-
   const cultureTypes = cultureService.getCultureTypes();
 
   if (isLoading && !preferences) {
@@ -614,29 +493,31 @@ export default function CulturesListSettingsScreen({ onTitleChange, onBack }: Cu
             {availableProfiles.map((profile) => {
               const isSelected = selectedProfiles.includes(profile.type);
               return (
-                <TouchableOpacity
-                  key={profile.type}
-                  style={[
-                    styles.profileChip,
-                    isSelected && styles.profileChipSelected,
-                  ]}
-                  onPress={() => handleToggleProfile(profile.type)}
-                  disabled={isLoading}
-                >
-                  {isSelected && (
-                    <View style={styles.checkmarkContainer}>
-                      <Text style={styles.checkmark}>✓</Text>
-                    </View>
-                  )}
-                  <Text
+                <View key={profile.type} style={styles.profileChipWrapper}>
+                  <TouchableOpacity
                     style={[
-                      styles.profileChipText,
-                      isSelected && styles.profileChipTextSelected,
+                      styles.profileChip,
+                      isSelected && styles.profileChipSelected,
                     ]}
+                    onPress={() => handleToggleProfile(profile.type)}
+                    disabled={false}
+                    activeOpacity={0.7}
                   >
-                    {profile.label}
-                  </Text>
-                </TouchableOpacity>
+                    {isSelected && (
+                      <View style={styles.checkmarkContainer}>
+                        <Text style={styles.checkmark}>✓</Text>
+                      </View>
+                    )}
+                    <Text
+                      style={[
+                        styles.profileChipText,
+                        isSelected && styles.profileChipTextSelected,
+                      ]}
+                    >
+                      {profile.label}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               );
             })}
           </View>
@@ -669,91 +550,37 @@ export default function CulturesListSettingsScreen({ onTitleChange, onBack }: Cu
             </View>
           ) : (
             <View style={styles.culturesList}>
-              {userCultures.map((culture) => {
-                const prods = productsByCulture[culture.id] ?? [];
-                const isExpanded = expandedCultures.has(culture.id);
-                return (
-                  <View key={culture.id} style={styles.cultureItem}>
-                    {/* En-tête culture */}
-                    <TouchableOpacity
-                      style={styles.cultureHeader}
-                      onPress={() => toggleExpandCulture(culture.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.cultureInfo}>
-                        <View
-                          style={[
-                            styles.cultureColor,
-                            { backgroundColor: culture.color || colors.primary[500] },
-                          ]}
-                        />
-                        <View style={styles.cultureDetails}>
-                          <Text variant="body" style={styles.cultureName}>
-                            {culture.name}
-                          </Text>
-                          <Text variant="caption" style={styles.cultureType}>
-                            {cultureTypes.find(t => t.value === culture.type)?.label || culture.type}
-                            {prods.length > 0 && ` • ${prods.length} produit${prods.length > 1 ? 's' : ''}`}
-                          </Text>
-                        </View>
+              {userCultures.map((culture) => (
+                <View key={culture.id} style={styles.cultureItem}>
+                  <View style={styles.cultureHeader}>
+                    <View style={styles.cultureInfo}>
+                      <View
+                        style={[
+                          styles.cultureColor,
+                          { backgroundColor: culture.color || colors.primary[500] },
+                        ]}
+                      />
+                      <View style={styles.cultureDetails}>
+                        <Text variant="body" style={styles.cultureName}>
+                          {culture.name}
+                        </Text>
+                        <Text variant="caption" style={styles.cultureType}>
+                          {cultureTypes.find(t => t.value === culture.type)?.label || culture.type}
+                        </Text>
                       </View>
-                      <View style={styles.cultureActions}>
-                        <TouchableOpacity
-                          onPress={() => handleCreateProduct(culture)}
-                          style={styles.iconBtn}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <PlusIcon color={colors.primary[600]} size={20} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleRemoveCulture(culture.id)}
-                          style={styles.iconBtn}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <TrashIcon color={colors.semantic.error} size={20} />
-                        </TouchableOpacity>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Liste produits (expandable) */}
-                    {isExpanded && prods.length > 0 && (
-                      <View style={styles.productList}>
-                        {prods.map((product) => (
-                          <View key={product.id} style={styles.productItem}>
-                            <View style={styles.productInfo}>
-                              <Text style={styles.productName}>{product.name}</Text>
-                              <Text style={styles.productMeta}>
-                                {product.unit}
-                                {product.default_price_ht != null && ` • ${product.default_price_ht.toFixed(2)} €/unité HT`}
-                              </Text>
-                            </View>
-                            <View style={styles.productActions}>
-                              <TouchableOpacity
-                                onPress={() => handleEditProduct(product)}
-                                style={styles.iconBtnSmall}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <Text style={styles.editText}>Modifier</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleDeleteProduct(product, culture.id)}
-                                style={styles.iconBtnSmall}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <TrashIcon color={colors.semantic.error} size={16} />
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    {isExpanded && prods.length === 0 && (
-                      <Text style={styles.noProductsText}>Aucun produit associé à cette culture.</Text>
-                    )}
+                    </View>
+                    <View style={styles.cultureActions}>
+                      <TouchableOpacity
+                        onPress={() => handleRemoveCulture(culture.id)}
+                        style={styles.iconBtn}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <TrashIcon color={colors.semantic.error} size={20} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                );
-              })}
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -812,85 +639,6 @@ export default function CulturesListSettingsScreen({ onTitleChange, onBack }: Cu
         </View>
       </Modal>
 
-      {/* Modal Créer produit */}
-      <Modal
-        visible={showCreateProductModal}
-        onClose={() => {
-          setShowCreateProductModal(false);
-          setProductForCulture(null);
-          setNewProductName('');
-          setNewProductUnit('kg');
-          setNewProductPrice('');
-        }}
-        title={productForCulture ? `Créer un produit pour ${productForCulture.name}` : 'Créer un produit'}
-        primaryAction={{
-          title: 'Créer',
-          onPress: handleSaveProduct,
-          disabled: !newProductName.trim(),
-        }}
-      >
-        <View style={styles.modalContent}>
-          <Input
-            label="Nom du produit"
-            placeholder="Ex: Tomate"
-            value={newProductName}
-            onChangeText={setNewProductName}
-            containerStyle={styles.formInput}
-          />
-          <Input
-            label="Unité"
-            placeholder="kg, caisse, botte..."
-            value={newProductUnit}
-            onChangeText={setNewProductUnit}
-            containerStyle={styles.formInput}
-          />
-          <Input
-            label="Prix unitaire HT (optionnel)"
-            placeholder="Ex: 2.50"
-            value={newProductPrice}
-            onChangeText={setNewProductPrice}
-            keyboardType="numeric"
-            containerStyle={styles.formInput}
-          />
-        </View>
-      </Modal>
-
-      {/* Modal Éditer produit */}
-      <Modal
-        visible={showEditProductModal}
-        onClose={() => {
-          setShowEditProductModal(false);
-          setEditingProduct(null);
-        }}
-        title="Modifier le produit"
-        primaryAction={{
-          title: 'Enregistrer',
-          onPress: handleUpdateProduct,
-          disabled: !editProductName.trim(),
-        }}
-      >
-        <View style={styles.modalContent}>
-          <Input
-            label="Nom du produit"
-            value={editProductName}
-            onChangeText={setEditProductName}
-            containerStyle={styles.formInput}
-          />
-          <Input
-            label="Unité"
-            value={editProductUnit}
-            onChangeText={setEditProductUnit}
-            containerStyle={styles.formInput}
-          />
-          <Input
-            label="Prix unitaire HT (optionnel)"
-            value={editProductPrice}
-            onChangeText={setEditProductPrice}
-            keyboardType="numeric"
-            containerStyle={styles.formInput}
-          />
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -917,6 +665,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: colors.border.primary,
+    position: 'relative',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -950,7 +699,11 @@ const styles = StyleSheet.create({
   profilesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    marginHorizontal: -spacing.xs,
+    marginVertical: -spacing.xs,
+  },
+  profileChipWrapper: {
+    padding: spacing.xs,
   },
   profileChip: {
     flexDirection: 'row',
@@ -1022,55 +775,6 @@ const styles = StyleSheet.create({
   iconBtn: {
     padding: spacing.xs,
   },
-  productList: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.xs,
-  },
-  productItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray[100],
-  },
-  productInfo: {
-    flex: 1,
-  },
-  productName: {
-    fontSize: 14,
-    color: colors.text.primary,
-    fontWeight: '500',
-  },
-  productMeta: {
-    fontSize: 12,
-    color: colors.text.secondary,
-    marginTop: 2,
-  },
-  productActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  iconBtnSmall: {
-    padding: 4,
-  },
-  editText: {
-    fontSize: 13,
-    color: colors.primary[600],
-    fontWeight: '500',
-  },
-  noProductsText: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    fontStyle: 'italic',
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.primary,
-  },
   cultureInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1093,23 +797,6 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: spacing.xs / 2,
   },
-  productsCount: {
-    color: colors.gray[500],
-    marginTop: 2,
-    fontSize: 12,
-  },
-  createProductButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: spacing.xs,
-    alignSelf: 'flex-start',
-  },
-  createProductText: {
-    fontSize: 13,
-    color: colors.primary[600],
-    fontWeight: '500',
-  },
   removeButton: {
     padding: spacing.sm,
   },
@@ -1125,6 +812,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     borderRadius: 8,
     padding: spacing.sm,
+    overflow: 'hidden',
+    zIndex: 0,
   },
   searchResultsListMain: {
     maxHeight: 250,

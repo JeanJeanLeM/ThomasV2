@@ -9,18 +9,37 @@ import type { Product } from '../types';
 export class ProductService {
   static async getProducts(farmId: number): Promise<Product[]> {
     const { data, error } = await DirectSupabaseService.directSelect(
+      'v_products_with_today_price',
+      '*',
+      [
+        { column: 'farm_id', value: farmId },
+        { column: 'listing_status', value: 'listed' },
+      ]
+    );
+
+    if (!error) {
+      return (data ?? []) as Product[];
+    }
+
+    // Fallback de compatibilité: si la vue n'existe pas encore (ou colonnes absentes),
+    // revenir à la table products pour ne pas bloquer l'app.
+    const { data: fallbackData, error: fallbackError } = await DirectSupabaseService.directSelect(
       'products',
       '*',
       [
         { column: 'farm_id', value: farmId },
         { column: 'is_active', value: true },
+        { column: 'listing_status', value: 'listed' },
       ]
     );
-    if (error) {
+
+    if (fallbackError) {
       console.error('[ProductService] getProducts error:', error);
+      console.error('[ProductService] getProducts fallback error:', fallbackError);
       return [];
     }
-    return (data ?? []) as Product[];
+
+    return (fallbackData ?? []) as Product[];
   }
 
   static async getProductById(id: string): Promise<Product | null> {
@@ -41,6 +60,7 @@ export class ProductService {
       [
         { column: 'culture_id', value: cultureId },
         { column: 'is_active', value: true },
+        { column: 'listing_status', value: 'listed' },
       ]
     );
     if (error) return [];
@@ -56,6 +76,7 @@ export class ProductService {
       unit: params.unit,
       default_price_ht: params.default_price_ht ?? null,
       default_vat_rate: params.default_vat_rate ?? 5.5,
+      listing_status: params.listing_status ?? 'listed',
       is_active: true,
     });
     if (error) {
@@ -80,5 +101,37 @@ export class ProductService {
 
   static async deactivateProduct(id: string): Promise<boolean> {
     return this.updateProduct(id, { is_active: false });
+  }
+
+  static async createProductSalePrice(params: {
+    product_id: string;
+    farm_id: number;
+    canal_de_vente: string;
+    prix: number;
+    unite_prix: string;
+    pourcentage_vente?: number;
+    valid_week_start?: number | null;
+    valid_week_end?: number | null;
+    notes?: string | null;
+  }): Promise<boolean> {
+    const { error } = await DirectSupabaseService.directInsert('product_sale_prices', {
+      product_id: params.product_id,
+      farm_id: params.farm_id,
+      canal_de_vente: params.canal_de_vente,
+      prix: params.prix,
+      unite_prix: params.unite_prix,
+      pourcentage_vente: params.pourcentage_vente ?? 0,
+      valid_week_start: params.valid_week_start ?? null,
+      valid_week_end: params.valid_week_end ?? null,
+      notes: params.notes ?? null,
+      is_active: true,
+    });
+
+    if (error) {
+      console.error('[ProductService] createProductSalePrice error:', error);
+      return false;
+    }
+
+    return true;
   }
 }

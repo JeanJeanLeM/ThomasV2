@@ -12,7 +12,9 @@ import {
 import { Text, Button, Input } from '../design-system/components';
 import { useFarm } from '../contexts/FarmContext';
 import { InvoiceService } from '../services/InvoiceService';
-import type { Invoice } from '../types';
+import { CustomerService } from '../services/CustomerService';
+import { SupplierService } from '../services/SupplierService';
+import type { Invoice, InvoiceLine, Customer, Supplier } from '../types';
 import type { ScreenName } from '../contexts/NavigationContext';
 
 interface InvoicesListScreenProps {
@@ -26,6 +28,9 @@ type StatusFilter = 'all' | 'draft' | 'sent' | 'paid' | 'cancelled';
 export default function InvoicesListScreen({ navigation, onNavigate }: InvoicesListScreenProps) {
   const { activeFarm } = useFarm();
   const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
+  const [customersMap, setCustomersMap] = useState<Record<string, Customer>>({});
+  const [suppliersMap, setSuppliersMap] = useState<Record<string, Supplier>>({});
+  const [linesMap, setLinesMap] = useState<Record<string, InvoiceLine[]>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<TabType>('outgoing');
@@ -34,15 +39,29 @@ export default function InvoicesListScreen({ navigation, onNavigate }: InvoicesL
 
   const loadInvoices = async (isRefresh = false) => {
     if (!activeFarm?.farm_id) return;
-    if (isRefresh) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     try {
-      // Load all invoices for the farm so we can compute stats
-      const { data } = await InvoiceService.getInvoices(activeFarm.farm_id, {});
-      setAllInvoices(data ?? []);
+      const [{ data: invoices }, customers, suppliers] = await Promise.all([
+        InvoiceService.getInvoices(activeFarm.farm_id, {}),
+        CustomerService.getCustomers(activeFarm.farm_id),
+        SupplierService.getSuppliers(activeFarm.farm_id),
+      ]);
+      const invList = invoices ?? [];
+      setAllInvoices(invList);
+
+      const cMap: Record<string, Customer> = {};
+      customers.forEach((c) => { cMap[c.id] = c; });
+      setCustomersMap(cMap);
+
+      const sMap: Record<string, Supplier> = {};
+      suppliers.forEach((s) => { sMap[s.id] = s; });
+      setSuppliersMap(sMap);
+
+      // Charger les lignes en batch
+      const ids = invList.map((i) => i.id);
+      const lines = await InvoiceService.getLinesBatch(ids);
+      setLinesMap(lines);
     } catch (e) {
       console.error('[InvoicesList] load error:', e);
     } finally {
@@ -91,7 +110,10 @@ export default function InvoicesListScreen({ navigation, onNavigate }: InvoicesL
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter((i) => {
-        const haystack = [i.invoice_number, i.notes ?? ''].join(' ').toLowerCase();
+        const counterpartyName = i.direction === 'outgoing'
+          ? (i.customer_id ? customersMap[i.customer_id]?.company_name ?? '' : '')
+          : (i.supplier_id ? suppliersMap[i.supplier_id]?.company_name ?? '' : '');
+        const haystack = [i.invoice_number, i.notes ?? '', counterpartyName].join(' ').toLowerCase();
         return haystack.includes(q);
       });
     }
@@ -99,7 +121,7 @@ export default function InvoicesListScreen({ navigation, onNavigate }: InvoicesL
     return list.sort(
       (a, b) => new Date(b.invoice_date).getTime() - new Date(a.invoice_date).getTime()
     );
-  }, [allInvoices, tab, statusFilter, searchQuery]);
+  }, [allInvoices, tab, statusFilter, searchQuery, customersMap, suppliersMap]);
 
   // ── Status counts for current tab ──
   const statusCounts = useMemo(() => {
@@ -387,54 +409,93 @@ export default function InvoicesListScreen({ navigation, onNavigate }: InvoicesL
               </View>
             ) : (
               <View style={styles.invoicesList}>
-                {filteredInvoices.map((inv) => (
+                {filteredInvoices.map((inv) => {
+                  const counterpartyName = inv.direction === 'outgoing'
+                    ? (inv.customer_id ? customersMap[inv.customer_id]?.company_name : undefined)
+                    : (inv.supplier_id ? suppliersMap[inv.supplier_id]?.company_name : undefined);
+
+                  const invLines = linesMap[inv.id] ?? [];
+                  const topLines = [...invLines]
+                    .sort((a, b) => (b.total_ttc ?? b.quantity * b.unit_price_ht) - (a.total_ttc ?? a.quantity * a.unit_price_ht))
+                    .slice(0, 2);
+
+                  const sColor = statusColor(inv.status);
+
+                  return (
                   <TouchableOpacity
                     key={inv.id}
                     style={styles.invoiceCard}
                     onPress={() => handleInvoicePress(inv)}
                     activeOpacity={0.7}
                   >
+                    {/* ── Row 1 : icône + numéro + montant ── */}
                     <View style={styles.invoiceCardHeader}>
                       <View style={styles.invoiceCardLeft}>
-                        <View style={[styles.invoiceIcon, { backgroundColor: statusColor(inv.status) + '15' }]}>
-                          <DocumentTextIcon color={statusColor(inv.status)} size={20} />
+                        <View style={[styles.invoiceIcon, { backgroundColor: sColor + '15' }]}>
+                          <DocumentTextIcon color={sColor} size={20} />
                         </View>
                         <View style={styles.invoiceCardInfo}>
                           <Text style={styles.invoiceNumber}>{inv.invoice_number}</Text>
                           <Text style={styles.invoiceDate}>
                             {new Date(inv.invoice_date).toLocaleDateString('fr-FR', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
+                              day: 'numeric', month: 'short', year: 'numeric',
                             })}
                           </Text>
                         </View>
                       </View>
                       <View style={styles.invoiceCardRight}>
-                        <Text style={[styles.invoiceTotal, { color: statusColor(inv.status) }]}>
+                        <Text style={[styles.invoiceTotal, { color: sColor }]}>
                           {formatCurrency(inv.total_ttc ?? 0)}
                         </Text>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: statusColor(inv.status) + '18' },
-                          ]}
-                        >
-                          <Text
-                            style={[styles.statusText, { color: statusColor(inv.status) }]}
-                          >
+                        <View style={[styles.statusBadge, { backgroundColor: sColor + '18' }]}>
+                          <Text style={[styles.statusText, { color: sColor }]}>
                             {statusLabel(inv.status)}
                           </Text>
                         </View>
                       </View>
                     </View>
+
+                    {/* ── Row 2 : nom du tiers ── */}
+                    {counterpartyName && (
+                      <View style={styles.counterpartyRow}>
+                        <Text style={styles.counterpartyLabel}>
+                          {inv.direction === 'outgoing' ? 'Client' : 'Fournisseur'}
+                        </Text>
+                        <Text style={styles.counterpartyName} numberOfLines={1}>
+                          {counterpartyName}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* ── Row 3 : top produits ── */}
+                    {topLines.length > 0 && (
+                      <View style={styles.linesPreview}>
+                        {topLines.map((l, idx) => (
+                          <View key={idx} style={styles.linePreviewRow}>
+                            <View style={styles.linePreviewDot} />
+                            <Text style={styles.linePreviewName} numberOfLines={1}>
+                              {l.product_name}
+                            </Text>
+                            <Text style={styles.linePreviewAmt}>
+                              {formatCurrency(l.total_ttc ?? l.quantity * l.unit_price_ht * (1 + l.vat_rate / 100))}
+                            </Text>
+                          </View>
+                        ))}
+                        {invLines.length > 2 && (
+                          <Text style={styles.moreLines}>+{invLines.length - 2} ligne{invLines.length - 2 > 1 ? 's' : ''}</Text>
+                        )}
+                      </View>
+                    )}
+
+                    {/* ── Notes ── */}
                     {inv.notes && (
                       <Text style={styles.invoiceNotes} numberOfLines={1}>
                         {inv.notes}
                       </Text>
                     )}
                   </TouchableOpacity>
-                ))}
+                  );
+                })}
 
                 {filteredInvoices.length === 0 && (
                   <View style={styles.emptyFilterState}>
@@ -775,6 +836,67 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
+  // Counterparty row
+  counterpartyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    gap: spacing.xs,
+  },
+  counterpartyLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.gray[400],
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    flexShrink: 0,
+  },
+  counterpartyName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text.primary,
+    flex: 1,
+  },
+
+  // Lines preview
+  linesPreview: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[100],
+    gap: 4,
+  },
+  linePreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  linePreviewDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.primary[400],
+    flexShrink: 0,
+  },
+  linePreviewName: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.text.secondary,
+  },
+  linePreviewAmt: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text.primary,
+    marginLeft: spacing.xs,
+  },
+  moreLines: {
+    fontSize: 11,
+    color: colors.gray[400],
+    fontStyle: 'italic',
+    marginTop: 2,
+    marginLeft: 13,
+  },
+
   invoiceNotes: {
     fontSize: 13,
     color: colors.gray[500],

@@ -4,6 +4,7 @@
  */
 
 import { DirectSupabaseService } from './DirectSupabaseService';
+import { supabase } from '../utils/supabase';
 import type { Invoice, InvoiceLine } from '../types';
 
 export interface InvoiceFilters {
@@ -148,6 +149,53 @@ export class InvoiceService {
     return invoice;
   }
 
+  static async updateInvoice(id: string, input: Omit<CreateInvoiceInput, 'farm_id' | 'user_id'>): Promise<Invoice | null> {
+    const { error: invError } = await DirectSupabaseService.directUpdate(
+      'invoices',
+      {
+        direction: input.direction,
+        document_type: input.document_type ?? 'invoice',
+        customer_id: input.direction === 'outgoing' ? input.customer_id ?? null : null,
+        supplier_id: input.direction === 'incoming' ? input.supplier_id ?? null : null,
+        invoice_date: input.invoice_date ?? new Date().toISOString().slice(0, 10),
+        delivery_date: input.delivery_date ?? null,
+        delivery_location: input.delivery_location ?? null,
+        payment_due_date: input.payment_due_date ?? null,
+        status: input.status ?? 'sent',
+        notes: input.notes ?? null,
+      },
+      [{ column: 'id', value: id }]
+    );
+
+    if (invError) {
+      console.error('[InvoiceService] updateInvoice error:', invError);
+      return null;
+    }
+
+    // Remplacer toutes les lignes
+    await DirectSupabaseService.directDelete('invoice_lines', [{ column: 'invoice_id', value: id }]);
+
+    for (let i = 0; i < input.lines.length; i++) {
+      const line = input.lines[i];
+      // total_ht / total_vat / total_ttc sont des colonnes GENERATED — ne pas les inclure
+      const { error: lineError } = await DirectSupabaseService.directInsert('invoice_lines', {
+        invoice_id: id,
+        product_id: line.product_id ?? null,
+        product_name: line.product_name,
+        quantity: line.quantity,
+        unit: line.unit,
+        unit_price_ht: line.unit_price_ht,
+        vat_rate: line.vat_rate,
+        line_order: line.line_order ?? i,
+        notes: line.notes ?? null,
+      });
+      if (lineError) console.error('[InvoiceService] updateInvoice line error:', lineError);
+    }
+
+    const { invoice } = await this.getInvoiceById(id);
+    return invoice;
+  }
+
   static async updateInvoiceStatus(id: string, status: 'draft' | 'sent' | 'paid' | 'cancelled'): Promise<boolean> {
     const { error } = await DirectSupabaseService.directUpdate(
       'invoices',
@@ -163,5 +211,21 @@ export class InvoiceService {
 
   static async deleteInvoice(id: string): Promise<boolean> {
     return this.updateInvoiceStatus(id, 'cancelled');
+  }
+
+  /** Charge les lignes pour un ensemble de factures en une seule requête */
+  static async getLinesBatch(invoiceIds: string[]): Promise<Record<string, InvoiceLine[]>> {
+    if (!invoiceIds.length) return {};
+    const { data, error } = await supabase
+      .from('invoice_lines')
+      .select('*')
+      .in('invoice_id', invoiceIds);
+    if (error || !data) return {};
+    const map: Record<string, InvoiceLine[]> = {};
+    for (const line of data as InvoiceLine[]) {
+      if (!map[line.invoice_id]) map[line.invoice_id] = [];
+      map[line.invoice_id].push(line);
+    }
+    return map;
   }
 }

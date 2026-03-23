@@ -15,25 +15,52 @@ import {
   Text,
   Button,
   Input,
+  DropdownSelector,
   StandardFormModal,
   FormSection,
   RowFields,
   FieldWrapper,
   EnhancedInput,
 } from '../design-system/components';
+import type { DropdownItem } from '../design-system/components/DropdownSelector';
 import { useFarm } from '../contexts/FarmContext';
+import { useAuth } from '../contexts/AuthContext';
 import { ProductService } from '../services/ProductService';
-import type { Product } from '../types';
+import { cultureService } from '../services/CultureService';
+import { userCulturePreferencesService } from '../services/UserCulturePreferencesService';
+import type { Product, Culture } from '../types';
 
 interface ProductsListScreenProps {
   navigation: { goBack: () => void };
 }
 
 const DEFAULT_VAT = 5.5;
+const SALES_CHANNELS: DropdownItem[] = [
+  { id: 'vente_directe', label: 'Vente directe' },
+  { id: 'marche', label: 'Marché' },
+  { id: 'amap', label: 'AMAP' },
+  { id: 'grossiste', label: 'Grossiste' },
+  { id: 'restauration', label: 'Restauration' },
+  { id: 'magasin', label: 'Magasin' },
+  { id: 'autre', label: 'Autre' },
+];
+const PRICE_UNITS: DropdownItem[] = [
+  { id: 'kg', label: 'kg' },
+  { id: 'g', label: 'g' },
+  { id: 'piece', label: 'pièce' },
+  { id: 'botte', label: 'botte' },
+  { id: 'caisse', label: 'caisse' },
+  { id: 'panier', label: 'panier' },
+  { id: 'l', label: 'L' },
+  { id: 'ml', label: 'mL' },
+];
 
 export default function ProductsListScreen({ navigation }: ProductsListScreenProps) {
   const { activeFarm } = useFarm();
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [cultures, setCultures] = useState<Culture[]>([]);
+  const [preferredCultureIds, setPreferredCultureIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +71,14 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
   const [formUnit, setFormUnit] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formVat, setFormVat] = useState(String(DEFAULT_VAT));
+  const [selectedCulture, setSelectedCulture] = useState<DropdownItem[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<DropdownItem[]>([]);
+  const [selectedPriceUnit, setSelectedPriceUnit] = useState<DropdownItem[]>([]);
+  const [salesPercentage, setSalesPercentage] = useState('0');
+  const [isYearRound, setIsYearRound] = useState(true);
+  const [weekStart, setWeekStart] = useState('');
+  const [weekEnd, setWeekEnd] = useState('');
+  const [saleNotes, setSaleNotes] = useState('');
 
   const loadProducts = async (isRefresh = false) => {
     if (!activeFarm?.farm_id) return;
@@ -62,7 +97,37 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
 
   useEffect(() => {
     loadProducts();
-  }, [activeFarm?.farm_id]);
+    const loadCultures = async () => {
+      if (!activeFarm?.farm_id) return;
+      try {
+        const [allCultures, preferences] = await Promise.all([
+          cultureService.getCultures(activeFarm.farm_id),
+          user?.id
+            ? userCulturePreferencesService.getUserPreferences(user.id, activeFarm.farm_id)
+            : Promise.resolve(null),
+        ]);
+        setCultures(allCultures);
+        setPreferredCultureIds(preferences?.cultureIds ?? []);
+      } catch (e) {
+        console.error('[ProductsList] cultures load error:', e);
+        setPreferredCultureIds([]);
+      }
+    };
+
+    loadCultures();
+  }, [activeFarm?.farm_id, user?.id]);
+
+  const cultureItems = useMemo<DropdownItem[]>(() => {
+    const preferredSet = new Set(preferredCultureIds);
+    const preferred = cultures.filter((c) => preferredSet.has(c.id));
+    const others = cultures.filter((c) => !preferredSet.has(c.id));
+
+    return [
+      { id: 'all', label: 'Toutes les cultures' },
+      ...preferred.map((c) => ({ id: String(c.id), label: c.name })),
+      ...others.map((c) => ({ id: String(c.id), label: c.name })),
+    ];
+  }, [cultures, preferredCultureIds]);
 
   const filteredProducts = useMemo(() => {
     if (!searchQuery.trim()) return products;
@@ -76,6 +141,14 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
     setFormUnit('');
     setFormPrice('');
     setFormVat(String(DEFAULT_VAT));
+    setSelectedCulture([{ id: 'all', label: 'Toutes les cultures' }]);
+    setSelectedChannel([]);
+    setSelectedPriceUnit([]);
+    setSalesPercentage('0');
+    setIsYearRound(true);
+    setWeekStart('');
+    setWeekEnd('');
+    setSaleNotes('');
     setShowForm(true);
   };
 
@@ -85,6 +158,13 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
     setFormUnit(product.unit || '');
     setFormPrice(product.default_price_ht != null ? String(product.default_price_ht) : '');
     setFormVat(product.default_vat_rate != null ? String(product.default_vat_rate) : String(DEFAULT_VAT));
+    if (product.culture_id != null) {
+      const foundCulture = cultures.find((c) => c.id === product.culture_id);
+      if (foundCulture) setSelectedCulture([{ id: String(foundCulture.id), label: foundCulture.name }]);
+      else setSelectedCulture([{ id: String(product.culture_id), label: `Culture #${product.culture_id}` }]);
+    } else {
+      setSelectedCulture([{ id: 'all', label: 'Toutes les cultures' }]);
+    }
     setShowForm(true);
   };
 
@@ -102,6 +182,14 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
     const unit = formUnit.trim() || 'u';
     const priceNum = formPrice.trim() ? parseFloat(formPrice.replace(',', '.')) : null;
     const vatNum = formVat.trim() ? parseFloat(formVat.replace(',', '.')) : DEFAULT_VAT;
+    const salesPctNum = salesPercentage.trim() ? parseFloat(salesPercentage.replace(',', '.')) : 0;
+    const weekStartNum = weekStart.trim() ? parseInt(weekStart, 10) : null;
+    const weekEndNum = weekEnd.trim() ? parseInt(weekEnd, 10) : null;
+    const selectedCultureId =
+      selectedCulture.length > 0 && selectedCulture[0].id !== 'all'
+        ? parseInt(selectedCulture[0].id, 10)
+        : null;
+
     if (priceNum != null && (isNaN(priceNum) || priceNum < 0)) {
       Alert.alert('Prix invalide', 'Saisissez un prix HT valide.');
       return;
@@ -110,11 +198,38 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
       Alert.alert('TVA invalide', 'Saisissez un taux de TVA entre 0 et 100.');
       return;
     }
+    if (!editingProduct && (priceNum == null || isNaN(priceNum) || priceNum <= 0)) {
+      Alert.alert('Prix requis', 'Le prix de vente doit être supérieur à 0.');
+      return;
+    }
+    if (!editingProduct && selectedChannel.length === 0) {
+      Alert.alert('Canal requis', 'Sélectionnez un canal de vente.');
+      return;
+    }
+    if (!editingProduct && selectedPriceUnit.length === 0) {
+      Alert.alert('Unité de prix requise', 'Sélectionnez une unité de prix.');
+      return;
+    }
+    if (isNaN(salesPctNum) || salesPctNum < 0 || salesPctNum > 100) {
+      Alert.alert('Pourcentage invalide', 'Saisissez une valeur entre 0 et 100.');
+      return;
+    }
+    if (!isYearRound) {
+      if (weekStartNum == null || weekEndNum == null || isNaN(weekStartNum) || isNaN(weekEndNum)) {
+        Alert.alert('Période invalide', 'Renseignez les semaines de début et de fin (1 à 53).');
+        return;
+      }
+      if (weekStartNum < 1 || weekStartNum > 53 || weekEndNum < 1 || weekEndNum > 53) {
+        Alert.alert('Période invalide', 'Les semaines doivent être comprises entre 1 et 53.');
+        return;
+      }
+    }
 
     setSubmitLoading(true);
     try {
       if (editingProduct) {
         const ok = await ProductService.updateProduct(editingProduct.id, {
+          culture_id: selectedCultureId,
           name,
           unit,
           default_price_ht: priceNum,
@@ -124,7 +239,14 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
           setProducts((prev) =>
             prev.map((p) =>
               p.id === editingProduct.id
-                ? { ...p, name, unit, default_price_ht: priceNum, default_vat_rate: vatNum }
+                ? {
+                    ...p,
+                    culture_id: selectedCultureId,
+                    name,
+                    unit,
+                    default_price_ht: priceNum,
+                    default_vat_rate: vatNum,
+                  }
                 : p
             )
           );
@@ -140,12 +262,33 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
         }
         const result = await ProductService.createProduct({
           farm_id: activeFarm.farm_id,
+          culture_id: selectedCultureId,
           name,
           unit,
           default_price_ht: priceNum,
           default_vat_rate: vatNum,
+          listing_status: 'listed',
         });
         if (result?.id) {
+          const priceCreated = await ProductService.createProductSalePrice({
+            product_id: result.id,
+            farm_id: activeFarm.farm_id,
+            canal_de_vente: selectedChannel[0].id,
+            prix: priceNum ?? 0,
+            unite_prix: selectedPriceUnit[0].id,
+            pourcentage_vente: salesPctNum,
+            valid_week_start: isYearRound ? null : weekStartNum,
+            valid_week_end: isYearRound ? null : weekEndNum,
+            notes: saleNotes.trim() ? saleNotes.trim() : null,
+          });
+
+          if (!priceCreated) {
+            Alert.alert(
+              'Prix non créé',
+              'Le produit a été créé mais le prix de vente initial a échoué. Vérifiez la table product_sale_prices.'
+            );
+          }
+
           const list = await ProductService.getProducts(activeFarm.farm_id);
           setProducts(list);
           closeForm();
@@ -202,15 +345,12 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
           </View>
 
           <View style={styles.searchRow}>
-            <View style={styles.searchInputWrap}>
-              <SearchIcon color={colors.gray[400]} size={20} style={styles.searchIcon} />
-              <Input
-                placeholder="Rechercher un produit..."
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                containerStyle={styles.searchInput}
-              />
-            </View>
+            <Input
+              placeholder="Rechercher un produit..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              leftIcon={<SearchIcon color={colors.gray[400]} size={18} />}
+            />
           </View>
 
           {filteredProducts.length === 0 ? (
@@ -270,7 +410,16 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
         }}
         secondaryAction={{ title: 'Annuler', onPress: closeForm }}
       >
-        <FormSection title="Informations" description="Nom et unité du produit">
+        <FormSection title="Identité produit" description="1) Culture 2) Produit 3) Unité produit">
+          <DropdownSelector
+            label="Culture"
+            placeholder="Sélectionner une culture"
+            items={cultureItems}
+            selectedItems={selectedCulture}
+            onSelectionChange={setSelectedCulture}
+            searchable
+            filterable={false}
+          />
           <EnhancedInput
             label="Nom du produit"
             value={formName}
@@ -279,34 +428,133 @@ export default function ProductsListScreen({ navigation }: ProductsListScreenPro
             required
           />
           <EnhancedInput
-            label="Unité"
+            label="Unité produit"
             value={formUnit}
             onChangeText={setFormUnit}
             placeholder="ex. kg, L, t, u..."
           />
         </FormSection>
-        <FormSection title="Tarification" description="Prix par défaut pour les factures">
-          <RowFields>
-            <FieldWrapper flex={1}>
-              <EnhancedInput
-                label="Prix HT (€)"
-                value={formPrice}
-                onChangeText={setFormPrice}
-                placeholder="0,00"
-                keyboardType="decimal-pad"
-              />
-            </FieldWrapper>
-            <FieldWrapper flex={1}>
-              <EnhancedInput
-                label="TVA (%)"
-                value={formVat}
-                onChangeText={setFormVat}
-                placeholder="5,5"
-                keyboardType="decimal-pad"
-              />
-            </FieldWrapper>
-          </RowFields>
-        </FormSection>
+        {!editingProduct && (
+          <FormSection title="Conditions de vente" description="3) Prix 4) Unités 5) TVA 6) Canal 7) % du canal">
+            <EnhancedInput
+              label="Prix de vente (€)"
+              value={formPrice}
+              onChangeText={setFormPrice}
+              placeholder="0,00"
+              keyboardType="decimal-pad"
+              required
+            />
+            <RowFields>
+              <FieldWrapper flex={1}>
+                <DropdownSelector
+                  label="Unité de prix"
+                  placeholder="Sélectionner une unité"
+                  items={PRICE_UNITS}
+                  selectedItems={selectedPriceUnit}
+                  onSelectionChange={setSelectedPriceUnit}
+                  searchable={false}
+                  filterable={false}
+                  required
+                />
+              </FieldWrapper>
+              <FieldWrapper flex={1}>
+                <EnhancedInput
+                  label="TVA (%)"
+                  value={formVat}
+                  onChangeText={setFormVat}
+                  placeholder="5,5"
+                  keyboardType="decimal-pad"
+                />
+              </FieldWrapper>
+            </RowFields>
+            <DropdownSelector
+              label="Canal de vente"
+              placeholder="Sélectionner un canal"
+              items={SALES_CHANNELS}
+              selectedItems={selectedChannel}
+              onSelectionChange={setSelectedChannel}
+              searchable={false}
+              filterable={false}
+              required
+            />
+            <EnhancedInput
+              label="% des ventes par canal"
+              value={salesPercentage}
+              onChangeText={setSalesPercentage}
+              placeholder="0"
+              keyboardType="decimal-pad"
+            />
+          </FormSection>
+        )}
+        {editingProduct && (
+          <FormSection title="Tarification" description="Prix et TVA par défaut du produit">
+            <RowFields>
+              <FieldWrapper flex={1}>
+                <EnhancedInput
+                  label="Prix HT (€)"
+                  value={formPrice}
+                  onChangeText={setFormPrice}
+                  placeholder="0,00"
+                  keyboardType="decimal-pad"
+                />
+              </FieldWrapper>
+              <FieldWrapper flex={1}>
+                <EnhancedInput
+                  label="TVA (%)"
+                  value={formVat}
+                  onChangeText={setFormVat}
+                  placeholder="5,5"
+                  keyboardType="decimal-pad"
+                />
+              </FieldWrapper>
+            </RowFields>
+          </FormSection>
+        )}
+        {!editingProduct && (
+          <FormSection title="Validité & notes" description="8) Toute l'année / début-fin 9) Notes">
+            <TouchableOpacity
+              style={styles.checkboxRow}
+              onPress={() => setIsYearRound((prev) => !prev)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.checkbox, isYearRound && styles.checkboxChecked]}>
+                {isYearRound && <Text style={styles.checkboxTick}>✓</Text>}
+              </View>
+              <Text variant="body" style={styles.checkboxLabel}>
+                Toute l'année
+              </Text>
+            </TouchableOpacity>
+            {!isYearRound && (
+              <RowFields>
+                <FieldWrapper flex={1}>
+                  <EnhancedInput
+                    label="Semaine début"
+                    value={weekStart}
+                    onChangeText={setWeekStart}
+                    placeholder="1 à 53"
+                    keyboardType="number-pad"
+                  />
+                </FieldWrapper>
+                <FieldWrapper flex={1}>
+                  <EnhancedInput
+                    label="Semaine fin"
+                    value={weekEnd}
+                    onChangeText={setWeekEnd}
+                    placeholder="1 à 53"
+                    keyboardType="number-pad"
+                  />
+                </FieldWrapper>
+              </RowFields>
+            )}
+            <EnhancedInput
+              label="Notes"
+              value={saleNotes}
+              onChangeText={setSaleNotes}
+              placeholder="Notes supplémentaires..."
+              multiline
+            />
+          </FormSection>
+        )}
       </StandardFormModal>
     </>
   );
@@ -338,9 +586,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   searchRow: { marginBottom: spacing.md },
-  searchInputWrap: { position: 'relative' },
-  searchIcon: { position: 'absolute', left: 12, top: 14, zIndex: 1 },
-  searchInput: { paddingLeft: 40 },
   emptyCard: {
     backgroundColor: colors.background.secondary,
     borderRadius: 12,
@@ -374,4 +619,32 @@ const styles = StyleSheet.create({
   cardBody: { flex: 1 },
   cardTitle: { color: colors.text.primary },
   cardMeta: { color: colors.text.secondary, marginTop: 2 },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+    backgroundColor: colors.background.secondary,
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
+  },
+  checkboxTick: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  checkboxLabel: {
+    color: colors.text.primary,
+  },
 });

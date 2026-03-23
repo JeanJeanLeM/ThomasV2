@@ -1,12 +1,96 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { Screen, Text, Button, Card } from '../design-system/components';
+import { Screen, Text, Button } from '../design-system/components';
 import { colors } from '../design-system/colors';
 import { typography } from '../design-system/typography';
-import { FarmAgentConfigService, MethodComparisonStats } from '../services/agent/FarmAgentConfigService';
+import { spacing } from '../design-system/spacing';
+import { FarmAgentConfigService, MethodComparisonStats, AgentMethodMetrics } from '../services/agent/FarmAgentConfigService';
 import { supabase } from '../utils/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { showAlert } from '../utils/webAlert';
+import { Ionicons } from '@expo/vector-icons';
+
+interface MethodCardProps {
+  active: boolean;
+  accentColor: string;
+  emoji: string;
+  title: string;
+  shortMeta: string;
+  features: { icon: string; label: string }[];
+  stats: AgentMethodMetrics | undefined;
+  onActivate: () => void;
+  activateLabel: string;
+  activateVariant: 'primary' | 'secondary';
+}
+
+function AgentMethodCard({
+  active,
+  accentColor,
+  emoji,
+  title,
+  shortMeta,
+  features,
+  stats,
+  onActivate,
+  activateLabel,
+  activateVariant,
+}: MethodCardProps) {
+  const hasStats = stats && stats.total_count > 0;
+
+  return (
+    <View style={[styles.cardShell, active && styles.cardShellActive]}>
+      <View style={[styles.accentBar, { backgroundColor: accentColor }]} />
+      <View style={styles.cardInner}>
+        <View style={styles.headerRow}>
+          <View style={styles.iconCircle}>
+            <Text style={styles.iconCircleEmoji}>{emoji}</Text>
+          </View>
+          <View style={styles.shortTexts}>
+            <View style={styles.titleRow}>
+              <Text style={styles.cardTitle} numberOfLines={1}>
+                {title}
+              </Text>
+              {active && (
+                <View style={styles.pillActive}>
+                  <Text style={styles.pillActiveText}>Actif</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.shortMeta}>{shortMeta}</Text>
+          </View>
+        </View>
+
+        <View style={styles.details}>
+          <View style={styles.featureGrid}>
+            {features.map((f) => (
+              <View key={f.label} style={styles.featureChip}>
+                <Text style={styles.featureChipIcon}>{f.icon}</Text>
+                <Text style={styles.featureChipText}>{f.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {hasStats && (
+            <View style={styles.statsInline}>
+              <Text style={styles.statsInlineText}>
+                {stats!.success_count}/{stats!.total_count} succès · {stats!.success_rate}%
+              </Text>
+            </View>
+          )}
+
+          {!active && (
+            <Button
+              title={activateLabel}
+              onPress={onActivate}
+              variant={activateVariant}
+              style={styles.activateBtn}
+            />
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
 
 /**
  * Écran de paramètres ferme - Configuration Agent IA
@@ -14,7 +98,7 @@ import { showAlert } from '../utils/webAlert';
 export default function FarmSettingsScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [currentMethod, setCurrentMethod] = useState<'simple' | 'pipeline'>('simple');
+  const [currentMethod, setCurrentMethod] = useState<'simple' | 'pipeline'>('pipeline');
   const [stats, setStats] = useState<MethodComparisonStats | null>(null);
   const [farmId, setFarmId] = useState<number | null>(null);
 
@@ -28,7 +112,6 @@ export default function FarmSettingsScreen() {
     try {
       setLoading(true);
 
-      // Récupérer l'ID de ferme active
       const { data: profile } = await supabase
         .from('profiles')
         .select('latest_active_farm_id')
@@ -42,14 +125,11 @@ export default function FarmSettingsScreen() {
 
       setFarmId(profile.latest_active_farm_id);
 
-      // Charger la configuration
       const config = await configService.getFarmConfig(profile.latest_active_farm_id);
       setCurrentMethod(config.agent_method);
 
-      // Charger les statistiques
       const comparisonStats = await configService.getMethodComparisonStats(profile.latest_active_farm_id);
       setStats(comparisonStats);
-
     } catch (error) {
       console.error('Error loading config:', error);
       showAlert('Erreur', 'Impossible de charger la configuration');
@@ -61,52 +141,39 @@ export default function FarmSettingsScreen() {
   const handleMethodChange = async (method: 'simple' | 'pipeline') => {
     if (!farmId) return;
 
-    console.log('🔧 [FarmSettings] Changement méthode demandé:', method);
+    const methodName = method === 'simple' ? 'Simple' : 'Pipeline';
 
-    const methodName = method === 'simple' ? 'Simple (rapide)' : 'Pipeline (avancée)';
-    
-    // showAlert avec callback pour web compatibility
     showAlert(
-      'Changer de méthode d\'analyse',
-      `Voulez-vous passer à la méthode ${methodName} ?`,
+      'Changer de méthode',
+      `Passer à la méthode ${methodName} ?`,
       [
-        { 
-          text: 'Annuler', 
+        {
+          text: 'Annuler',
           style: 'cancel',
-          onPress: () => console.log('❌ [FarmSettings] Changement annulé')
+          onPress: () => {},
         },
-        { 
-          text: 'Confirmer', 
+        {
+          text: 'Confirmer',
           style: 'default',
           onPress: async () => {
-            console.log('✅ [FarmSettings] Changement confirmé, début mise à jour...');
             try {
               setLoading(true);
-              console.log('📡 [FarmSettings] Appel updateAgentMethod...');
-              
               await configService.updateAgentMethod(
                 farmId,
                 method,
                 `Changement utilisateur depuis paramètres`
               );
-              
-              console.log('✅ [FarmSettings] Méthode mise à jour en DB');
               setCurrentMethod(method);
-              
-              console.log('📡 [FarmSettings] Rechargement configuration...');
               await loadConfiguration();
-              
-              console.log('✅ [FarmSettings] Configuration rechargée');
-              showAlert('✅ Succès', `Méthode ${method} activée`);
+              showAlert('Succès', `${methodName} activé`);
             } catch (error) {
-              console.error('❌ [FarmSettings] Error updating method:', error);
+              console.error('Error updating method:', error);
               showAlert('Erreur', 'Impossible de changer la méthode');
             } finally {
               setLoading(false);
-              console.log('🏁 [FarmSettings] Processus terminé');
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -115,159 +182,86 @@ export default function FarmSettingsScreen() {
     return (
       <Screen>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary[500]} />
           <Text style={styles.loadingText}>Chargement...</Text>
         </View>
       </Screen>
     );
   }
 
+  const pipelineFeatures = [
+    { icon: '🧠', label: '6 étapes' },
+    { icon: '🎯', label: 'Tools auto' },
+    { icon: '🔧', label: 'Évolutif' },
+    { icon: '⏱️', label: '~5–8 s' },
+  ];
+  const simpleFeatures = [
+    { icon: '⚡', label: '~2–3 s' },
+    { icon: '✅', label: 'Stable' },
+    { icon: '💰', label: '1 appel IA' },
+  ];
+
   return (
-    <Screen>
-      <ScrollView style={styles.container}>
-        {/* En-tête */}
+    <Screen backgroundColor={colors.background.primary}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Assistant IA Thomas</Text>
-          <Text style={styles.subtitle}>
-            Choisissez la méthode d'analyse des messages
-          </Text>
+          <Text style={styles.subtitle}>Méthode d’analyse des messages</Text>
         </View>
 
-        {/* Méthode Simple */}
-        <Card style={[
-          styles.methodCard,
-          currentMethod === 'simple' && styles.activeCard
-        ]}>
-          <View style={styles.methodHeader}>
-            <View style={styles.methodTitleRow}>
-              <Text style={styles.methodTitle}>⚡ Méthode Simple</Text>
-              {currentMethod === 'simple' && (
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>ACTIVE</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.methodSubtitle}>Analyse rapide en un appel</Text>
-          </View>
+        <AgentMethodCard
+          active={currentMethod === 'pipeline'}
+          accentColor={colors.secondary.purple}
+          emoji="🔬"
+          title="Pipeline"
+          shortMeta="Recommandé · multi-étapes · outils auto · ~5–8 s"
+          features={pipelineFeatures}
+          stats={stats ? stats.pipeline : undefined}
+          onActivate={() => handleMethodChange('pipeline')}
+          activateLabel="Activer Pipeline"
+          activateVariant="primary"
+        />
 
-          <View style={styles.methodContent}>
-            <View style={styles.featureRow}>
-              <Text style={styles.featureIcon}>⚡</Text>
-              <Text style={styles.featureText}>Rapide: ~2-3 secondes</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Text style={styles.featureIcon}>✅</Text>
-              <Text style={styles.featureText}>Fiable et testée</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Text style={styles.featureIcon}>💰</Text>
-              <Text style={styles.featureText}>Économique (1 appel IA)</Text>
-            </View>
+        <AgentMethodCard
+          active={currentMethod === 'simple'}
+          accentColor={colors.secondary.orange}
+          emoji="⚡"
+          title="Simple"
+          shortMeta="Un seul appel IA · rapide · ~2–3 s"
+          features={simpleFeatures}
+          stats={stats ? stats.simple : undefined}
+          onActivate={() => handleMethodChange('simple')}
+          activateLabel="Activer Simple"
+          activateVariant="secondary"
+        />
 
-            {stats && stats.simple.total_count > 0 && (
-              <View style={styles.statsBox}>
-                <Text style={styles.statsTitle}>Statistiques</Text>
-                <Text style={styles.statsText}>
-                  ✓ {stats.simple.success_count} / {stats.simple.total_count} succès
-                </Text>
-                <Text style={styles.statsText}>
-                  📊 Taux: {stats.simple.success_rate}%
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {currentMethod !== 'simple' && (
-            <Button
-              title="Activer la méthode Simple"
-              onPress={() => handleMethodChange('simple')}
-              variant="primary"
-              style={styles.button}
-            />
-          )}
-        </Card>
-
-        {/* Méthode Pipeline */}
-        <Card style={[
-          styles.methodCard,
-          currentMethod === 'pipeline' && styles.activeCard
-        ]}>
-          <View style={styles.methodHeader}>
-            <View style={styles.methodTitleRow}>
-              <Text style={styles.methodTitle}>🔬 Méthode Pipeline</Text>
-              {currentMethod === 'pipeline' && (
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>ACTIVE</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.methodSubtitle}>Analyse modulaire avancée</Text>
-          </View>
-
-          <View style={styles.methodContent}>
-            <View style={styles.featureRow}>
-              <Text style={styles.featureIcon}>🧠</Text>
-              <Text style={styles.featureText}>Intelligente: analyse en 6 étapes</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Text style={styles.featureIcon}>🎯</Text>
-              <Text style={styles.featureText}>Précise: tool calling autonome</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Text style={styles.featureIcon}>🔧</Text>
-              <Text style={styles.featureText}>Évolutive: facile à améliorer</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Text style={styles.featureIcon}>⏱️</Text>
-              <Text style={styles.featureText}>Plus lente: ~5-8 secondes</Text>
-            </View>
-
-            {stats && stats.pipeline.total_count > 0 && (
-              <View style={styles.statsBox}>
-                <Text style={styles.statsTitle}>Statistiques</Text>
-                <Text style={styles.statsText}>
-                  ✓ {stats.pipeline.success_count} / {stats.pipeline.total_count} succès
-                </Text>
-                <Text style={styles.statsText}>
-                  📊 Taux: {stats.pipeline.success_rate}%
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {currentMethod !== 'pipeline' && (
-            <Button
-              title="Activer la méthode Pipeline"
-              onPress={() => handleMethodChange('pipeline')}
-              variant="secondary"
-              style={styles.button}
-            />
-          )}
-        </Card>
-
-        {/* Recommandation */}
         {stats && stats.recommended_method !== 'insufficient_data' && (
-          <Card style={styles.recommendationCard}>
-            <Text style={styles.recommendationTitle}>💡 Recommandation</Text>
-            <Text style={styles.recommendationText}>
-              {stats.recommended_method === 'simple' ? '⚡ Méthode Simple' : '🔬 Méthode Pipeline'} recommandée
-            </Text>
-            <Text style={styles.recommendationReason}>{stats.reason}</Text>
-          </Card>
+          <View style={styles.recoShell}>
+            <View style={styles.recoHeader}>
+              <Ionicons name="bulb-outline" size={20} color={colors.semantic.warning} />
+              <Text style={styles.recoTitle}>
+                Recommandation :{' '}
+                {stats.recommended_method === 'simple' ? 'Simple' : 'Pipeline'}
+              </Text>
+            </View>
+            <Text style={styles.recoReason}>{stats.reason}</Text>
+          </View>
         )}
 
-        {/* Information */}
-        <Card style={styles.infoCard}>
-          <Text style={styles.infoTitle}>ℹ️ Information</Text>
-          <Text style={styles.infoText}>
-            Vous pouvez changer de méthode à tout moment. Les deux méthodes analysent 
-            vos messages de la même manière, seule la technologie diffère.
+        <View style={styles.infoShell}>
+          <View style={styles.infoHeader}>
+            <Ionicons name="information-circle-outline" size={22} color={colors.semantic.info} />
+            <Text style={styles.infoTitle}>Information</Text>
+          </View>
+          <Text style={styles.infoBody}>
+            Vous pouvez changer à tout moment. Par défaut, Thomas utilise Pipeline (ventes, achats,
+            parcelles…). Simple = réponses un peu plus rapides, un seul appel IA.
           </Text>
-          <Text style={styles.infoText}>
-            {'\n'}La méthode Simple est recommandée pour un usage quotidien. 
-            La méthode Pipeline est en phase de test pour des analyses plus précises.
-          </Text>
-        </Card>
+        </View>
 
         <View style={styles.spacer} />
       </ScrollView>
@@ -276,9 +270,12 @@ export default function FarmSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
-    padding: 16,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing['3xl'],
   },
   loadingContainer: {
     flex: 1,
@@ -286,142 +283,201 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 16,
+    marginTop: spacing.md,
     fontSize: typography.sizes.md,
-    color: colors.textSecondary,
+    color: colors.text.secondary,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: spacing.lg,
   },
   title: {
     fontSize: typography.sizes.xxl,
     fontWeight: typography.weights.bold,
-    color: colors.text,
-    marginBottom: 8,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: typography.sizes.md,
-    color: colors.textSecondary,
-  },
-  methodCard: {
-    marginBottom: 16,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  activeCard: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight + '10',
-  },
-  methodHeader: {
-    marginBottom: 16,
-  },
-  methodTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  methodTitle: {
-    fontSize: typography.sizes.xl,
-    fontWeight: typography.weights.bold,
-    color: colors.text,
-  },
-  methodSubtitle: {
     fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
+    color: colors.text.secondary,
   },
-  activeBadge: {
-    backgroundColor: colors.success,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  activeBadgeText: {
-    color: '#fff',
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.bold,
-  },
-  methodContent: {
-    marginBottom: 16,
-  },
-  featureRow: {
+
+  cardShell: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  featureIcon: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  featureText: {
-    fontSize: typography.sizes.md,
-    color: colors.text,
-  },
-  statsBox: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: colors.background,
-    borderRadius: 8,
+    marginBottom: spacing.md,
+    backgroundColor: colors.background.secondary,
+    borderRadius: 12,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.border.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  statsTitle: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.semibold,
-    color: colors.textSecondary,
-    marginBottom: 6,
+  cardShellActive: {
+    borderColor: colors.primary[300],
+    backgroundColor: colors.primary[50],
   },
-  statsText: {
-    fontSize: typography.sizes.sm,
-    color: colors.text,
+  accentBar: {
+    width: 4,
+  },
+  cardInner: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.sm,
+    paddingLeft: spacing.sm,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.gray[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircleEmoji: {
+    fontSize: 20,
+  },
+  shortTexts: {
+    flex: 1,
+    minWidth: 0,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
     marginBottom: 2,
   },
-  button: {
-    marginTop: 8,
-  },
-  recommendationCard: {
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: colors.warning + '10',
-    borderWidth: 1,
-    borderColor: colors.warning,
-  },
-  recommendationTitle: {
+  cardTitle: {
     fontSize: typography.sizes.lg,
     fontWeight: typography.weights.bold,
-    color: colors.text,
-    marginBottom: 8,
+    color: colors.text.primary,
   },
-  recommendationText: {
+  pillActive: {
+    backgroundColor: colors.success[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.success[200],
+  },
+  pillActiveText: {
+    fontSize: 11,
+    fontWeight: typography.weights.bold,
+    color: colors.success[700],
+  },
+  shortMeta: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.secondary,
+    lineHeight: 16,
+  },
+  details: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.primary,
+    marginTop: spacing.xs,
+  },
+  featureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  featureChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gray[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  featureChipIcon: {
+    fontSize: 12,
+  },
+  featureChipText: {
+    fontSize: 11,
+    color: colors.text.primary,
+    fontWeight: typography.weights.medium,
+  },
+  statsInline: {
+    backgroundColor: colors.gray[50],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.sm,
+  },
+  statsInlineText: {
+    fontSize: typography.sizes.xs,
+    color: colors.text.secondary,
+    fontWeight: typography.weights.medium,
+  },
+  activateBtn: {
+    marginTop: spacing.xs,
+  },
+
+  recoShell: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.warning[200],
+    marginBottom: spacing.md,
+    padding: spacing.md,
+  },
+  recoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  recoTitle: {
+    flex: 1,
     fontSize: typography.sizes.md,
     fontWeight: typography.weights.semibold,
-    color: colors.text,
-    marginBottom: 4,
+    color: colors.text.primary,
   },
-  recommendationReason: {
+  recoReason: {
     fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
+    color: colors.text.secondary,
+    lineHeight: 20,
+    paddingLeft: spacing.sm + 20,
   },
-  infoCard: {
-    marginBottom: 16,
-    padding: 16,
-    backgroundColor: colors.info + '10',
+
+  infoShell: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.info,
+    borderColor: colors.border.primary,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   infoTitle: {
     fontSize: typography.sizes.md,
     fontWeight: typography.weights.semibold,
-    color: colors.text,
-    marginBottom: 8,
+    color: colors.text.primary,
   },
-  infoText: {
+  infoBody: {
     fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
+    color: colors.text.secondary,
     lineHeight: 20,
   },
+
   spacer: {
-    height: 32,
+    height: spacing.xl,
   },
 });
