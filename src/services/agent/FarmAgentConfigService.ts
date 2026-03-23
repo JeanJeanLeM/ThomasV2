@@ -68,8 +68,8 @@ export class FarmAgentConfigService {
       .from('farm_agent_config')
       .insert({
         farm_id: farmId,
-        agent_method: 'simple',
-        config_reason: 'Configuration par défaut - première utilisation'
+        agent_method: 'pipeline',
+        config_reason: 'Configuration par défaut - première utilisation (pipeline)'
       })
       .select()
       .single();
@@ -204,9 +204,9 @@ export class FarmAgentConfigService {
         recommended_method = 'simple';
         reason = `Simple plus performant: ${simple_metrics.success_rate}% vs ${pipeline_metrics.success_rate}%`;
       } else {
-        // Performances similaires, recommander la méthode simple (plus rapide)
-        recommended_method = 'simple';
-        reason = `Performances similaires, simple est plus rapide`;
+        // Performances similaires : pipeline par défaut produit (analyse plus riche)
+        recommended_method = 'pipeline';
+        reason = `Performances similaires, pipeline privilégié par défaut`;
       }
     }
 
