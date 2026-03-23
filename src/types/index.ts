@@ -454,6 +454,23 @@ export interface Product {
   unit: string;
   default_price_ht?: number | null;
   default_vat_rate?: number | null;
+  listing_status?: 'draft' | 'listed' | 'archived' | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductSalePrice {
+  id: string;
+  product_id: string;
+  farm_id: number;
+  canal_de_vente: string;
+  prix: number;
+  unite_prix: string;
+  pourcentage_vente: number;
+  valid_week_start?: number | null;
+  valid_week_end?: number | null;
+  notes?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

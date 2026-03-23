@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   ScrollView,
@@ -15,44 +15,54 @@ import { Text, Button, Input } from '../design-system/components';
 import { useFarm } from '../contexts/FarmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { InvoiceService, type CreateInvoiceInput, type InvoiceLineInput } from '../services/InvoiceService';
+import type { Invoice } from '../types';
 import { InvoiceAnalysisService } from '../services/InvoiceAnalysisService';
 import { InvoiceIngestionService } from '../services/InvoiceIngestionService';
 import { CustomerService } from '../services/CustomerService';
 import { SupplierService } from '../services/SupplierService';
 import { ProductService } from '../services/ProductService';
-import type { Customer, Supplier, Product, InvoiceDocumentType, InvoiceAIOutput } from '../types';
+import type { Customer, Supplier, Product, InvoiceDocumentType, InvoiceAIOutput, InvoiceLine } from '../types';
 import type { ScreenName } from '../contexts/NavigationContext';
 
 interface InvoiceCreateScreenProps {
   navigation: { goBack: () => void };
   onNavigate: (screen: ScreenName, params?: Record<string, unknown>) => void;
+  /** Si fourni → mode édition : pré-remplissage + appel updateInvoice */
+  invoiceId?: string;
 }
-
-// ─── Types internes ────────────────────────────────────────────────────────
 
 type CreationMode = 'manual' | 'ai';
 type Step = 1 | 2 | 3 | 4;
 
 const DOCUMENT_TYPE_LABELS: Record<InvoiceDocumentType, string> = {
   invoice: 'Facture',
-  delivery_note: 'Bon de livraison (BL)',
+  delivery_note: 'Bon de livraison',
   invoice_with_delivery: 'Facture valant BL',
 };
 
-// ─── Composant ────────────────────────────────────────────────────────────
+// ─── Helpers UI ───────────────────────────────────────────────────────────────
 
-export default function InvoiceCreateScreen({ navigation, onNavigate }: InvoiceCreateScreenProps) {
+function SectionCard({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <View style={[styles.card, style]}>{children}</View>;
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return <Text style={styles.sectionTitle}>{children}</Text>;
+}
+
+// ─── Composant principal ──────────────────────────────────────────────────────
+
+export default function InvoiceCreateScreen({ navigation, onNavigate, invoiceId }: InvoiceCreateScreenProps) {
   const { activeFarm } = useFarm();
   const { user } = useAuth();
 
-  // Mode de création
-  const [creationMode, setCreationMode] = useState<CreationMode>('manual');
+  const isEditMode = !!invoiceId;
 
-  // Étapes du formulaire manuel
+  const [creationMode, setCreationMode] = useState<CreationMode>('manual');
   const [step, setStep] = useState<Step>(1);
   const [saving, setSaving] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(isEditMode);
 
-  // Champs du formulaire
   const [direction, setDirection] = useState<'outgoing' | 'incoming'>('outgoing');
   const [documentType, setDocumentType] = useState<InvoiceDocumentType>('invoice');
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -66,16 +76,21 @@ export default function InvoiceCreateScreen({ navigation, onNavigate }: InvoiceC
     { product_name: '', quantity: 1, unit: 'unité', unit_price_ht: 0, vat_rate: 5.5 },
   ]);
 
-  // Référentiels
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
 
-  // Mode IA
   const [aiText, setAiText] = useState('');
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiPreview, setAiPreview] = useState<InvoiceAIOutput | null>(null);
   const [aiIngesting, setAiIngesting] = useState(false);
+
+  // Vrai si l'API web est configurée (sinon photo/galerie désactivées)
+  const apiAvailable = useMemo(() => !!process.env['EXPO_PUBLIC_API_BASE_URL'], []);
+
+  // Feedback inline (évite les alertes silencieuses)
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle');
 
   useEffect(() => {
     if (!activeFarm?.farm_id) return;
@@ -88,76 +103,98 @@ export default function InvoiceCreateScreen({ navigation, onNavigate }: InvoiceC
       setCustomers(cust);
       setSuppliers(supp);
       setProducts(prod);
-    })();
-  }, [activeFarm?.farm_id]);
 
-  // ─── Totaux ──────────────────────────────────────────────────────────────
+      // Mode édition : charger la facture existante
+      if (invoiceId) {
+        const { invoice, lines: existingLines } = await InvoiceService.getInvoiceById(invoiceId);
+        if (invoice) {
+          setDirection(invoice.direction);
+          setDocumentType((invoice.document_type as InvoiceDocumentType) ?? 'invoice');
+          setCustomerId(invoice.customer_id ?? null);
+          setSupplierId(invoice.supplier_id ?? null);
+          setInvoiceDate(invoice.invoice_date ?? new Date().toISOString().slice(0, 10));
+          setDeliveryDate(invoice.delivery_date ?? '');
+          setDeliveryLocation(invoice.delivery_location ?? '');
+          setPaymentDueDate(invoice.payment_due_date ?? '');
+          setNotes(invoice.notes ?? '');
+          if (existingLines.length > 0) {
+            setLines(existingLines.map((l: InvoiceLine) => ({
+              product_id: l.product_id ?? undefined,
+              product_name: l.product_name,
+              quantity: l.quantity,
+              unit: l.unit,
+              unit_price_ht: l.unit_price_ht,
+              vat_rate: l.vat_rate,
+              line_order: l.line_order,
+              notes: l.notes ?? undefined,
+            })));
+          }
+        }
+        setLoadingInitial(false);
+      }
+    })();
+  }, [activeFarm?.farm_id, invoiceId]);
+
+  // ─── Calculs ───────────────────────────────────────────────────────────────
 
   const totalHt = lines.reduce((s, l) => s + l.quantity * l.unit_price_ht, 0);
   const totalVat = lines.reduce((s, l) => s + l.quantity * l.unit_price_ht * (l.vat_rate / 100), 0);
   const totalTtc = totalHt + totalVat;
 
-  // ─── Lignes ──────────────────────────────────────────────────────────────
+  // ─── Lignes ────────────────────────────────────────────────────────────────
 
   const addLine = () =>
-    setLines((prev) => [
-      ...prev,
-      { product_name: '', quantity: 1, unit: 'unité', unit_price_ht: 0, vat_rate: 5.5 },
-    ]);
+    setLines((prev) => [...prev, { product_name: '', quantity: 1, unit: 'unité', unit_price_ht: 0, vat_rate: 5.5 }]);
 
   const updateLine = (idx: number, upd: Partial<InvoiceLineInput>) =>
-    setLines((prev) => {
-      const next = [...prev];
-      next[idx] = { ...next[idx], ...upd };
-      return next;
-    });
+    setLines((prev) => { const n = [...prev]; n[idx] = { ...n[idx], ...upd }; return n; });
 
   const removeLine = (idx: number) => {
     if (lines.length <= 1) return;
     setLines((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const applyProductToLine = (idx: number, product: Product) => {
-    updateLine(idx, {
-      product_id: product.id,
-      product_name: product.name,
-      unit: product.unit,
-      unit_price_ht: product.default_price_ht ?? 0,
-      vat_rate: product.default_vat_rate ?? 5.5,
-    });
+  // ─── Validation par étape ─────────────────────────────────────────────────
+
+  const counterpartyOk = (direction === 'outgoing' && !!customerId) || (direction === 'incoming' && !!supplierId);
+  const requiresDelivery = documentType === 'invoice_with_delivery' || documentType === 'delivery_note';
+  const datesOk = !requiresDelivery || !!deliveryDate;
+  const validLines = lines.filter((l) => l.product_name.trim() && l.quantity > 0 && l.unit_price_ht >= 0);
+  const linesOk = validLines.length > 0;
+
+  const stepIsValid = (s: Step): boolean => {
+    if (s === 1) return counterpartyOk;
+    if (s === 2) return datesOk;
+    if (s === 3) return linesOk;
+    return true;
   };
 
-  // ─── Sauvegarde manuelle ──────────────────────────────────────────────────
+  // ─── Sauvegarde manuelle ───────────────────────────────────────────────────
 
   const handleSave = async (status: 'draft' | 'sent') => {
-    if (!activeFarm?.farm_id || !user?.id) return;
+    setSaveError(null);
 
-    const counterpartyOk =
-      (direction === 'outgoing' && customerId) || (direction === 'incoming' && supplierId);
+    if (!activeFarm?.farm_id || !user?.id) {
+      setSaveError('Session expirée. Veuillez rafraîchir l\'application.');
+      return;
+    }
     if (!counterpartyOk) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un client ou un fournisseur.');
+      setSaveError(`Retournez à l'étape 1 et sélectionnez un ${direction === 'outgoing' ? 'client' : 'fournisseur'}.`);
       return;
     }
-
-    const requiresDelivery = documentType === 'invoice_with_delivery' || documentType === 'delivery_note';
-    if (requiresDelivery && !deliveryDate) {
-      Alert.alert('Erreur', 'Un bon de livraison nécessite une date de livraison.');
+    if (!datesOk) {
+      setSaveError('Retournez à l\'étape 2 et renseignez la date de livraison.');
       return;
     }
-
-    const validLines = lines.filter(
-      (l) => l.product_name.trim() && l.quantity > 0 && l.unit_price_ht >= 0
-    );
-    if (validLines.length === 0) {
-      Alert.alert('Erreur', 'Ajoutez au moins une ligne valide.');
+    if (!linesOk) {
+      setSaveError('Retournez à l\'étape 3 et ajoutez au moins une ligne valide.');
       return;
     }
 
     setSaving(true);
+    setSaveStatus('saving');
     try {
-      const input: CreateInvoiceInput = {
-        farm_id: activeFarm.farm_id,
-        user_id: user.id,
+      const inputBase = {
         direction,
         document_type: documentType,
         customer_id: direction === 'outgoing' ? customerId ?? undefined : undefined,
@@ -170,156 +207,85 @@ export default function InvoiceCreateScreen({ navigation, onNavigate }: InvoiceC
         status,
         lines: validLines.map((l, i) => ({ ...l, line_order: i })),
       };
-      const created = await InvoiceService.createInvoice(input);
-      if (created) {
-        Alert.alert(
-          'Créé',
-          `${DOCUMENT_TYPE_LABELS[documentType]} ${created.invoice_number} enregistré(e).`,
-          [{ text: 'OK', onPress: () => onNavigate('InvoiceDetails', { invoiceId: created.id }) }]
-        );
+
+      let resultInvoice: Invoice | null = null;
+
+      if (isEditMode && invoiceId) {
+        resultInvoice = await InvoiceService.updateInvoice(invoiceId, inputBase);
       } else {
-        Alert.alert('Erreur', 'Impossible de créer le document.');
+        const input: CreateInvoiceInput = {
+          ...inputBase,
+          farm_id: activeFarm.farm_id,
+          user_id: user.id,
+        };
+        resultInvoice = await InvoiceService.createInvoice(input);
+      }
+
+      if (resultInvoice) {
+        setSaveStatus('success');
+        setTimeout(() => {
+          onNavigate('InvoiceDetails', { invoiceId: resultInvoice!.id });
+        }, 1200);
+      } else {
+        setSaveError(`Le serveur n'a pas pu ${isEditMode ? 'modifier' : 'créer'} le document. Vérifiez votre connexion et réessayez.`);
+        setSaveStatus('idle');
       }
     } catch (e) {
-      console.error(e);
-      Alert.alert('Erreur', 'Une erreur est survenue.');
+      console.error('[InvoiceCreate] handleSave error:', e);
+      setSaveError('Une erreur inattendue est survenue. Réessayez dans quelques instants.');
+      setSaveStatus('idle');
     } finally {
       setSaving(false);
     }
   };
 
-  // ─── Mode IA : analyse texte ──────────────────────────────────────────────
+  // ─── Mode IA ───────────────────────────────────────────────────────────────
 
-  const handleAnalyzeText = async () => {
-    if (!aiText.trim()) {
-      Alert.alert('Erreur', 'Saisissez un texte à analyser.');
-      return;
-    }
+  const runAnalysis = async (params: Parameters<typeof InvoiceAnalysisService.analyze>[0]) => {
     setAiAnalyzing(true);
     setAiPreview(null);
-    const result = await InvoiceAnalysisService.analyze({
-      mode: 'text',
-      textContent: aiText,
-      direction,
-      currentDateIso: new Date().toISOString().slice(0, 10),
-    });
+    const result = await InvoiceAnalysisService.analyze(params);
     setAiAnalyzing(false);
-    if (!result.success) {
-      Alert.alert('Erreur analyse', result.error);
-      return;
-    }
+    if (!result.success) { Alert.alert('Erreur analyse', result.error); return; }
     setAiPreview(result.data);
   };
 
-  // ─── Mode IA : analyse image ──────────────────────────────────────────────
+  const handleAnalyzeText = () => {
+    if (!aiText.trim()) { Alert.alert('Erreur', 'Saisissez un texte à analyser.'); return; }
+    runAnalysis({ mode: 'text', textContent: aiText, direction, currentDateIso: new Date().toISOString().slice(0, 10) });
+  };
 
   const handleAnalyzeImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission requise', 'Autorisez l\'accès à la galerie pour analyser une photo de facture.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      base64: true,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-
-    const asset = result.assets[0];
-    if (!asset.base64) {
-      Alert.alert('Erreur', 'Impossible de lire l\'image sélectionnée.');
-      return;
-    }
-
-    setAiAnalyzing(true);
-    setAiPreview(null);
-    const analyzeResult = await InvoiceAnalysisService.analyze({
-      mode: 'base64',
-      imageBase64: asset.base64,
-      mimeType: asset.mimeType ?? 'image/jpeg',
-      direction,
-      currentDateIso: new Date().toISOString().slice(0, 10),
-    });
-    setAiAnalyzing(false);
-
-    if (!analyzeResult.success) {
-      Alert.alert('Erreur analyse', analyzeResult.error);
-      return;
-    }
-    setAiPreview(analyzeResult.data);
+    if (!perm.granted) { Alert.alert('Permission requise', 'Autorisez l\'accès à la galerie.'); return; }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, base64: true, quality: 0.8 });
+    if (res.canceled || !res.assets?.[0]?.base64) return;
+    runAnalysis({ mode: 'base64', imageBase64: res.assets[0].base64!, mimeType: res.assets[0].mimeType ?? 'image/jpeg', direction });
   };
-
-  // ─── Mode IA : prendre une photo ─────────────────────────────────────────
 
   const handleAnalyzeCamera = async () => {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert('Permission requise', 'Autorisez l\'accès à la caméra pour photographier une facture.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      base64: true,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-
-    const asset = result.assets[0];
-    if (!asset.base64) {
-      Alert.alert('Erreur', 'Impossible de lire la photo.');
-      return;
-    }
-
-    setAiAnalyzing(true);
-    setAiPreview(null);
-    const analyzeResult = await InvoiceAnalysisService.analyze({
-      mode: 'base64',
-      imageBase64: asset.base64,
-      mimeType: asset.mimeType ?? 'image/jpeg',
-      direction,
-      currentDateIso: new Date().toISOString().slice(0, 10),
-    });
-    setAiAnalyzing(false);
-
-    if (!analyzeResult.success) {
-      Alert.alert('Erreur analyse', analyzeResult.error);
-      return;
-    }
-    setAiPreview(analyzeResult.data);
+    if (!perm.granted) { Alert.alert('Permission requise', 'Autorisez l\'accès à la caméra.'); return; }
+    const res = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.8 });
+    if (res.canceled || !res.assets?.[0]?.base64) return;
+    runAnalysis({ mode: 'base64', imageBase64: res.assets[0].base64!, mimeType: res.assets[0].mimeType ?? 'image/jpeg', direction });
   };
-
-  // ─── Mode IA : confirmer et ingérer ──────────────────────────────────────
 
   const handleConfirmIngestion = async () => {
     if (!aiPreview || !activeFarm?.farm_id || !user?.id) return;
-
     setAiIngesting(true);
     const result = await InvoiceIngestionService.ingestInvoice({
-      farmId: activeFarm.farm_id,
-      userId: user.id,
-      aiOutput: aiPreview,
-      source: 'invoice_scan',
+      farmId: activeFarm.farm_id, userId: user.id, aiOutput: aiPreview, source: 'invoice_scan',
     });
     setAiIngesting(false);
-
-    if (!result.success) {
-      Alert.alert('Erreur ingestion', result.error ?? 'Impossible d\'enregistrer la facture.');
-      return;
-    }
-
-    const lines_txt = `${result.linesCreated} ligne${result.linesCreated > 1 ? 's' : ''}`;
+    if (!result.success) { Alert.alert('Erreur', result.error ?? 'Enregistrement impossible.'); return; }
     const extras: string[] = [];
-    if (result.chargesCreated > 0) extras.push(`${result.chargesCreated} consommable${result.chargesCreated > 1 ? 's' : ''}`);
-    if (result.semencesCreated > 0) extras.push(`${result.semencesCreated} semence${result.semencesCreated > 1 ? 's' : ''}`);
-
-    Alert.alert(
-      'Facture enregistrée',
-      `Facture ${result.invoiceNumber} créée (${lines_txt}${extras.length ? ', ' + extras.join(', ') : ''}).`,
-      [{ text: 'Voir', onPress: () => result.invoiceId && onNavigate('InvoiceDetails', { invoiceId: result.invoiceId }) }]
-    );
+    if (result.chargesCreated) extras.push(`${result.chargesCreated} consommable${result.chargesCreated > 1 ? 's' : ''}`);
+    if (result.semencesCreated) extras.push(`${result.semencesCreated} semence${result.semencesCreated > 1 ? 's' : ''}`);
+    Alert.alert('Enregistrée', `Facture ${result.invoiceNumber} créée — ${result.linesCreated} ligne${result.linesCreated > 1 ? 's' : ''}${extras.length ? ', ' + extras.join(', ') : ''}.`, [
+      { text: 'Voir', onPress: () => result.invoiceId && onNavigate('InvoiceDetails', { invoiceId: result.invoiceId }) },
+    ]);
   };
-
-  // ─── Préremplir le formulaire depuis l'aperçu IA ─────────────────────────
 
   const handleFillFormFromAI = () => {
     if (!aiPreview) return;
@@ -329,213 +295,256 @@ export default function InvoiceCreateScreen({ navigation, onNavigate }: InvoiceC
     if (ai.delivery_date) setDeliveryDate(ai.delivery_date);
     if (ai.payment_due_date) setPaymentDueDate(ai.payment_due_date);
     if (ai.notes) setNotes(ai.notes);
-    setLines(
-      aiPreview.lines.map((l) => ({
-        product_name: l.product_name,
-        quantity: l.quantity,
-        unit: l.unit,
-        unit_price_ht: l.unit_price_ht,
-        vat_rate: l.vat_rate,
-        notes: l.notes ?? undefined,
-      }))
-    );
+    setLines(aiPreview.lines.map((l) => ({
+      product_name: l.product_name, quantity: l.quantity, unit: l.unit,
+      unit_price_ht: l.unit_price_ht, vat_rate: l.vat_rate, notes: l.notes ?? undefined,
+    })));
     setCreationMode('manual');
     setAiPreview(null);
   };
 
-  // ─── Contenu selon mode ───────────────────────────────────────────────────
-
   const list = direction === 'outgoing' ? customers : suppliers;
 
-  if (creationMode === 'ai') {
+  // ── Chargement initial (mode édition) ──────────────────────────────────────
+  if (loadingInitial) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-        {/* Direction */}
-        <Text style={styles.sectionTitle}>Type d'opération</Text>
-        <View style={styles.row}>
-          {(['outgoing', 'incoming'] as const).map((d) => (
-            <TouchableOpacity
-              key={d}
-              style={[styles.chip, direction === d && styles.chipActive]}
-              onPress={() => setDirection(d)}
-            >
-              <Text style={[styles.chipText, direction === d && styles.chipTextActive]}>
-                {d === 'outgoing' ? 'Vente' : 'Achat'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Saisie texte */}
-        <Text style={styles.sectionTitle}>Analyser une facture</Text>
-        <Text style={styles.hint}>
-          Collez le texte d'un email/message d'achat ou photographiez une facture.
-        </Text>
-
-        <TextInput
-          style={styles.textArea}
-          placeholder="Collez le texte de votre facture ou message ici…"
-          placeholderTextColor={colors.gray[400]}
-          multiline
-          numberOfLines={6}
-          value={aiText}
-          onChangeText={setAiText}
-        />
-
-        <View style={styles.aiButtonRow}>
-          <Button variant="outline" onPress={handleAnalyzeText} disabled={aiAnalyzing || !aiText.trim()} style={styles.aiBtn}>
-            Analyser le texte
-          </Button>
-          <Button variant="outline" onPress={handleAnalyzeImage} disabled={aiAnalyzing} style={styles.aiBtn}>
-            Galerie
-          </Button>
-          <Button variant="outline" onPress={handleAnalyzeCamera} disabled={aiAnalyzing} style={styles.aiBtn}>
-            Caméra
-          </Button>
-        </View>
-
-        {aiAnalyzing && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={colors.primary[600]} />
-            <Text style={styles.loadingText}>Analyse en cours…</Text>
-          </View>
-        )}
-
-        {/* Aperçu résultat IA */}
-        {aiPreview && (
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Aperçu détecté</Text>
-            <Text style={styles.previewRow}>
-              Confiance : {Math.round(aiPreview.confidence * 100)} %
-            </Text>
-            {aiPreview.invoice.supplier_name && (
-              <Text style={styles.previewRow}>Fournisseur : {aiPreview.invoice.supplier_name}</Text>
-            )}
-            {aiPreview.invoice.customer_name && (
-              <Text style={styles.previewRow}>Client : {aiPreview.invoice.customer_name}</Text>
-            )}
-            {aiPreview.invoice.invoice_date && (
-              <Text style={styles.previewRow}>Date : {aiPreview.invoice.invoice_date}</Text>
-            )}
-            {aiPreview.invoice.invoice_number && (
-              <Text style={styles.previewRow}>N° : {aiPreview.invoice.invoice_number}</Text>
-            )}
-            <Text style={[styles.previewRow, { marginTop: spacing.sm }]}>
-              Lignes détectées ({aiPreview.lines.length}) :
-            </Text>
-            {aiPreview.lines.map((l, i) => (
-              <Text key={i} style={styles.previewLine}>
-                • {l.product_name} — {l.quantity} {l.unit} × {l.unit_price_ht.toFixed(2)} €
-                {l.is_charge ? ' [consommable]' : ''}
-                {l.is_semence ? ' [semence]' : ''}
-              </Text>
-            ))}
-
-            <View style={styles.previewActions}>
-              <Button
-                variant="primary"
-                onPress={handleConfirmIngestion}
-                disabled={aiIngesting}
-                style={styles.previewBtn}
-              >
-                {aiIngesting ? 'Enregistrement…' : 'Confirmer et enregistrer'}
-              </Button>
-              <Button variant="outline" onPress={handleFillFormFromAI} style={styles.previewBtn}>
-                Éditer manuellement
-              </Button>
-            </View>
-          </View>
-        )}
-
-        <View style={styles.stepNav}>
-          <Button variant="outline" onPress={() => setCreationMode('manual')} style={styles.stepBtn}>
-            Retour saisie manuelle
-          </Button>
-        </View>
-      </ScrollView>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.primary }}>
+        <ActivityIndicator size="large" color={colors.primary[600]} />
+        <Text style={{ marginTop: spacing.md, color: colors.text.secondary }}>Chargement de la facture…</Text>
+      </View>
     );
   }
 
-  // ─── Mode manuel ─────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // MODE IA
+  // ══════════════════════════════════════════════════════════════════════════
 
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+  if (creationMode === 'ai') {
+    return (
+      <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
 
-      {/* Bouton basculer vers mode IA */}
-      <TouchableOpacity style={styles.aiToggle} onPress={() => setCreationMode('ai')}>
-        <Text style={styles.aiToggleText}>Analyser une facture avec l'IA</Text>
-      </TouchableOpacity>
-
-      {/* Step 1 : direction + document_type + tiers */}
-      {step === 1 && (
-        <>
-          <Text style={styles.sectionTitle}>Type d'opération</Text>
-          <View style={styles.row}>
+        {/* Direction */}
+        <SectionCard>
+          <SectionTitle>Type d'opération</SectionTitle>
+          <View style={styles.chipRow}>
             {(['outgoing', 'incoming'] as const).map((d) => (
-              <TouchableOpacity
-                key={d}
-                style={[styles.chip, direction === d && styles.chipActive]}
-                onPress={() => setDirection(d)}
-              >
+              <TouchableOpacity key={d} style={[styles.chip, direction === d && styles.chipActive]} onPress={() => setDirection(d)}>
                 <Text style={[styles.chipText, direction === d && styles.chipTextActive]}>
                   {d === 'outgoing' ? 'Vente' : 'Achat'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
+        </SectionCard>
 
-          <Text style={styles.label}>Type de document</Text>
-          <View style={styles.row}>
-            {(Object.keys(DOCUMENT_TYPE_LABELS) as InvoiceDocumentType[]).map((dt) => (
-              <TouchableOpacity
-                key={dt}
-                style={[styles.chip, documentType === dt && styles.chipActive]}
-                onPress={() => setDocumentType(dt)}
-              >
-                <Text style={[styles.chipText, documentType === dt && styles.chipTextActive]} numberOfLines={2}>
-                  {DOCUMENT_TYPE_LABELS[dt]}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.label}>
-            {direction === 'outgoing' ? 'Client' : 'Fournisseur'}
+        {/* Zone analyse par texte */}
+        <SectionCard>
+          <SectionTitle>Analyser par message</SectionTitle>
+          <Text style={styles.helpText}>
+            Collez le texte d'un email ou message d'achat (ex. "J'ai acheté 4 kg d'ail à 2,50 €…").
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerRow}>
-            {list.map((item) => {
-              const selected =
-                (direction === 'outgoing' && item.id === customerId) ||
-                (direction === 'incoming' && item.id === supplierId);
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.pickerItem, selected && styles.pickerItemActive]}
-                  onPress={() => {
-                    if (direction === 'outgoing') { setCustomerId(item.id); setSupplierId(null); }
-                    else { setSupplierId(item.id); setCustomerId(null); }
-                  }}
-                >
-                  <Text style={[styles.pickerText, selected && styles.pickerTextActive]} numberOfLines={1}>
-                    {item.company_name}
+
+          <TextInput
+            style={styles.textArea}
+            placeholder="Collez le texte de votre facture ou message ici…"
+            placeholderTextColor={colors.gray[400]}
+            multiline
+            numberOfLines={6}
+            value={aiText}
+            onChangeText={setAiText}
+          />
+
+          <Button
+            title="Analyser ce texte"
+            variant="primary"
+            onPress={handleAnalyzeText}
+            disabled={aiAnalyzing || !aiText.trim()}
+            style={styles.fullBtn}
+          />
+
+          {aiAnalyzing && (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color={colors.primary[600]} />
+              <Text style={styles.loadingText}>Analyse en cours…</Text>
+            </View>
+          )}
+        </SectionCard>
+
+        {/* Photo / Galerie — disponible seulement si API configurée */}
+        {apiAvailable ? (
+          <SectionCard>
+            <SectionTitle>Analyser une photo ou un PDF</SectionTitle>
+            <Text style={styles.helpText}>Photographiez ou importez une facture pour l'analyser automatiquement.</Text>
+            <View style={styles.twoColRow}>
+              <Button title="Photo" variant="outline" onPress={handleAnalyzeCamera} disabled={aiAnalyzing} style={styles.halfBtn} />
+              <Button title="Galerie" variant="outline" onPress={handleAnalyzeImage} disabled={aiAnalyzing} style={styles.halfBtn} />
+            </View>
+          </SectionCard>
+        ) : (
+          <View style={styles.devBanner}>
+            <Text style={styles.devBannerTitle}>📷  Analyse photo / PDF</Text>
+            <Text style={styles.devBannerBody}>
+              Fonctionnalité en cours de développement.{'\n'}
+              En attendant, ajoutez vos factures via le chat Thomas ou en saisie manuelle ci-dessous.
+            </Text>
+          </View>
+        )}
+
+        {/* Aperçu IA */}
+        {aiPreview && (
+          <SectionCard style={styles.previewCard}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle}>Résultat détecté</Text>
+              <View style={[styles.confidenceBadge, { backgroundColor: aiPreview.confidence >= 0.7 ? colors.primary[100] : colors.warning[100] }]}>
+                <Text style={[styles.confidenceText, { color: aiPreview.confidence >= 0.7 ? colors.primary[700] : colors.warning[700] }]}>
+                  {Math.round(aiPreview.confidence * 100)} %
+                </Text>
+              </View>
+            </View>
+
+            {(aiPreview.invoice.supplier_name || aiPreview.invoice.customer_name) && (
+              <Text style={styles.previewMeta}>
+                {aiPreview.invoice.direction === 'incoming' ? 'Fournisseur' : 'Client'} :{' '}
+                <Text style={styles.previewMetaBold}>
+                  {aiPreview.invoice.supplier_name ?? aiPreview.invoice.customer_name}
+                </Text>
+              </Text>
+            )}
+            {aiPreview.invoice.invoice_date && (
+              <Text style={styles.previewMeta}>Date : <Text style={styles.previewMetaBold}>{aiPreview.invoice.invoice_date}</Text></Text>
+            )}
+            {aiPreview.invoice.invoice_number && (
+              <Text style={styles.previewMeta}>N° : <Text style={styles.previewMetaBold}>{aiPreview.invoice.invoice_number}</Text></Text>
+            )}
+
+            <View style={styles.divider} />
+            <Text style={styles.linesTitle}>{aiPreview.lines.length} ligne{aiPreview.lines.length > 1 ? 's' : ''} détectée{aiPreview.lines.length > 1 ? 's' : ''}</Text>
+
+            {aiPreview.lines.map((l, i) => (
+              <View key={i} style={styles.previewLine}>
+                <View style={styles.previewLineDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.previewLineName}>{l.product_name}</Text>
+                  <Text style={styles.previewLineSub}>
+                    {l.quantity} {l.unit} × {l.unit_price_ht.toFixed(2)} €
+                    {l.is_charge ? '  •  consommable' : ''}
+                    {l.is_semence ? '  •  semence' : ''}
+                  </Text>
+                </View>
+              </View>
+            ))}
+
+            <Button
+              title={aiIngesting ? 'Enregistrement…' : 'Confirmer et enregistrer'}
+              variant="primary"
+              onPress={handleConfirmIngestion}
+              disabled={aiIngesting}
+              style={styles.fullBtn}
+            />
+            <Button
+              title="Modifier manuellement"
+              variant="outline"
+              onPress={handleFillFormFromAI}
+              style={[styles.fullBtn, { marginTop: spacing.sm }]}
+            />
+          </SectionCard>
+        )}
+
+        <Button
+          title="Retour à la saisie manuelle"
+          variant="ghost"
+          onPress={() => setCreationMode('manual')}
+          style={styles.ghostBtn}
+        />
+      </ScrollView>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // MODE MANUEL
+  // ══════════════════════════════════════════════════════════════════════════
+
+  return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
+
+      {/* Accès mode IA */}
+      <TouchableOpacity style={styles.aiBanner} onPress={() => setCreationMode('ai')} activeOpacity={0.8}>
+        <View style={styles.aiBannerDot} />
+        <Text style={styles.aiBannerText}>Analyser une facture avec l'IA</Text>
+        <Text style={styles.aiBannerArrow}>›</Text>
+      </TouchableOpacity>
+
+      {/* Indicateur d'étapes */}
+      <View style={styles.stepIndicator}>
+        {([1, 2, 3, 4] as Step[]).map((s) => (
+          <View key={s} style={[styles.stepDot, step === s && styles.stepDotActive, step > s && styles.stepDotDone]} />
+        ))}
+      </View>
+
+      {/* ── Step 1 ── */}
+      {step === 1 && (
+        <>
+          <SectionCard>
+            <SectionTitle>Type d'opération</SectionTitle>
+            <View style={styles.chipRow}>
+              {(['outgoing', 'incoming'] as const).map((d) => (
+                <TouchableOpacity key={d} style={[styles.chip, direction === d && styles.chipActive]} onPress={() => setDirection(d)}>
+                  <Text style={[styles.chipText, direction === d && styles.chipTextActive]}>
+                    {d === 'outgoing' ? 'Vente' : 'Achat'}
                   </Text>
                 </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-          {list.length === 0 && (
-            <Text style={styles.hint}>
-              Aucun {direction === 'outgoing' ? 'client' : 'fournisseur'}. Créez-en un dans Clients & Fournisseurs.
-            </Text>
-          )}
+              ))}
+            </View>
+          </SectionCard>
+
+          <SectionCard>
+            <SectionTitle>Type de document</SectionTitle>
+            <View style={styles.chipRow}>
+              {(Object.keys(DOCUMENT_TYPE_LABELS) as InvoiceDocumentType[]).map((dt) => (
+                <TouchableOpacity key={dt} style={[styles.chip, documentType === dt && styles.chipActive]} onPress={() => setDocumentType(dt)}>
+                  <Text style={[styles.chipText, documentType === dt && styles.chipTextActive]} numberOfLines={2}>
+                    {DOCUMENT_TYPE_LABELS[dt]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </SectionCard>
+
+          <SectionCard>
+            <SectionTitle>{direction === 'outgoing' ? 'Client' : 'Fournisseur'}</SectionTitle>
+            {list.length === 0 ? (
+              <Text style={styles.emptyText}>
+                Aucun {direction === 'outgoing' ? 'client' : 'fournisseur'}. Créez-en un dans Clients & Fournisseurs.
+              </Text>
+            ) : (
+              <View style={styles.contactGrid}>
+                {list.map((item) => {
+                  const selected = (direction === 'outgoing' && item.id === customerId) || (direction === 'incoming' && item.id === supplierId);
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.contactChip, selected && styles.contactChipActive]}
+                      onPress={() => {
+                        if (direction === 'outgoing') { setCustomerId(item.id); setSupplierId(null); }
+                        else { setSupplierId(item.id); setCustomerId(null); }
+                      }}
+                    >
+                      <Text style={[styles.contactChipText, selected && styles.contactChipTextActive]} numberOfLines={1}>
+                        {item.company_name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </SectionCard>
         </>
       )}
 
-      {/* Step 2 : dates */}
+      {/* ── Step 2 ── */}
       {step === 2 && (
-        <>
-          <Text style={styles.sectionTitle}>Dates</Text>
+        <SectionCard>
+          <SectionTitle>Dates</SectionTitle>
           <Input label="Date facture" value={invoiceDate} onChangeText={setInvoiceDate} placeholder="AAAA-MM-JJ" />
           <Input
             label={documentType === 'invoice_with_delivery' ? 'Date livraison (obligatoire)' : 'Date livraison (optionnel)'}
@@ -544,220 +553,398 @@ export default function InvoiceCreateScreen({ navigation, onNavigate }: InvoiceC
             placeholder="AAAA-MM-JJ"
           />
           {(documentType === 'delivery_note' || documentType === 'invoice_with_delivery') && (
-            <Input
-              label="Lieu de livraison"
-              value={deliveryLocation}
-              onChangeText={setDeliveryLocation}
-              placeholder="Adresse ou lieu"
-            />
+            <Input label="Lieu de livraison" value={deliveryLocation} onChangeText={setDeliveryLocation} placeholder="Adresse ou lieu" />
           )}
-          <Input
-            label="Échéance paiement (optionnel)"
-            value={paymentDueDate}
-            onChangeText={setPaymentDueDate}
-            placeholder="AAAA-MM-JJ"
-          />
+          <Input label="Échéance paiement (optionnel)" value={paymentDueDate} onChangeText={setPaymentDueDate} placeholder="AAAA-MM-JJ" />
           <Input label="Notes (optionnel)" value={notes} onChangeText={setNotes} placeholder="Notes" multiline />
-        </>
+        </SectionCard>
       )}
 
-      {/* Step 3 : lignes */}
+      {/* ── Step 3 ── */}
       {step === 3 && (
-        <>
-          <Text style={styles.sectionTitle}>Lignes produits</Text>
+        <SectionCard>
+          <SectionTitle>Lignes produits</SectionTitle>
 
-          {/* Produits suggérés */}
           {products.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.productSuggest}>
-              {products.map((p) => (
-                <TouchableOpacity
-                  key={p.id}
-                  style={styles.productChip}
-                  onPress={() => {
-                    const emptyIdx = lines.findIndex((l) => !l.product_name.trim());
-                    if (emptyIdx >= 0) applyProductToLine(emptyIdx, p);
-                    else {
-                      addLine();
-                      setTimeout(() => applyProductToLine(lines.length, p), 50);
-                    }
-                  }}
-                >
-                  <Text style={styles.productChipText} numberOfLines={1}>{p.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <>
+              <Text style={styles.subLabel}>Produits catalogue</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
+                {products.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={styles.productTag}
+                    onPress={() => {
+                      const emptyIdx = lines.findIndex((l) => !l.product_name.trim());
+                      const targetIdx = emptyIdx >= 0 ? emptyIdx : lines.length;
+                      if (emptyIdx < 0) addLine();
+                      setTimeout(() => updateLine(targetIdx, {
+                        product_id: p.id, product_name: p.name, unit: p.unit,
+                        unit_price_ht: p.default_price_ht ?? 0, vat_rate: p.default_vat_rate ?? 5.5,
+                      }), 20);
+                    }}
+                  >
+                    <Text style={styles.productTagText}>{p.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </>
           )}
 
           {lines.map((line, idx) => (
             <View key={idx} style={styles.lineCard}>
-              <Input
-                label="Produit"
-                value={line.product_name}
-                onChangeText={(t) => updateLine(idx, { product_name: t })}
-                placeholder="Nom du produit"
-              />
-              <View style={styles.lineRow}>
-                <Input
-                  label="Qté"
-                  value={String(line.quantity)}
-                  onChangeText={(t) => updateLine(idx, { quantity: parseFloat(t) || 0 })}
-                  keyboardType="numeric"
-                  containerStyle={styles.lineField}
-                />
-                <Input
-                  label="Unité"
-                  value={line.unit}
-                  onChangeText={(t) => updateLine(idx, { unit: t })}
-                  containerStyle={styles.lineField}
-                />
-                <Input
-                  label="Prix HT"
-                  value={String(line.unit_price_ht)}
-                  onChangeText={(t) => updateLine(idx, { unit_price_ht: parseFloat(t) || 0 })}
-                  keyboardType="numeric"
-                  containerStyle={styles.lineField}
-                />
-                <Input
-                  label="TVA %"
-                  value={String(line.vat_rate)}
-                  onChangeText={(t) => updateLine(idx, { vat_rate: parseFloat(t) || 0 })}
-                  keyboardType="numeric"
-                  containerStyle={styles.lineField}
-                />
-              </View>
-              <View style={styles.lineFooter}>
-                <Text style={styles.lineTotal}>
-                  {(line.quantity * line.unit_price_ht * (1 + line.vat_rate / 100)).toFixed(2)} € TTC
-                </Text>
+              <View style={styles.lineHeader}>
+                <Text style={styles.lineNumber}>Ligne {idx + 1}</Text>
                 {lines.length > 1 && (
                   <TouchableOpacity onPress={() => removeLine(idx)}>
                     <Text style={styles.removeText}>Supprimer</Text>
                   </TouchableOpacity>
                 )}
               </View>
+              <Input label="Produit" value={line.product_name} onChangeText={(t) => updateLine(idx, { product_name: t })} placeholder="Nom du produit" />
+              <View style={styles.lineFields}>
+                <Input label="Qté" value={String(line.quantity)} onChangeText={(t) => updateLine(idx, { quantity: parseFloat(t) || 0 })} keyboardType="numeric" containerStyle={styles.lineField} />
+                <Input label="Unité" value={line.unit} onChangeText={(t) => updateLine(idx, { unit: t })} containerStyle={styles.lineField} />
+                <Input label="Prix HT" value={String(line.unit_price_ht)} onChangeText={(t) => updateLine(idx, { unit_price_ht: parseFloat(t) || 0 })} keyboardType="numeric" containerStyle={styles.lineField} />
+                <Input label="TVA %" value={String(line.vat_rate)} onChangeText={(t) => updateLine(idx, { vat_rate: parseFloat(t) || 0 })} keyboardType="numeric" containerStyle={styles.lineField} />
+              </View>
+              <Text style={styles.lineTtc}>
+                {(line.quantity * line.unit_price_ht * (1 + line.vat_rate / 100)).toFixed(2)} € TTC
+              </Text>
             </View>
           ))}
-          <Button variant="outline" onPress={addLine} style={styles.addBtn}>
-            Ajouter une ligne
-          </Button>
-        </>
+
+          <Button title="+ Ajouter une ligne" variant="outline" onPress={addLine} style={styles.fullBtn} />
+        </SectionCard>
       )}
 
-      {/* Step 4 : récapitulatif + enregistrement */}
+      {/* ── Step 4 ── */}
       {step === 4 && (
-        <>
-          <Text style={styles.sectionTitle}>Récapitulatif</Text>
-          <View style={styles.summary}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Type</Text>
-              <Text>{DOCUMENT_TYPE_LABELS[documentType]}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Direction</Text>
-              <Text>{direction === 'outgoing' ? 'Vente' : 'Achat'}</Text>
-            </View>
-            <View style={[styles.summaryRow, { marginTop: spacing.sm }]}>
-              <Text>Total HT</Text>
-              <Text>{totalHt.toFixed(2)} €</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text>Total TVA</Text>
-              <Text>{totalVat.toFixed(2)} €</Text>
-            </View>
-            <View style={[styles.summaryRow, styles.summaryRowTtc]}>
-              <Text style={styles.summaryTtc}>Total TTC</Text>
-              <Text style={styles.summaryTtc}>{totalTtc.toFixed(2)} €</Text>
+        <SectionCard>
+          <SectionTitle>Récapitulatif</SectionTitle>
+
+          {/* Badges type + direction */}
+          <View style={styles.summaryMeta}>
+            <Text style={styles.summaryMetaLabel}>{DOCUMENT_TYPE_LABELS[documentType]}</Text>
+            <View style={[styles.directionBadge, { backgroundColor: direction === 'outgoing' ? colors.primary[100] : '#dbeafe' }]}>
+              <Text style={[styles.directionBadgeText, { color: direction === 'outgoing' ? colors.primary[700] : colors.secondary.blue }]}>
+                {direction === 'outgoing' ? 'Vente' : 'Achat'}
+              </Text>
             </View>
           </View>
-          <Button variant="primary" onPress={() => handleSave('sent')} disabled={saving} style={styles.btn}>
-            Valider et envoyer
-          </Button>
-          <Button variant="outline" onPress={() => handleSave('draft')} disabled={saving} style={styles.btn}>
-            Enregistrer brouillon
-          </Button>
-        </>
+
+          {/* Récap lignes */}
+          {validLines.length > 0 && (
+            <View style={styles.recapLines}>
+              {validLines.map((l, i) => (
+                <View key={i} style={styles.recapLine}>
+                  <Text style={styles.recapLineName} numberOfLines={1}>{l.product_name}</Text>
+                  <Text style={styles.recapLineAmt}>{(l.quantity * l.unit_price_ht).toFixed(2)} € HT</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Totaux */}
+          <View style={styles.totalBlock}>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total HT</Text>
+              <Text style={styles.totalValue}>{totalHt.toFixed(2)} €</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total TVA</Text>
+              <Text style={styles.totalValue}>{totalVat.toFixed(2)} €</Text>
+            </View>
+            <View style={[styles.totalRow, styles.totalTtcRow]}>
+              <Text style={styles.totalTtcLabel}>Total TTC</Text>
+              <Text style={styles.totalTtcValue}>{totalTtc.toFixed(2)} €</Text>
+            </View>
+          </View>
+
+          {/* Avertissements de validation */}
+          {!counterpartyOk && (
+            <View style={styles.warnBanner}>
+              <Text style={styles.warnText}>
+                ⚠ Aucun {direction === 'outgoing' ? 'client' : 'fournisseur'} sélectionné — retournez à l'étape 1.
+              </Text>
+            </View>
+          )}
+          {!datesOk && (
+            <View style={styles.warnBanner}>
+              <Text style={styles.warnText}>⚠ Date de livraison manquante — retournez à l'étape 2.</Text>
+            </View>
+          )}
+          {!linesOk && (
+            <View style={styles.warnBanner}>
+              <Text style={styles.warnText}>⚠ Aucune ligne valide — retournez à l'étape 3.</Text>
+            </View>
+          )}
+
+          {/* Erreur d'enregistrement */}
+          {saveError && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{saveError}</Text>
+            </View>
+          )}
+
+          {/* Succès */}
+          {saveStatus === 'success' && (
+            <View style={styles.successBanner}>
+              <Text style={styles.successText}>
+                ✓ Document {isEditMode ? 'modifié' : 'créé'} avec succès. Redirection en cours…
+              </Text>
+            </View>
+          )}
+
+          {/* Boutons d'action */}
+          {saveStatus !== 'success' && (
+            <>
+              <Button
+                title={saveStatus === 'saving' ? 'Enregistrement…' : isEditMode ? 'Enregistrer les modifications' : 'Valider et envoyer'}
+                variant="primary"
+                onPress={() => handleSave('sent')}
+                disabled={saving || !counterpartyOk || !datesOk || !linesOk}
+                style={styles.fullBtn}
+              />
+              {!isEditMode && (
+                <Button
+                  title={saveStatus === 'saving' ? 'Enregistrement…' : 'Enregistrer en brouillon'}
+                  variant="outline"
+                  onPress={() => handleSave('draft')}
+                  disabled={saving || !counterpartyOk || !datesOk || !linesOk}
+                  style={[styles.fullBtn, { marginTop: spacing.sm }]}
+                />
+              )}
+            </>
+          )}
+        </SectionCard>
       )}
 
-      {/* Navigation entre étapes */}
+      {/* Navigation */}
       <View style={styles.stepNav}>
         {step > 1 && (
-          <Button variant="outline" onPress={() => setStep((s) => (s - 1) as Step)} style={styles.stepBtn}>
-            Précédent
-          </Button>
+          <Button
+            title="← Précédent"
+            variant="outline"
+            onPress={() => { setSaveError(null); setSaveStatus('idle'); setStep((s) => (s - 1) as Step); }}
+            style={styles.navBtn}
+          />
         )}
         {step < 4 && (
-          <Button variant="primary" onPress={() => setStep((s) => (s + 1) as Step)} style={styles.stepBtn}>
-            Suivant
-          </Button>
+          <Button
+            title={stepIsValid(step) ? 'Suivant →' : step === 1 ? `Choisir un ${direction === 'outgoing' ? 'client' : 'fournisseur'}` : step === 2 ? 'Date de livraison requise' : 'Ajouter une ligne'}
+            variant="primary"
+            onPress={() => setStep((s) => (s + 1) as Step)}
+            disabled={!stepIsValid(step)}
+            style={styles.navBtn}
+          />
         )}
       </View>
     </ScrollView>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.08,
+  shadowRadius: 4,
+  elevation: 3,
+} as const;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background.primary },
-  content: { padding: spacing.md, paddingBottom: spacing.xl },
+  screen: { flex: 1, backgroundColor: colors.background.primary },
+  screenContent: { padding: spacing.lg, paddingBottom: 40, gap: spacing.md },
 
-  aiToggle: {
-    backgroundColor: colors.primary[50],
+  // Cards
+  card: {
+    backgroundColor: colors.background.secondary,
+    borderRadius: 12,
+    padding: spacing.lg,
+    ...CARD_SHADOW,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text.primary, marginBottom: spacing.md },
+  subLabel: { fontSize: 13, color: colors.text.secondary, marginBottom: spacing.sm },
+
+  // Mode IA banner
+  aiBanner: {
+    backgroundColor: colors.primary[600],
+    borderRadius: 12,
+    padding: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    ...CARD_SHADOW,
+  },
+  aiBannerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary[200] },
+  aiBannerText: { flex: 1, color: '#fff', fontWeight: '600', fontSize: 15 },
+  aiBannerArrow: { color: colors.primary[200], fontSize: 22, fontWeight: '300' },
+
+  // Step indicator
+  stepIndicator: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, marginBottom: spacing.xs },
+  stepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.gray[300] },
+  stepDotActive: { backgroundColor: colors.primary[600], width: 20 },
+  stepDotDone: { backgroundColor: colors.primary[300] },
+
+  // Chips (direction / doc type)
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    backgroundColor: colors.gray[100],
     borderWidth: 1,
-    borderColor: colors.primary[200],
+    borderColor: colors.border.primary,
+  },
+  chipActive: { backgroundColor: colors.primary[600], borderColor: colors.primary[600] },
+  chipText: { fontSize: 14, color: colors.text.secondary, fontWeight: '500' },
+  chipTextActive: { color: '#fff', fontWeight: '600' },
+
+  // Contact grid
+  contactGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  contactChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    backgroundColor: colors.gray[100],
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+    maxWidth: '48%',
+  },
+  contactChipActive: { backgroundColor: colors.primary[50], borderColor: colors.primary[600] },
+  contactChipText: { fontSize: 13, color: colors.text.secondary },
+  contactChipTextActive: { color: colors.primary[700], fontWeight: '600' },
+  emptyText: { fontSize: 14, color: colors.text.tertiary, fontStyle: 'italic' },
+
+  // Product tags
+  productTag: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: colors.gray[100],
+    marginRight: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  productTagText: { fontSize: 12, color: colors.gray[700] },
+
+  // Lines
+  lineCard: {
+    backgroundColor: colors.gray[50],
     borderRadius: 8,
     padding: spacing.md,
-    alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
   },
-  aiToggleText: { color: colors.primary[700], fontWeight: '600', fontSize: 15 },
-
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: colors.gray[900], marginBottom: spacing.md },
-  label: { fontSize: 14, color: colors.gray[600], marginBottom: spacing.xs },
-
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
-  chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 8, backgroundColor: colors.gray[100] },
-  chipActive: { backgroundColor: colors.primary[100] },
-  chipText: { fontSize: 14, color: colors.gray[600] },
-  chipTextActive: { color: colors.primary[600], fontWeight: '600' },
-
-  pickerRow: { marginBottom: spacing.md },
-  pickerItem: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderRadius: 8, backgroundColor: colors.gray[100], marginRight: spacing.sm,
-  },
-  pickerItemActive: { backgroundColor: colors.primary[600] },
-  pickerText: { fontSize: 14, color: colors.gray[700] },
-  pickerTextActive: { color: 'white', fontWeight: '600' },
-
-  hint: { fontSize: 14, color: colors.gray[500], fontStyle: 'italic', marginBottom: spacing.sm },
-
-  productSuggest: { marginBottom: spacing.md },
-  productChip: {
-    paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: 6,
-    backgroundColor: colors.gray[100], marginRight: spacing.xs, borderWidth: 1, borderColor: colors.gray[200],
-  },
-  productChipText: { fontSize: 12, color: colors.gray[700] },
-
-  lineCard: { backgroundColor: colors.gray[50], borderRadius: 8, padding: spacing.md, marginBottom: spacing.md },
-  lineRow: { flexDirection: 'row', gap: spacing.xs },
+  lineHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  lineNumber: { fontSize: 13, fontWeight: '600', color: colors.gray[500] },
+  removeText: { fontSize: 13, color: colors.semantic.error },
+  lineFields: { flexDirection: 'row', gap: spacing.xs },
   lineField: { flex: 1 },
-  lineFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.sm },
-  lineTotal: { fontWeight: '600', color: colors.primary[600] },
-  removeText: { color: colors.semantic.error, fontSize: 14 },
-  addBtn: { marginBottom: spacing.md },
+  lineTtc: { fontSize: 14, fontWeight: '700', color: colors.primary[600], textAlign: 'right', marginTop: spacing.xs },
 
-  summary: { backgroundColor: colors.gray[50], borderRadius: 8, padding: spacing.md, marginBottom: spacing.lg },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
-  summaryLabel: { color: colors.gray[500], fontSize: 13 },
-  summaryRowTtc: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.gray[200] },
-  summaryTtc: { fontSize: 18, fontWeight: '700', color: colors.primary[600] },
-  btn: { marginBottom: spacing.sm },
+  // Warning / error / success banners
+  warnBanner: {
+    backgroundColor: colors.warning[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning[500],
+    borderRadius: 6,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  warnText: { fontSize: 13, color: colors.warning[700], lineHeight: 18 },
+  errorBanner: {
+    backgroundColor: colors.error[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.error[500],
+    borderRadius: 6,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  errorText: { fontSize: 13, color: colors.error[700], lineHeight: 18 },
+  successBanner: {
+    backgroundColor: colors.primary[50],
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary[500],
+    borderRadius: 6,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  successText: { fontSize: 14, color: colors.primary[700], fontWeight: '600', lineHeight: 20 },
 
-  stepNav: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm, marginTop: spacing.lg },
-  stepBtn: { minWidth: 120 },
+  // Recap lines
+  recapLines: {
+    backgroundColor: colors.gray[50],
+    borderRadius: 8,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+    gap: spacing.xs,
+  },
+  recapLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  recapLineName: { flex: 1, fontSize: 13, color: colors.text.primary },
+  recapLineAmt: { fontSize: 13, color: colors.text.secondary, marginLeft: spacing.sm },
+
+  // Summary
+  summaryMeta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.md },
+  summaryMetaLabel: { fontSize: 15, fontWeight: '600', color: colors.text.primary },
+  directionBadge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 12 },
+  directionBadgeText: { fontSize: 12, fontWeight: '600' },
+  totalBlock: {
+    backgroundColor: colors.gray[50],
+    borderRadius: 8,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border.primary,
+  },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
+  totalLabel: { color: colors.text.secondary, fontSize: 14 },
+  totalValue: { color: colors.text.primary, fontSize: 14 },
+  totalTtcRow: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.primary,
+    marginBottom: 0,
+  },
+  totalTtcLabel: { fontSize: 17, fontWeight: '700', color: colors.text.primary },
+  totalTtcValue: { fontSize: 17, fontWeight: '700', color: colors.primary[600] },
+
+  // Buttons
+  fullBtn: { marginTop: spacing.md },
+  halfBtn: { flex: 1 },
+  twoColRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  ghostBtn: { alignSelf: 'center', marginTop: spacing.sm },
+  stepNav: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  navBtn: { flex: 1 },
+
+  // Bannière fonctionnalité en développement
+  devBanner: {
+    backgroundColor: colors.gray[100],
+    borderRadius: 12,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+    borderStyle: 'dashed',
+    gap: spacing.sm,
+  },
+  devBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.gray[600],
+  },
+  devBannerBody: {
+    fontSize: 14,
+    color: colors.gray[500],
+    lineHeight: 21,
+  },
 
   // Mode IA
+  helpText: { fontSize: 14, color: colors.text.secondary, marginBottom: spacing.md, lineHeight: 20 },
   textArea: {
     borderWidth: 1,
     borderColor: colors.border.primary,
@@ -765,27 +952,26 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     fontSize: 14,
     color: colors.text.primary,
-    backgroundColor: colors.background.secondary,
+    backgroundColor: colors.gray[50],
     minHeight: 120,
     textAlignVertical: 'top',
     marginBottom: spacing.md,
   },
-  aiButtonRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, flexWrap: 'wrap' },
-  aiBtn: { flex: 1 },
-  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  loadingText: { color: colors.gray[600] },
+  loadingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+  loadingText: { color: colors.text.secondary, fontSize: 14 },
 
-  previewCard: {
-    backgroundColor: colors.primary[50],
-    borderWidth: 1,
-    borderColor: colors.primary[200],
-    borderRadius: 8,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  previewTitle: { fontSize: 16, fontWeight: '700', color: colors.primary[700], marginBottom: spacing.sm },
-  previewRow: { fontSize: 14, color: colors.gray[800], marginBottom: 4 },
-  previewLine: { fontSize: 13, color: colors.gray[700], marginLeft: spacing.sm, marginBottom: 2 },
-  previewActions: { marginTop: spacing.md, gap: spacing.sm },
-  previewBtn: { marginBottom: spacing.xs },
+  // Aperçu IA
+  previewCard: { borderLeftWidth: 3, borderLeftColor: colors.primary[500] },
+  previewHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
+  previewTitle: { fontSize: 16, fontWeight: '700', color: colors.text.primary },
+  confidenceBadge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 12 },
+  confidenceText: { fontSize: 12, fontWeight: '700' },
+  previewMeta: { fontSize: 14, color: colors.text.secondary, marginBottom: 4 },
+  previewMetaBold: { fontWeight: '600', color: colors.text.primary },
+  divider: { height: 1, backgroundColor: colors.border.primary, marginVertical: spacing.md },
+  linesTitle: { fontSize: 13, fontWeight: '600', color: colors.gray[500], marginBottom: spacing.sm },
+  previewLine: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm },
+  previewLineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary[500], marginTop: 5 },
+  previewLineName: { fontSize: 14, fontWeight: '600', color: colors.text.primary },
+  previewLineSub: { fontSize: 12, color: colors.text.secondary, marginTop: 2 },
 });

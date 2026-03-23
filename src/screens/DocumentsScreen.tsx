@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   ScrollView, 
@@ -9,12 +9,11 @@ import {
   Platform,
   TextInput
 } from 'react-native';
-import { showDeleteConfirm, showSuccess, showError, showAlert } from '../utils/webAlert';
+import { showDeleteConfirm, showSuccess, showError } from '../utils/webAlert';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
 import { typography } from '../design-system/typography';
 import { Text } from '../design-system/components/Text';
-import { Button } from '../design-system/components/Button';
 import { EmptyState } from '../design-system/components/EmptyState';
 import { SkeletonList } from '../design-system/components/SkeletonList';
 import { DropdownSelector, DropdownItem } from '../design-system/components/DropdownSelector';
@@ -30,7 +29,7 @@ import {
   EyeIcon
 } from '../design-system/icons';
 // UnifiedHeader supprimé - géré par SimpleNavigator
-import { documentService, Document, DocumentCategory } from '../services/DocumentService';
+import { documentService, Document } from '../services/DocumentService';
 import { useFarm } from '../contexts/FarmContext';
 
 interface DocumentsScreenProps {
@@ -40,9 +39,8 @@ interface DocumentsScreenProps {
 
 // Interface Document maintenant importée du service
 
-// Catégories pour le filtrage
-const FILTER_CATEGORIES: DropdownItem[] = [
-  { id: 'all', label: 'Toutes les catégories' },
+// Libellés des catégories (les puces de filtre ne listent que les catégories présentes dans les documents)
+const CATEGORY_LABELS: DropdownItem[] = [
   { id: 'analyse-sol', label: 'Analyse de sol' },
   { id: 'certifications', label: 'Certifications' },
   { id: 'assurance', label: 'Assurance' },
@@ -52,9 +50,8 @@ const FILTER_CATEGORIES: DropdownItem[] = [
   { id: 'cartes', label: 'Cartes' },
   { id: 'manuels', label: 'Manuels' },
   { id: 'rapports', label: 'Rapports' },
+  { id: 'autre', label: 'Autre' },
 ];
-
-// Données réelles chargées depuis la base de données
 
 export default function DocumentsScreen({ onBack, onFarmSelector }: DocumentsScreenProps) {
   const { activeFarm } = useFarm();
@@ -96,6 +93,28 @@ export default function DocumentsScreen({ onBack, onFarmSelector }: DocumentsScr
 
     setFilteredDocuments(filtered);
   }, [documents, selectedCategory, searchText]);
+
+  const categoryFilterItems = useMemo(() => {
+    const all: DropdownItem = { id: 'all', label: 'Toutes les catégories' };
+    const seen = new Set<string>();
+    const rest: DropdownItem[] = [];
+    documents.forEach((doc) => {
+      if (seen.has(doc.category)) return;
+      seen.add(doc.category);
+      const label =
+        CATEGORY_LABELS.find((c) => c.id === doc.category)?.label ?? doc.category;
+      rest.push({ id: doc.category, label });
+    });
+    rest.sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+    return [all, ...rest];
+  }, [documents]);
+
+  useEffect(() => {
+    if (selectedCategory === 'all') return;
+    if (!documents.some((d) => d.category === selectedCategory)) {
+      setSelectedCategory('all');
+    }
+  }, [documents, selectedCategory]);
 
   // Charger les documents depuis la base de données
   const loadDocuments = async () => {
@@ -146,7 +165,7 @@ export default function DocumentsScreen({ onBack, onFarmSelector }: DocumentsScr
   };
 
   const getCategoryLabel = (category: string) => {
-    const categoryItem = FILTER_CATEGORIES.find(cat => cat.id === category);
+    const categoryItem = CATEGORY_LABELS.find(cat => cat.id === category);
     return categoryItem?.label || category;
   };
 
@@ -366,29 +385,8 @@ export default function DocumentsScreen({ onBack, onFarmSelector }: DocumentsScr
     }
   };
 
-  // Fonction de test pour vérifier que tous les boutons fonctionnent
-  const handleTestAllButtons = () => {
-    if (documents.length === 0) {
-      showAlert(
-        'Aucun document',
-        'Ajoutez d\'abord un document pour tester les fonctionnalités.'
-      );
-      return;
-    }
-
-    const testDoc = documents[0];
-    if (testDoc) {
-      console.log('Test de suppression pour:', testDoc.name);
-      
-      // Tester directement la suppression (fonction principale qui pose problème)
-      handleDeleteDocument(testDoc);
-    }
-  };
-
-  const selectedCategoryFilter = FILTER_CATEGORIES.filter(cat => cat.id === selectedCategory);
-
-  // Debug: Log pour identifier le problème des doubles headers
-  console.log('🔍 [DocumentsScreen] Rendu avec onBack:', !!onBack);
+  /** No-op : certains bundles web en cache référencent encore ce nom après suppression du bouton de test. */
+  const handleTestAllButtons = () => {};
 
   return (
     <View style={styles.container}>
@@ -405,15 +403,6 @@ export default function DocumentsScreen({ onBack, onFarmSelector }: DocumentsScr
           </Text>
           
           <View style={styles.sectionActions}>
-            {/* Bouton de test (temporaire pour vérification) */}
-            <TouchableOpacity
-              onPress={handleTestAllButtons}
-              style={[styles.actionButton, { backgroundColor: colors.semantic.warning }]}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.actionButtonText}>Test Suppr</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity
               onPress={() => setIsAddDocumentVisible(true)}
               style={styles.addButton}
@@ -424,75 +413,83 @@ export default function DocumentsScreen({ onBack, onFarmSelector }: DocumentsScr
           </View>
         </View>
 
-        {/* En-tête statistiques conforme au guide */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
-            <DocumentIcon color={colors.semantic.success} size={22} />
-            <Text variant="h3" style={styles.summaryTitle}>
-              Aperçu de vos documents
-            </Text>
-          </View>
-
-          <View style={styles.summaryStats}>
-            <View style={styles.summaryStatItem}>
-              <Text style={styles.summaryNumber}>{stats.totalDocuments}</Text>
-              <Text style={styles.summaryLabel}>Documents</Text>
+        {/* Statistiques (données réelles uniquement ; masqué si aucun document) */}
+        {!loading && documents.length > 0 && (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryHeader}>
+              <DocumentIcon color={colors.semantic.success} size={22} />
+              <Text variant="h3" style={styles.summaryTitle}>
+                Aperçu de vos documents
+              </Text>
             </View>
-            <View style={styles.summaryStatItem}>
-              <Text style={styles.summaryNumber}>{stats.totalSizeMB}</Text>
-              <Text style={styles.summaryLabel}>MB utilisés</Text>
-            </View>
-            <View style={styles.summaryStatItem}>
-              <Text style={styles.summaryNumber}>{stats.categoriesCount}</Text>
-              <Text style={styles.summaryLabel}>Catégories</Text>
-            </View>
-          </View>
-        </View>
 
-        {/* Barre de recherche séparée */}
-        <View style={styles.searchSection}>
-          <View style={styles.searchContainer}>
-            <SearchIcon size={20} color={colors.text.tertiary} />
-            <TextInput
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={setSearchText}
-              placeholder="Rechercher dans vos documents..."
-              placeholderTextColor={colors.text.tertiary}
-            />
-          </View>
-        </View>
-
-        {/* Filtres en cartouches scrollables */}
-        <View style={styles.filtersContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterScrollView}
-            contentContainerStyle={styles.filterScrollContent}
-          >
-            {FILTER_CATEGORIES.map((category) => (
-              <TouchableOpacity
-                key={category.id}
-                onPress={() => setSelectedCategory(category.id)}
-                style={[
-                  styles.filterChip,
-                  selectedCategory === category.id && styles.filterChipActive
-                ]}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedCategory === category.id && styles.filterChipTextActive
-                  ]}
-                >
-                  {category.label}
+            <View style={styles.summaryStats}>
+              <View style={styles.summaryStatItem}>
+                <Text style={styles.summaryNumber}>{stats.totalDocuments}</Text>
+                <Text style={styles.summaryLabel}>Documents</Text>
+              </View>
+              <View style={styles.summaryStatItem}>
+                <Text style={styles.summaryNumber}>
+                  {stats.totalSizeMB.toFixed(2)}
                 </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+                <Text style={styles.summaryLabel}>MB utilisés</Text>
+              </View>
+              <View style={styles.summaryStatItem}>
+                <Text style={styles.summaryNumber}>{stats.categoriesCount}</Text>
+                <Text style={styles.summaryLabel}>Catégories</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {(loading || documents.length > 0) && (
+          <>
+            {/* Barre de recherche séparée */}
+            <View style={styles.searchSection}>
+              <View style={styles.searchContainer}>
+                <SearchIcon size={20} color={colors.text.tertiary} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={searchText}
+                  onChangeText={setSearchText}
+                  placeholder="Rechercher dans vos documents..."
+                  placeholderTextColor={colors.text.tertiary}
+                />
+              </View>
+            </View>
+
+            {/* Filtres : uniquement les catégories réellement présentes */}
+            <View style={styles.filtersContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterScrollView}
+                contentContainerStyle={styles.filterScrollContent}
+              >
+                {categoryFilterItems.map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    onPress={() => setSelectedCategory(category.id)}
+                    style={[
+                      styles.filterChip,
+                      selectedCategory === category.id && styles.filterChipActive
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        selectedCategory === category.id && styles.filterChipTextActive
+                      ]}
+                    >
+                      {category.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </>
+        )}
 
         {/* Liste des documents */}
         <View style={styles.documentsList}>
@@ -642,11 +639,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  actionButtonText: {
-    color: colors.text.inverse,
-    fontSize: typography.sizes.xs,
-    fontWeight: typography.weights.semibold,
   },
   addButton: {
     width: 48,
