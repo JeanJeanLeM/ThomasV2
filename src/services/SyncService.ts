@@ -205,18 +205,74 @@ export class SyncService {
 
       console.log('✅ [SYNC] Message texte envoyé:', chatMessage.id);
 
-      // Lancer l'analyse IA (en arrière-plan, ne pas bloquer)
-      // L'analyse se fera automatiquement côté serveur ou via le flux normal
+      // Lancer l'analyse IA + persister la réponse assistant (cards) pour l'UX chat
       try {
-        await AIChatService.analyzeMessage(
+        const analysisResult = await AIChatService.analyzeMessage(
           chatMessage.id,
           message.content || '',
           message.session_id
         );
-        console.log('✅ [SYNC] Analyse IA lancée pour message texte');
+
+        const analysisAny = analysisResult as any;
+        const actionsWithData = (analysisResult.actions || []).map((action: any) => ({
+          ...action,
+          extracted_data: action.extracted_data || action.action_data?.extracted_data || {},
+          decomposed_text: action.decomposed_text || action.action_data?.decomposed_text || action.original_text,
+          original_text: action.original_text || action.action_data?.original_text,
+          matched_entities: action.matched_entities || action.action_data?.context || {},
+        }));
+        const displayableActions = analysisAny.is_help_request
+          ? actionsWithData.filter((action: any) => action.action_type !== 'help')
+          : actionsWithData;
+        const actionsCount = displayableActions.length;
+
+        const aiResponseText = analysisAny.is_help_request && analysisAny.message
+          ? analysisAny.message
+          : actionsCount > 0
+            ? `Parfait ! J'ai identifié ${actionsCount} action${actionsCount > 1 ? 's' : ''} dans votre message.`
+            : `J'ai bien noté votre message.`;
+
+        await ChatServiceDirect.sendMessage({
+          session_id: message.session_id,
+          role: 'assistant',
+          content: aiResponseText,
+          ai_confidence: analysisResult.confidence,
+          metadata: {
+            analysis_id: analysisResult.analysis_id,
+            actions_count: actionsCount,
+            actions: displayableActions,
+            has_actions: actionsCount > 0,
+            processing_time_ms: analysisResult.processing_time_ms,
+            is_help_request: analysisAny.is_help_request || false,
+            ...(analysisAny.help_shortcut && { help_shortcut: analysisAny.help_shortcut }),
+            synced_from_offline_queue: true,
+            source_message_id: chatMessage.id,
+          },
+        });
+
+        console.log('✅ [SYNC] Analyse IA + message assistant créés pour message texte', {
+          actions: actionsCount,
+          help: !!analysisAny.is_help_request,
+        });
       } catch (analysisError: any) {
         // Ne pas faire échouer la sync si l'analyse échoue
-        console.warn('⚠️ [SYNC] Analyse IA échouée (non bloquant):', analysisError);
+        console.warn('⚠️ [SYNC] Analyse IA texte échouée (non bloquant):', analysisError);
+
+        // Réponse fallback pour conserver un feedback visible dans le chat
+        try {
+          await ChatServiceDirect.sendMessage({
+            session_id: message.session_id,
+            role: 'assistant',
+            content: 'Votre message hors ligne a été synchronisé, mais l’analyse Thomas a échoué. Vous pouvez relancer "Analyser avec Thomas".',
+            metadata: {
+              fallback_mode: true,
+              synced_from_offline_queue: true,
+              source_message_id: chatMessage.id,
+            },
+          });
+        } catch (fallbackError) {
+          console.warn('⚠️ [SYNC] Impossible de créer le fallback assistant:', fallbackError);
+        }
       }
 
       return true;

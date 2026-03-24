@@ -75,6 +75,8 @@ interface Message {
   attachments?: any[]; // Pièces jointes du message
   hasAttachments?: boolean;
   confidence?: number;
+  offlineQueueStatus?: 'pending' | 'processing' | 'failed';
+  offlineQueueError?: string;
 }
 
 type InputMode = 'vocal_direct' | 'dictation';
@@ -2494,6 +2496,18 @@ export default function ChatConversation({
     };
   }, [isRecording, chat?.id]);
 
+  // Brancher la progression détaillée de SyncService sur la bannière de chat
+  useEffect(() => {
+    SyncService.setProgressCallback((progress) => {
+      setSyncProgress(progress.message || `Synchronisation ${progress.current}/${progress.total}...`);
+    });
+
+    return () => {
+      // Reset vers un callback neutre au démontage
+      SyncService.setProgressCallback(() => {});
+    };
+  }, []);
+
   // Synchronisation automatique quand la connexion revient
   useEffect(() => {
     if (!networkStatus.isConnected) {
@@ -2555,65 +2569,111 @@ export default function ChatConversation({
     };
   }, [networkStatus.isConnected, refreshQueue]);
 
-  // Afficher les messages en attente dans le chat (texte et audio)
+  // Afficher les messages en attente dans le chat (texte + audio), avec statut évolutif
   useEffect(() => {
     if (!chat?.id) return;
-    
-    const chatPendingMessages = pendingMessages.filter(
-      msg => msg.session_id === chat.id && (msg.type === 'text' || msg.type === 'audio') && msg.status === 'pending'
+
+    let cancelled = false;
+    const chatQueuedMessages = pendingMessages.filter(
+      msg =>
+        msg.session_id === chat.id &&
+        (msg.type === 'text' || msg.type === 'audio') &&
+        (msg.status === 'pending' || msg.status === 'processing' || msg.status === 'failed')
     );
-    
-    if (chatPendingMessages.length > 0) {
-      // Fonction async pour récupérer les URIs audio
-      const loadPendingMessages = async () => {
-        const pendingMessagesAsChatMessages: Message[] = await Promise.all(
-          chatPendingMessages.map(async (pending) => {
-            if (pending.type === 'audio') {
-              // Message audio en attente - récupérer l'URI réelle depuis le stockage
-              let audioUri = pending.audio_uri || '';
-              try {
-                const actualUri = await AudioStorageService.getAudioUri(pending.audio_uri || '');
-                if (actualUri) {
-                  audioUri = actualUri;
-                }
-              } catch (error) {
-                console.warn('⚠️ [OFFLINE] Impossible de récupérer l\'URI audio:', error);
+
+    const loadQueuedMessages = async () => {
+      const queuedMessagesAsChatMessages: Message[] = await Promise.all(
+        chatQueuedMessages.map(async (pending) => {
+          const statusSuffix =
+            pending.status === 'processing'
+              ? '\n\n🔄 Synchronisation en cours...'
+              : pending.status === 'failed'
+                ? `\n\n❌ Échec de synchronisation${pending.error ? `: ${pending.error}` : ''}`
+                : '';
+
+          if (pending.type === 'audio') {
+            // Message audio en attente - récupérer l'URI réelle depuis le stockage
+            let audioUri = pending.audio_uri || '';
+            try {
+              const actualUri = await AudioStorageService.getAudioUri(pending.audio_uri || '');
+              if (actualUri) {
+                audioUri = actualUri;
               }
-              
-              return {
-                id: pending.id,
-                text: '🎤 Message vocal en attente de synchronisation...',
-                isUser: true,
-                timestamp: new Date(pending.created_at),
-                hasAttachments: true,
-                attachments: [{
-                  type: 'audio',
-                  uri: audioUri,
-                  duration: pending.audio_metadata?.duration || 0,
-                }]
-              };
-            } else {
-              // Message texte en attente
-              return {
-                id: pending.id,
-                text: pending.content || '',
-                isUser: true,
-                timestamp: new Date(pending.created_at)
-              };
+            } catch (error) {
+              console.warn('⚠️ [OFFLINE] Impossible de récupérer l\'URI audio:', error);
             }
-          })
+
+            const baseText =
+              pending.status === 'processing'
+                ? '🎤 Message vocal en cours de synchronisation...'
+                : pending.status === 'failed'
+                  ? '🎤 Message vocal en échec de synchronisation'
+                  : '🎤 Message vocal en attente de synchronisation...';
+
+            return {
+              id: pending.id,
+              text: `${baseText}${statusSuffix}`,
+              isUser: true,
+              timestamp: new Date(pending.created_at),
+              hasAttachments: true,
+              attachments: [{
+                type: 'audio',
+                uri: audioUri,
+                duration: pending.audio_metadata?.duration || 0,
+              }],
+              offlineQueueStatus: pending.status,
+              offlineQueueError: pending.error,
+            };
+          }
+
+          // Message texte en attente / processing / failed
+          return {
+            id: pending.id,
+            text: `${pending.content || ''}${statusSuffix}`,
+            isUser: true,
+            timestamp: new Date(pending.created_at),
+            offlineQueueStatus: pending.status,
+            offlineQueueError: pending.error,
+          };
+        })
+      );
+
+      if (cancelled) return;
+
+      const queuedIds = new Set(chatQueuedMessages.map(m => m.id));
+
+      // Reconciliation:
+      // 1) supprimer les anciens placeholders offline qui ne sont plus en queue
+      // 2) upsert les placeholders offline courants (pending/processing/failed)
+      setMessages(prev => {
+        const base = prev.filter(
+          m => !(m.id.startsWith('offline_') && !queuedIds.has(m.id))
         );
-        
-        // Ajouter les messages en attente à la liste des messages s'ils n'y sont pas déjà
-        setMessages(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          const newPending = pendingMessagesAsChatMessages.filter(m => !existingIds.has(m.id));
-          return [...prev, ...newPending];
-        });
-      };
-      
-      loadPendingMessages();
-    }
+
+        const indexById = new Map<string, number>();
+        base.forEach((m, idx) => indexById.set(m.id, idx));
+
+        const next = [...base];
+        for (const queued of queuedMessagesAsChatMessages) {
+          const existingIndex = indexById.get(queued.id);
+          if (typeof existingIndex === 'number') {
+            next[existingIndex] = {
+              ...next[existingIndex],
+              ...queued,
+            };
+          } else {
+            next.push(queued);
+          }
+        }
+        return next;
+      });
+    };
+
+    loadQueuedMessages();
+
+    return () => {
+      cancelled = true;
+    };
   }, [pendingMessages, chat?.id]);
 
   // Écouter les nouveaux messages en temps réel (seulement pour les vrais chats)
@@ -2870,6 +2930,20 @@ export default function ChatConversation({
         });
         
         console.log('✅ [OFFLINE] Message ajouté à la queue:', queueId);
+
+        // Affichage immédiat dans le fil chat (UX offline)
+        const tempOfflineTextMessage: Message = {
+          id: queueId,
+          text: messageContent,
+          isUser: true,
+          timestamp: new Date(),
+          offlineQueueStatus: 'pending',
+        };
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === queueId);
+          return exists ? prev : [...prev, tempOfflineTextMessage];
+        });
+        scrollToBottom(true, 50);
         
         await refreshQueue();
         
@@ -4161,6 +4235,7 @@ export default function ChatConversation({
             
             // Vérifier si le message nécessiterait une analyse (mais pas si c'est une demande d'aide)
             const couldBeAnalyzed = message.text.length >= 10 && !message.hasAttachments && !isHelpRequest;
+            const offlineStatus = message.offlineQueueStatus;
             
             return (
               <View
@@ -4197,6 +4272,71 @@ export default function ChatConversation({
                     {message.text}
                   </Text>
                 </View>
+
+                {/* Statut de synchro offline du message */}
+                {offlineStatus && (
+                  <View
+                    style={{
+                      marginTop: spacing.xs,
+                      alignSelf: 'flex-end',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 12,
+                      backgroundColor:
+                        offlineStatus === 'failed'
+                          ? '#FEE2E2'
+                          : offlineStatus === 'processing'
+                            ? '#DBEAFE'
+                            : '#FEF3C7',
+                      borderWidth: 1,
+                      borderColor:
+                        offlineStatus === 'failed'
+                          ? '#FCA5A5'
+                          : offlineStatus === 'processing'
+                            ? '#93C5FD'
+                            : '#FCD34D',
+                    }}
+                  >
+                    <Ionicons
+                      name={
+                        offlineStatus === 'failed'
+                          ? 'alert-circle'
+                          : offlineStatus === 'processing'
+                            ? 'sync'
+                            : 'cloud-offline'
+                      }
+                      size={13}
+                      color={
+                        offlineStatus === 'failed'
+                          ? '#B91C1C'
+                          : offlineStatus === 'processing'
+                            ? '#1D4ED8'
+                            : '#92400E'
+                      }
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '600',
+                        color:
+                          offlineStatus === 'failed'
+                            ? '#B91C1C'
+                            : offlineStatus === 'processing'
+                              ? '#1D4ED8'
+                              : '#92400E',
+                      }}
+                    >
+                      {offlineStatus === 'failed'
+                        ? 'Échec de synchronisation'
+                        : offlineStatus === 'processing'
+                          ? 'Synchronisation en cours...'
+                          : 'En attente de connexion'}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Bouton "Analyser avec Thomas" si pas encore analysé */}
                 {!hasBeenAnalyzed && !hasAnalysisMetadata && couldBeAnalyzed && message.id && !message.id.startsWith('temp-') && !message.id.startsWith('offline') && (
