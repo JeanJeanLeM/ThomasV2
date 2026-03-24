@@ -42,6 +42,7 @@ export function useUnifiedSpeechRecognition(
   const [nativeAvailable, setNativeAvailable] = useState(false);
 
   const nativeFinalizedRef = useRef('');
+  const lastFinalSegmentRef = useRef('');
   const isNative = Platform.OS !== 'web';
 
   // Vérifie la disponibilité du module au montage (natif seulement)
@@ -100,17 +101,22 @@ export function useUnifiedSpeechRecognition(
     const subResult = ExpoSpeechRecognitionModule.addListener(
       'result',
       (event: { isFinal: boolean; results: Array<{ transcript: string; confidence: number }> }) => {
-        const transcript = event.results?.[0]?.transcript ?? '';
+        const transcript = (event.results?.[0]?.transcript ?? '').trim();
 
         if (event.isFinal) {
+          if (!transcript) return;
+          // Certains moteurs renvoient parfois le même final plusieurs fois.
+          if (transcript === lastFinalSegmentRef.current) return;
+          lastFinalSegmentRef.current = transcript;
+
           const separator = nativeFinalizedRef.current.length > 0 ? ' ' : '';
-          const updated = nativeFinalizedRef.current + separator + transcript.trim();
+          const updated = nativeFinalizedRef.current + separator + transcript;
           nativeFinalizedRef.current = updated;
           setNativeFinalized(updated);
           setNativeInterim('');
           onInterim?.('');
-          onFinalSegment?.(transcript.trim(), updated);
-          console.log('✅ [NATIVE-SPEECH] Segment final:', transcript.trim());
+          onFinalSegment?.(transcript, updated);
+          console.log('✅ [NATIVE-SPEECH] Segment final:', transcript);
         } else {
           setNativeInterim(transcript);
           onInterim?.(transcript);
@@ -137,12 +143,33 @@ export function useUnifiedSpeechRecognition(
 
     // Réinitialiser l'état
     nativeFinalizedRef.current = '';
+    lastFinalSegmentRef.current = '';
     setNativeFinalized('');
     setNativeInterim('');
     setNativeError(null);
 
+    // Vérifier la disponibilité runtime (service OS activé + module prêt)
+    const availableNow = !!ExpoSpeechRecognitionModule.isRecognitionAvailable?.();
+    if (!availableNow) {
+      const msg =
+        Platform.OS === 'android'
+          ? 'Service de reconnaissance indisponible sur l’appareil (activez Google Speech Services).'
+          : 'Dictée indisponible (activez Siri et Dictée dans les réglages iOS).';
+      console.error('❌ [NATIVE-SPEECH]', msg);
+      setNativeError(msg);
+      onError?.(msg);
+      return;
+    }
+
     // Demander les permissions si nécessaire
-    const perms = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    let perms: any;
+    if (Platform.OS === 'ios' && ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync) {
+      // Sur iOS, on privilégie le micro + on-device recognition pour éviter
+      // les problèmes fréquents de permission "Speech Recognition".
+      perms = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
+    } else {
+      perms = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    }
     if (!perms.granted) {
       const msg = 'Permission microphone refusée';
       console.error('❌ [NATIVE-SPEECH]', msg);
@@ -152,10 +179,23 @@ export function useUnifiedSpeechRecognition(
     }
 
     try {
+      const androidVersion =
+        Platform.OS === 'android'
+          ? (typeof Platform.Version === 'number'
+              ? Platform.Version
+              : parseInt(String(Platform.Version), 10))
+          : 0;
+      const supportsContinuous = Platform.OS !== 'android' || androidVersion >= 33;
+      const supportsOnDevice = !!ExpoSpeechRecognitionModule.supportsOnDeviceRecognition?.();
+
       ExpoSpeechRecognitionModule.start({
         lang: language,
         interimResults: true,
-        continuous: true,
+        // Android <= 12 ne gère pas continuous proprement avec ce module.
+        continuous: supportsContinuous,
+        // Sur iOS, on force on-device si possible pour rendre la dictée plus fiable.
+        requiresOnDeviceRecognition: Platform.OS === 'ios' ? supportsOnDevice : undefined,
+        iosTaskHint: Platform.OS === 'ios' ? 'dictation' : undefined,
       });
     } catch (err: any) {
       console.error('❌ [NATIVE-SPEECH] Erreur start:', err);
@@ -184,6 +224,7 @@ export function useUnifiedSpeechRecognition(
       console.warn('⚠️ [NATIVE-SPEECH] Erreur abort:', err);
     }
     nativeFinalizedRef.current = '';
+    lastFinalSegmentRef.current = '';
     setNativeFinalized('');
     setNativeInterim('');
     setNativeIsListening(false);

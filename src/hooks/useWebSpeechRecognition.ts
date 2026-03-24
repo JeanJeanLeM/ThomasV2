@@ -63,6 +63,7 @@ export function useWebSpeechRecognition(
 
   const recognitionRef = useRef<any>(null);
   const finalizedRef = useRef('');       // Copie ref pour éviter les stale closures
+  const finalByIndexRef = useRef<Map<number, string>>(new Map()); // Évite les doublons cumulés
   const stoppedManuallyRef = useRef(false);
 
   // Initialiser la reconnaissance
@@ -109,29 +110,49 @@ export function useWebSpeechRecognition(
 
     recognition.onresult = (event: any) => {
       let interim = '';
-      let newFinalSegment = '';
+      let changedFinalSegment = '';
+      let hasFinalChange = false;
 
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
+      // Important:
+      // Sur certains moteurs, un "final" peut revenir avec une phrase cumulée
+      // ("j'ai", puis "j'ai récolté", puis "j'ai récolté des...").
+      // On stocke donc le final par index et on reconstruit le texte global
+      // pour éviter d'append des doublons.
+      for (let i = 0; i < event.results.length; i++) {
+        const transcript = (event.results[i][0]?.transcript || '').trim();
+        if (!transcript) continue;
+
         if (event.results[i].isFinal) {
-          newFinalSegment += transcript;
-        } else {
-          interim += transcript;
+          const prevAtIndex = finalByIndexRef.current.get(i) || '';
+          if (prevAtIndex !== transcript) {
+            finalByIndexRef.current.set(i, transcript);
+            changedFinalSegment = transcript;
+            hasFinalChange = true;
+          }
+        } else if (i >= event.resultIndex) {
+          interim = interim ? `${interim} ${transcript}` : transcript;
         }
       }
 
-      // Mettre à jour l'interim
-      setInterimText(interim);
-      onInterim?.(interim);
+      const cleanInterim = interim.trim();
+      setInterimText(cleanInterim);
+      onInterim?.(cleanInterim);
 
-      // Accumuler les segments finaux
-      if (newFinalSegment) {
-        const separator = finalizedRef.current.length > 0 ? ' ' : '';
-        const updated = finalizedRef.current + separator + newFinalSegment.trim();
-        finalizedRef.current = updated;
-        setFinalizedText(updated);
-        onFinalSegment?.(newFinalSegment.trim(), updated);
-        console.log('✅ [WEB-SPEECH] Segment final:', newFinalSegment.trim());
+      if (hasFinalChange) {
+        const updated = Array.from(finalByIndexRef.current.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([, segment]) => segment.trim())
+          .filter(Boolean)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        if (updated !== finalizedRef.current) {
+          finalizedRef.current = updated;
+          setFinalizedText(updated);
+          onFinalSegment?.(changedFinalSegment, updated);
+          console.log('✅ [WEB-SPEECH] Segment final:', changedFinalSegment);
+        }
       }
     };
 
@@ -154,6 +175,7 @@ export function useWebSpeechRecognition(
 
     stoppedManuallyRef.current = false;
     finalizedRef.current = '';
+    finalByIndexRef.current.clear();
     setFinalizedText('');
     setInterimText('');
     setErrorMessage(null);
@@ -191,6 +213,7 @@ export function useWebSpeechRecognition(
       }
     }
     finalizedRef.current = '';
+    finalByIndexRef.current.clear();
     setFinalizedText('');
     setInterimText('');
     setIsListening(false);

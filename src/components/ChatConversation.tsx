@@ -459,6 +459,9 @@ export default function ChatConversation({
 
   const webSpeech = useUnifiedSpeechRecognition({
     language: 'fr-FR',
+    onStart: () => {
+      setIsRecording(true);
+    },
     onFinalSegment: (_segment, fullFinalized) => {
       // Appliquer la correction contextuelle sur le texte finalisé complet
       let displayText = fullFinalized;
@@ -497,9 +500,11 @@ export default function ChatConversation({
     },
     onStop: () => {
       setWebSpeechInterim('');
+      setIsRecording(false);
     },
     onError: (error) => {
       console.error('❌ [WEB-SPEECH] Erreur reconnaissance:', error);
+      setIsRecording(false);
       if (error !== 'no-speech') {
         Alert.alert('Erreur dictée', `La reconnaissance vocale a rencontré une erreur : ${error}`);
       }
@@ -719,7 +724,6 @@ export default function ChatConversation({
 
     console.log('🎙️ [DICTATION] Démarrage dictée Web Speech...');
     webSpeech.start();
-    setIsRecording(true);
     if (navigation.voiceHelpEnabled) {
       setVoiceHelpExampleIndex(0);
       setShowVoiceHelpOverlay(true);
