@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Modal,
@@ -30,6 +30,22 @@ const ONBOARDING_IMAGES: (ImageSourcePropType | null)[] = [
   require('../../../assets/Onboarding/ONBOARDING 3.png'),
 ];
 
+/** Précharge toutes les illustrations dès l’étape 1 (étapes suivantes sans flash). */
+function prefetchOnboardingImages(): void {
+  for (const source of ONBOARDING_IMAGES) {
+    if (!source) continue;
+    try {
+      const resolved = Image.resolveAssetSource(source as number);
+      const uri = resolved?.uri;
+      if (uri) {
+        Image.prefetch(uri).catch(() => {});
+      }
+    } catch {
+      // Web / résolution impossible : ignoré
+    }
+  }
+}
+
 interface OnboardingModalProps {
   visible: boolean;
   onClose: () => void;
@@ -37,6 +53,22 @@ interface OnboardingModalProps {
 
 const OnboardingModal: React.FC<OnboardingModalProps> = ({ visible, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const preloadedForSessionRef = useRef(false);
+
+  // Dès que l’utilisateur est sur la page 1 : précharger toutes les images en arrière-plan
+  useEffect(() => {
+    if (!visible || currentIndex !== 0) return;
+    if (preloadedForSessionRef.current) return;
+    preloadedForSessionRef.current = true;
+    prefetchOnboardingImages();
+  }, [visible, currentIndex]);
+
+  // Nouvelle ouverture du modal (ex. depuis la FAQ) : permettre un nouveau preload si besoin
+  useEffect(() => {
+    if (!visible) {
+      preloadedForSessionRef.current = false;
+    }
+  }, [visible]);
 
   const step = ONBOARDING_STEPS[currentIndex];
   const isFirst = currentIndex === 0;
