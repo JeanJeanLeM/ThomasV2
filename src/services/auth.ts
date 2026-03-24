@@ -37,6 +37,16 @@ interface UserProfile {
 }
 
 class ThomasAuthService implements AuthService {
+  /**
+   * URL de retour OAuth côté web.
+   * Permet d'éviter un fallback vers un Site URL Supabase obsolète.
+   */
+  private getWebOAuthRedirectUrl(): string | undefined {
+    if (typeof window === 'undefined' || !window.location?.origin) {
+      return undefined;
+    }
+    return window.location.origin;
+  }
   
   // ==============================
   // AUTHENTIFICATION EMAIL
@@ -147,12 +157,14 @@ class ThomasAuthService implements AuthService {
       // Détection environnement : web vs mobile
       const { Platform } = require('react-native');
       const isWeb = Platform.OS === 'web';
+      const webRedirectTo = this.getWebOAuthRedirectUrl();
 
       // Sur le web, Supabase gère automatiquement la redirection
-      // avec l'URL actuelle (window.location.href).
+      // avec redirectTo explicite pour éviter un fallback Site URL incorrect.
       // Sur mobile (app native), on force le schéma personnalisé.
       const oauthOptions: any = isWeb
         ? {
+            ...(webRedirectTo ? { redirectTo: webRedirectTo } : {}),
             queryParams: {
               access_type: 'offline',
               prompt: 'consent',
@@ -199,9 +211,11 @@ class ThomasAuthService implements AuthService {
       // Détection environnement : web vs mobile
       const { Platform } = require('react-native');
       const isWeb = Platform.OS === 'web';
+      const webRedirectTo = this.getWebOAuthRedirectUrl();
 
       const oauthOptions: any = isWeb
         ? {
+            ...(webRedirectTo ? { redirectTo: webRedirectTo } : {}),
             queryParams: {
               scope: 'name email',
             },

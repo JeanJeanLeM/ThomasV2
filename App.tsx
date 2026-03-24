@@ -7,6 +7,7 @@ import LoadingScreen from './src/screens/LoadingScreen';
 import FarmSelectionScreen from './src/screens/FarmSelectionScreen';
 import { ForceUpdateScreen } from './src/screens/ForceUpdateScreen';
 import NewSimpleNavigator from './src/navigation/NewSimpleNavigator';
+import AddToHomeScreenPrompt from './src/components/AddToHomeScreenPrompt';
 import InitializationDebug from './src/components/debug/InitializationDebug';
 import DatabaseConnectivityTest from './src/components/debug/DatabaseConnectivityTest';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -160,6 +161,7 @@ function AppMainContent(): JSX.Element {
   return (
     <NavigationProvider>
       <NewSimpleNavigator />
+      <AddToHomeScreenPrompt />
     </NavigationProvider>
   );
 }

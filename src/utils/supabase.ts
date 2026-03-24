@@ -25,6 +25,8 @@ const createSupabaseClient = () => {
     );
   }
 
+  const isWeb = typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+
   // Création du client avec les variables publiques et custom storage
   return createClient(
     ENV_CLIENT.SUPABASE_URL,
@@ -33,7 +35,9 @@ const createSupabaseClient = () => {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false,
+        // Nécessaire sur web pour finaliser OAuth après redirection.
+        // Désactivé sur mobile natif où la gestion passe par deep links.
+        detectSessionInUrl: isWeb,
         debug: false,
         // Storage personnalisé utilisant SecureStore pour mobile
         storage: {
