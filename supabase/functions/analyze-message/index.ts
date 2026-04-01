@@ -257,7 +257,7 @@ interface AnalyzeMessageRequest {
 interface UserContext {
   user_id: string
   plots: Array<{id: number, name: string, aliases: string[], llm_keywords: string[], is_active: boolean}>
-  surface_units: Array<{id: number, name: string, plot_name: string}>
+  surface_units: Array<{id: number, name: string, plot_id: number, plot_name: string}>
   materials: Array<{id: number, name: string, category: string, llm_keywords?: string[], is_active: boolean}>
   conversions: Array<{
     id: string, 
@@ -274,6 +274,13 @@ interface UserContext {
     preferred_units: Record<string, string>
     default_plot_ids: number[]
   }
+}
+
+interface SurfaceSelector {
+  original: string
+  prefix: string
+  numbers: number[]
+  select_all: boolean
 }
 
 serve(async (req) => {
@@ -631,8 +638,8 @@ async function buildUserContext(supabase: any, userId: string, farmId: number): 
   const { data: surfaceUnits } = await supabase
     .from('surface_units')
     .select(`
-      id, name, 
-      plots!inner(name)
+      id, name, plot_id,
+      plots!inner(id, name)
     `)
     .eq('plots.farm_id', farmId)
     .eq('is_active', true)
@@ -664,7 +671,8 @@ async function buildUserContext(supabase: any, userId: string, farmId: number): 
     surface_units: (surfaceUnits || []).map((su: any) => ({
       id: su.id,
       name: su.name,
-      plot_name: su.plots.name
+      plot_id: su.plot_id ?? su.plots?.id,
+      plot_name: su.plots?.name
     })),
     materials: materials || [],
     conversions: conversions || [],
@@ -888,7 +896,12 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
     console.log(`🎯 [MATCH-PLOTS] Liste des surface units:`, context.surface_units.map(su => `${su.name} (${su.plot_name})`).join(', '))
   }
   
-  const results = {
+  const results: {
+    plot_ids: number[]
+    surface_unit_ids: number[]
+    matched_plots: any[]
+    matched_surface_units: any[]
+  } = {
     plot_ids: [],
     surface_unit_ids: [],
     matched_plots: [],
@@ -899,6 +912,119 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
     console.log(`⚠️ [MATCH-PLOTS] Aucune mention à traiter, retour résultat vide`)
     return results
   }
+
+  const toNumberSet = (value: string) => new Set((value.match(/\d+/g) || []))
+  const normalizeForMatch = (value: string) => normalizeString(value || '')
+  const numbersCompatible = (mentionValue: string, candidateValue: string): boolean => {
+    const mentionNumbers = toNumberSet(normalizeForMatch(mentionValue))
+    const candidateNumbers = toNumberSet(normalizeForMatch(candidateValue))
+
+    if (mentionNumbers.size > 0 && candidateNumbers.size > 0) {
+      return [...mentionNumbers].every(n => candidateNumbers.has(n)) &&
+        [...candidateNumbers].every(n => mentionNumbers.has(n))
+    }
+    if (mentionNumbers.size > 0 && candidateNumbers.size === 0) {
+      return false
+    }
+    return true
+  }
+
+  const detectSurfacePrefix = (value: string): string | null => {
+    const normalized = normalizeForMatch(value)
+    const match = normalized.match(/\b(planche|rang|ligne|bande)s?\b/)
+    return match?.[1] || null
+  }
+
+  const parseSurfaceSelectors = (rawMention: string, fallbackPrefix: string | null): SurfaceSelector[] => {
+    const mention = rawMention.trim()
+    if (!mention) return []
+
+    const normalizedMention = normalizeForMatch(mention)
+    const prefix = detectSurfacePrefix(mention) || fallbackPrefix
+    if (!prefix) return []
+
+    const selectAll = /\btoutes?\s+les?\s+(planches?|rangs?|lignes?|bandes?)\b/i.test(normalizedMention)
+    const numbers = new Set<number>()
+
+    const rangeRegex = new RegExp(`\\b${prefix}s?\\b\\s*(\\d+)\\s*(?:a|à|-|au|jusqu(?:a|à))\\s*(\\d+)`, 'gi')
+    for (const match of normalizedMention.matchAll(rangeRegex)) {
+      const from = parseInt(match[1], 10)
+      const to = parseInt(match[2], 10)
+      if (!Number.isNaN(from) && !Number.isNaN(to)) {
+        const start = Math.min(from, to)
+        const end = Math.max(from, to)
+        const maxExpanded = Math.min(end, start + 99)
+        for (let i = start; i <= maxExpanded; i++) {
+          numbers.add(i)
+        }
+      }
+    }
+
+    const afterPrefix = normalizedMention.match(new RegExp(`\\b${prefix}s?\\b\\s+(.+)$`))
+    const numbersAfterPrefix = afterPrefix?.[1] ? (afterPrefix[1].match(/\d+/g) || []) : []
+    numbersAfterPrefix.forEach((n) => {
+      const parsed = parseInt(n, 10)
+      if (!Number.isNaN(parsed)) numbers.add(parsed)
+    })
+
+    if (numbers.size === 0 && /^\d+$/.test(normalizedMention)) {
+      numbers.add(parseInt(normalizedMention, 10))
+    }
+
+    return [{
+      original: mention,
+      prefix,
+      numbers: [...numbers],
+      select_all: selectAll
+    }]
+  }
+
+  const scoreSurfaceUnitMatch = (mentionValue: string, surfaceUnitName: string): { score: number, matchType: string } => {
+    const mentionNorm = normalizeForMatch(mentionValue)
+    const candidateNorm = normalizeForMatch(surfaceUnitName)
+    if (!mentionNorm || !candidateNorm) return { score: 0, matchType: 'none' }
+
+    if (mentionNorm === candidateNorm) {
+      return { score: 1.0, matchType: 'exact' }
+    }
+
+    if (
+      (candidateNorm.includes(mentionNorm) || mentionNorm.includes(candidateNorm)) &&
+      numbersCompatible(mentionNorm, candidateNorm)
+    ) {
+      return { score: 0.9, matchType: 'partial' }
+    }
+
+    const similarity = calculateStringSimilarity(mentionNorm, candidateNorm)
+    if (similarity >= 0.7) {
+      return { score: similarity, matchType: 'fuzzy' }
+    }
+
+    return { score: 0, matchType: 'none' }
+  }
+
+  const surfaceRegex = /\b(planche|rang|ligne|bande)\b/i
+  const detectMentionPlotIds = (mention: string): number[] => {
+    const mentionNorm = normalizeForMatch(mention)
+    const ids = new Set<number>()
+    for (const plot of context.plots) {
+      const candidates = [plot.name, ...(Array.isArray(plot.aliases) ? plot.aliases : [])]
+      for (const candidate of candidates) {
+        const candidateNorm = normalizeForMatch(candidate || '')
+        if (candidateNorm && mentionNorm.includes(candidateNorm)) {
+          ids.add(plot.id)
+          break
+        }
+      }
+    }
+    return [...ids]
+  }
+  const hasSurfaceContext = mentions.some(m => typeof m === 'string' && surfaceRegex.test(m))
+  const defaultSurfacePrefix = mentions
+    .map(m => (typeof m === 'string' ? detectSurfacePrefix(m) : null))
+    .find(Boolean) || null
+
+  const surfaceMentions: string[] = []
   
   for (const mention of mentions) {
     if (!mention || typeof mention !== 'string') {
@@ -906,6 +1032,7 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
       continue
     }
     const mentionLower = mention.toLowerCase().trim()
+    const mentionNormalized = normalizeForMatch(mention)
     console.log(`🔍 [MATCH-PLOTS] Traitement mention: "${mention}"`)
     
     let bestMatch = null
@@ -913,7 +1040,12 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
     let matchType = 'none'
     
     // Détecter si c'est une mention de surface unit (planche, rang, ligne)
-    const isSurfaceUnit = /\b(planche|rang|ligne|bande)\b/i.test(mention)
+    const isSurfaceUnit =
+      surfaceRegex.test(mention) ||
+      (hasSurfaceContext && /^\d+$/.test(mentionNormalized))
+    if (isSurfaceUnit) {
+      surfaceMentions.push(mention)
+    }
     
     for (const plot of context.plots) {
       // Niveau 1: Match exact
@@ -984,31 +1116,88 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
           match_type: matchType
         })
       }
-      
-      // Si mention de surface unit, chercher dans les planches de cette parcelle
-      if (isSurfaceUnit) {
-        const surfaceUnits = context.surface_units.filter(su => su.plot_name === bestMatch.name)
-        
-        for (const su of surfaceUnits) {
-          // Match simple sur le nom de la surface unit
-          if (su.name.toLowerCase().includes(mentionLower) || 
-              mentionLower.includes(su.name.toLowerCase())) {
+    } else {
+      console.log(`❌ [MATCH-PLOTS] Aucun match pour: "${mention}"`)
+    }
+  }
+
+  const preferredPlotIds = new Set<number>(results.plot_ids)
+  for (const mention of surfaceMentions) {
+    const selectors = parseSurfaceSelectors(mention, defaultSurfacePrefix)
+    const explicitPlotIds = detectMentionPlotIds(mention)
+    const targetPlotIds = explicitPlotIds.length > 0
+      ? explicitPlotIds
+      : preferredPlotIds.size === 1
+      ? [...preferredPlotIds]
+      : (context.plots.length === 1 ? [context.plots[0].id] : [])
+
+    if (selectors.length === 0 || targetPlotIds.length === 0) {
+      continue
+    }
+
+    for (const selector of selectors) {
+      for (const plotId of targetPlotIds) {
+        const unitsInPlot = context.surface_units.filter((su) => su.plot_id === plotId)
+        if (unitsInPlot.length === 0) continue
+
+        if (selector.select_all) {
+          const prefixedUnits = unitsInPlot.filter((su) =>
+            new RegExp(`\\b${selector.prefix}s?\\b`, 'i').test(normalizeForMatch(su.name))
+          )
+          const unitsToAdd = prefixedUnits.length > 0 ? prefixedUnits : unitsInPlot
+          for (const su of unitsToAdd) {
             if (!results.surface_unit_ids.includes(su.id)) {
               results.surface_unit_ids.push(su.id)
               results.matched_surface_units.push({
-                original: mention,
+                original: selector.original,
                 matched: su.name,
                 id: su.id,
+                plot_id: su.plot_id,
                 plot_name: su.plot_name,
-                confidence: 0.85
+                confidence: 0.9,
+                match_type: 'select_all'
               })
-              console.log(`✅ [MATCH-PLOTS] Surface unit trouvée: ${su.name} dans ${su.plot_name}`)
+            }
+          }
+          continue
+        }
+
+        for (const num of selector.numbers) {
+          let bestSurfaceMatch: any = null
+          let bestSurfaceScore = 0
+          let bestSurfaceMatchType = 'none'
+          const candidate = `${selector.prefix} ${num}`
+
+          for (const su of unitsInPlot) {
+            const suNorm = normalizeForMatch(su.name)
+            const suNumbers = suNorm.match(/\d+/g) || []
+            if (!suNumbers.includes(String(num))) continue
+
+            const scoreResult = scoreSurfaceUnitMatch(candidate, su.name)
+            if (scoreResult.score > bestSurfaceScore) {
+              bestSurfaceMatch = su
+              bestSurfaceScore = scoreResult.score
+              bestSurfaceMatchType = scoreResult.matchType
+            }
+          }
+
+          if (bestSurfaceMatch && bestSurfaceScore >= 0.75) {
+            if (!results.surface_unit_ids.includes(bestSurfaceMatch.id)) {
+              results.surface_unit_ids.push(bestSurfaceMatch.id)
+              results.matched_surface_units.push({
+                original: selector.original,
+                matched: bestSurfaceMatch.name,
+                id: bestSurfaceMatch.id,
+                plot_id: bestSurfaceMatch.plot_id,
+                plot_name: bestSurfaceMatch.plot_name,
+                confidence: bestSurfaceScore,
+                match_type: bestSurfaceMatchType
+              })
+              console.log(`✅ [MATCH-PLOTS] Surface unit trouvée: ${bestSurfaceMatch.name} (${bestSurfaceMatchType})`)
             }
           }
         }
       }
-    } else {
-      console.log(`❌ [MATCH-PLOTS] Aucun match pour: "${mention}"`)
     }
   }
   
@@ -1062,7 +1251,10 @@ async function matchMaterials(mentions: string[], context: UserContext) {
     console.log(`🔧 [MATCH-MATERIALS] Liste des matériels:`, context.materials.map(m => `${m.name} [${m.category}]`).join(', '))
   }
   
-  const results = {
+  const results: {
+    material_ids: number[]
+    matched_materials: any[]
+  } = {
     material_ids: [],
     matched_materials: []
   }
@@ -1365,18 +1557,74 @@ async function contextualizeAction(supabase: any, action: any, context: UserCont
     console.log(`\n🔍 [CONTEXT] Test condition matching parcelles:`)
     console.log(`   - extractedData.plots existe: ${!!extractedData.plots}`)
     console.log(`   - extractedData.plots valeur: ${JSON.stringify(extractedData.plots)}`)
-    
-    if (extractedData.plots) {
-      console.log(`✅ [CONTEXT] Condition parcelles validée, lancement matchPlots...`)
-      const plotMentions = Array.isArray(extractedData.plots) ? extractedData.plots : [extractedData.plots]
-      console.log(`   Mentions transformées en array: ${JSON.stringify(plotMentions)}`)
-      
+
+    const mergePlotMentions = (): string[] => {
+      const mentions = new Set<string>()
+      const explicitMentions = extractedData.plots
+        ? (Array.isArray(extractedData.plots) ? extractedData.plots : [extractedData.plots])
+        : []
+
+      explicitMentions
+        .filter((m: unknown) => typeof m === 'string' && String(m).trim().length > 0)
+        .forEach((m: string) => mentions.add(m))
+
+      const sourceText = `${action?.original_text || ''} ${action?.decomposed_text || ''}`.trim()
+      if (sourceText) {
+        const normalizedSource = normalizeString(sourceText)
+
+        for (const plot of context.plots) {
+          const candidates = [plot.name, ...(Array.isArray(plot.aliases) ? plot.aliases : [])]
+          for (const candidate of candidates) {
+            const normalizedCandidate = normalizeString(candidate || '')
+            if (normalizedCandidate && normalizedSource.includes(normalizedCandidate)) {
+              mentions.add(plot.name)
+            }
+          }
+        }
+
+        const surfacePattern = /\b(?:toutes?\s+les?\s+)?(?:planches?|rangs?|lignes?|bandes?)(?:\s+\d+(?:\s*(?:,|et)\s*\d+)*(?:\s*(?:à|a|-|au)\s*\d+)?)?/gi
+        for (const match of sourceText.matchAll(surfacePattern)) {
+          if (match[0]?.trim()) {
+            mentions.add(match[0].trim())
+          }
+        }
+
+        // Ajoute des mentions composées "parcelle + planche(s)" pour lier
+        // explicitement les sous-unités à la bonne parcelle en cas de multi-parcelles.
+        const surfacePatternText = '(?:toutes?\\s+les?\\s+)?(?:planches?|rangs?|lignes?|bandes?)(?:\\s+\\d+(?:\\s*(?:,|et)\\s*\\d+)*(?:\\s*(?:à|a|-|au)\\s*\\d+)?)?'
+        for (const plot of context.plots) {
+          const candidates = [plot.name, ...(Array.isArray(plot.aliases) ? plot.aliases : [])]
+          for (const candidate of candidates) {
+            const normalizedCandidate = normalizeString(candidate || '')
+            if (!normalizedCandidate) continue
+
+            let startIdx = normalizedSource.indexOf(normalizedCandidate)
+            while (startIdx !== -1) {
+              const endIdx = Math.min(normalizedSource.length, startIdx + normalizedCandidate.length + 90)
+              const windowText = normalizedSource.slice(startIdx, endIdx)
+              const localSurfaceRegex = new RegExp(surfacePatternText, 'gi')
+              for (const localMatch of windowText.matchAll(localSurfaceRegex)) {
+                if (localMatch[0]?.trim()) {
+                  mentions.add(`${plot.name} ${localMatch[0].trim()}`)
+                }
+              }
+              startIdx = normalizedSource.indexOf(normalizedCandidate, startIdx + normalizedCandidate.length)
+            }
+          }
+        }
+      }
+
+      return [...mentions]
+    }
+
+    const plotMentions = mergePlotMentions()
+    console.log(`   Mentions fusionnées pour matching: ${JSON.stringify(plotMentions)}`)
+    if (plotMentions.length > 0) {
       const plotMatches = await matchPlots(plotMentions, context, supabase)
       console.log(`   Résultat matchPlots:`, JSON.stringify(plotMatches, null, 2))
-      
       Object.assign(contextData, plotMatches)
     } else {
-      console.log(`⚠️ [CONTEXT] extractedData.plots absent ou vide, skip matching parcelles`)
+      console.log(`⚠️ [CONTEXT] Aucune mention parcelle/planche détectée`)
     }
 
     // Matching sophistiqué des matériels (UNIFIED)

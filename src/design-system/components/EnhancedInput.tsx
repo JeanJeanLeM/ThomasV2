@@ -50,6 +50,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
   labelStyle,
   value,
   onChangeText,
+  keyboardType,
   secureTextEntry,
   ...props
 }) => {
@@ -63,6 +64,22 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
     if (hasError) return colors.semantic.error;
     if (isFocused) return colors.primary[600];
     return colors.gray[400];
+  };
+
+  // iOS: `numeric` / `number-pad` peuvent masquer les séparateurs décimaux.
+  // On force `decimal-pad` pour les champs numériques de formulaires.
+  const effectiveKeyboardType =
+    Platform.OS === 'ios' && keyboardType === 'numeric'
+      ? 'decimal-pad'
+      : keyboardType;
+
+  const handleChangeText = (text: string) => {
+    if (!onChangeText) return;
+    const normalizedText =
+      Platform.OS === 'ios' && effectiveKeyboardType === 'decimal-pad'
+        ? text.replace(',', '.')
+        : text;
+    onChangeText(normalizedText);
   };
 
   return (
@@ -100,7 +117,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
             inputStyle,
           ]}
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={handleChangeText}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           editable={!disabled}
@@ -108,6 +125,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
           placeholderTextColor={colors.gray[400]}
           {...(Platform.OS === 'android' ? { importantForAutofill: 'no' as const } : {})}
           {...props}
+          keyboardType={effectiveKeyboardType}
         />
 
         {/* Right Icon */}

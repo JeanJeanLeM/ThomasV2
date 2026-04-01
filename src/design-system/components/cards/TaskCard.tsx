@@ -25,6 +25,7 @@ export interface TaskData {
   number_of_people?: number; // Nombre de personnes
   plants?: string[]; // Cultures/plantes
   plot_ids?: string[]; // IDs des parcelles
+  surface_unit_ids?: string[]; // IDs des sous-unités (planches/rangs/lignes)
   material_ids?: string[]; // IDs des matériels/outils
   quantity?: { value: number; unit: string }; // Quantité avec unité
   quantity_converted?: { value: number; unit: string }; // Quantité convertie (ex: bottes -> kg)

@@ -22,7 +22,7 @@ console.log('🚀 Thomas Agent Pipeline v2.0 - Real Implementation')
 interface UserContext {
   user_id: string
   plots: Array<{id: number, name: string, aliases: string[], llm_keywords: string[], is_active: boolean}>
-  surface_units: Array<{id: number, name: string, plot_name: string}>
+  surface_units: Array<{id: number, name: string, plot_id: number, plot_name: string}>
   materials: Array<{id: number, name: string, category: string, llm_keywords?: string[], is_active: boolean}>
   conversions: Array<{
     id: string, 
@@ -42,6 +42,13 @@ interface UserContext {
     preferred_units: Record<string, string>
     default_plot_ids: number[]
   }
+}
+
+interface SurfaceSelector {
+  original: string
+  prefix: string
+  numbers: number[]
+  select_all: boolean
 }
 
 // ============================================================================
@@ -115,7 +122,35 @@ serve(async (req) => {
       const messageForExtraction = intentItem.reconstructed_message || user_message
       console.log(`🔍 [PIPELINE] Tool selection pour intent "${intentItem.intent}": ${messageForExtraction.substring(0, 60)}...`)
       
-      const plans = await selectTools(supabaseClient, openaiKey, messageForExtraction, intentItem, userContext)
+      let plans = await selectTools(supabaseClient, openaiKey, messageForExtraction, intentItem, userContext)
+
+      // Garde-fou: pour un intent help, garantir un tool help avec help_topic spécifique.
+      if (intentItem.intent === 'help') {
+        const inferredHelpTopic = inferHelpTopicFromMessage(messageForExtraction, intentItem.context_inferred)
+        const helpPlans = plans.filter((p: any) => p.tool_name === 'help')
+
+        if (helpPlans.length === 0) {
+          plans = [{
+            tool_name: 'help',
+            confidence: intentItem.confidence || 0.9,
+            parameters: { help_topic: inferredHelpTopic }
+          }]
+          console.log(`ℹ️ [TOOLS] Intent help forcé -> tool help (${inferredHelpTopic})`)
+        } else {
+          plans = helpPlans.map((p: any) => {
+            const requested = normalizeHelpTopic(p.parameters?.help_topic)
+            const topic = requested || inferredHelpTopic
+            return {
+              ...p,
+              parameters: {
+                ...(p.parameters || {}),
+                help_topic: topic
+              }
+            }
+          })
+          console.log(`ℹ️ [TOOLS] Help topic normalisé: ${plans.map((p: any) => p.parameters?.help_topic).join(', ')}`)
+        }
+      }
       
       // Ajouter info de contexte inféré et intent aux plans pour extraction détaillée
       for (const plan of plans) {
@@ -557,8 +592,8 @@ async function buildUserContext(supabase: any, userId: string, farmId: number): 
   const { data: surfaceUnits } = await supabase
     .from('surface_units')
     .select(`
-      id, name, 
-      plots!inner(name)
+      id, name, plot_id,
+      plots!inner(id, name)
     `)
     .eq('plots.farm_id', farmId)
     .eq('is_active', true)
@@ -605,7 +640,8 @@ async function buildUserContext(supabase: any, userId: string, farmId: number): 
     surface_units: (surfaceUnits || []).map((su: any) => ({
       id: su.id,
       name: su.name,
-      plot_name: su.plots.name
+      plot_id: su.plot_id ?? su.plots?.id,
+      plot_name: su.plots?.name
     })),
     materials: materials || [],
     conversions: conversions || [],
@@ -628,7 +664,12 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
   console.log(`\n🎯 [MATCH-PLOTS] Début matching parcelles`)
   console.log(`🎯 [MATCH-PLOTS] Mentions: ${mentions.length}`)
   
-  const results = {
+  const results: {
+    plot_ids: number[]
+    surface_unit_ids: number[]
+    matched_plots: any[]
+    matched_surface_units: any[]
+  } = {
     plot_ids: [],
     surface_unit_ids: [],
     matched_plots: [],
@@ -638,18 +679,136 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
   if (!mentions || mentions.length === 0) {
     return results
   }
+
+  const toNumberSet = (value: string) => new Set(extractNumbers(normalizeString(value)))
+  const numbersCompatible = (mentionValue: string, candidateValue: string): boolean => {
+    const mentionNumbers = toNumberSet(mentionValue)
+    const candidateNumbers = toNumberSet(candidateValue)
+
+    if (mentionNumbers.size > 0 && candidateNumbers.size > 0) {
+      return [...mentionNumbers].every(n => candidateNumbers.has(n)) &&
+        [...candidateNumbers].every(n => mentionNumbers.has(n))
+    }
+    if (mentionNumbers.size > 0 && candidateNumbers.size === 0) {
+      return false
+    }
+    return true
+  }
+
+  const detectSurfacePrefix = (value: string): string | null => {
+    const normalized = normalizeString(value)
+    const match = normalized.match(/\b(planche|rang|ligne|bande)s?\b/)
+    return match?.[1] || null
+  }
+
+  const parseSurfaceSelectors = (rawMention: string, fallbackPrefix: string | null): SurfaceSelector[] => {
+    const mention = rawMention.trim()
+    if (!mention) return []
+
+    const normalizedMention = normalizeString(mention)
+    const prefix = detectSurfacePrefix(mention) || fallbackPrefix
+    if (!prefix) return []
+
+    const selectAll = /\btoutes?\s+les?\s+(planches?|rangs?|lignes?|bandes?)\b/i.test(normalizedMention)
+    const numbers = new Set<number>()
+
+    const rangeRegex = new RegExp(`\\b${prefix}s?\\b\\s*(\\d+)\\s*(?:a|à|-|au|jusqu(?:a|à))\\s*(\\d+)`, 'gi')
+    for (const match of normalizedMention.matchAll(rangeRegex)) {
+      const from = parseInt(match[1], 10)
+      const to = parseInt(match[2], 10)
+      if (!Number.isNaN(from) && !Number.isNaN(to)) {
+        const start = Math.min(from, to)
+        const end = Math.max(from, to)
+        const maxExpanded = Math.min(end, start + 99)
+        for (let i = start; i <= maxExpanded; i++) {
+          numbers.add(i)
+        }
+      }
+    }
+
+    const afterPrefix = normalizedMention.match(new RegExp(`\\b${prefix}s?\\b\\s+(.+)$`))
+    const numbersAfterPrefix = afterPrefix?.[1] ? extractNumbers(afterPrefix[1]) : []
+    numbersAfterPrefix.forEach((n) => {
+      const parsed = parseInt(n, 10)
+      if (!Number.isNaN(parsed)) numbers.add(parsed)
+    })
+
+    if (numbers.size === 0 && /^\d+$/.test(normalizedMention)) {
+      numbers.add(parseInt(normalizedMention, 10))
+    }
+
+    return [{
+      original: mention,
+      prefix,
+      numbers: [...numbers],
+      select_all: selectAll
+    }]
+  }
+
+  const scoreSurfaceUnitMatch = (mentionValue: string, surfaceUnitName: string): { score: number, matchType: string } => {
+    const mentionNorm = normalizeString(mentionValue)
+    const candidateNorm = normalizeString(surfaceUnitName)
+    if (!mentionNorm || !candidateNorm) return { score: 0, matchType: 'none' }
+
+    if (mentionNorm === candidateNorm) {
+      return { score: 1.0, matchType: 'exact' }
+    }
+
+    if (
+      (candidateNorm.includes(mentionNorm) || mentionNorm.includes(candidateNorm)) &&
+      numbersCompatible(mentionNorm, candidateNorm)
+    ) {
+      return { score: 0.9, matchType: 'partial' }
+    }
+
+    const similarity = calculateStringSimilarity(mentionNorm, candidateNorm)
+    if (similarity >= 0.7) {
+      return { score: similarity, matchType: 'fuzzy' }
+    }
+
+    return { score: 0, matchType: 'none' }
+  }
+
+  const surfaceRegex = /\b(planche|rang|ligne|bande)\b/i
+  const detectMentionPlotIds = (mention: string): number[] => {
+    const mentionNorm = normalizeString(mention)
+    const ids = new Set<number>()
+    for (const plot of context.plots) {
+      const candidates = [plot.name, ...(Array.isArray(plot.aliases) ? plot.aliases : [])]
+      for (const candidate of candidates) {
+        const candidateNorm = normalizeString(candidate || '')
+        if (candidateNorm && mentionNorm.includes(candidateNorm)) {
+          ids.add(plot.id)
+          break
+        }
+      }
+    }
+    return [...ids]
+  }
+  const hasSurfaceContext = mentions.some(m => typeof m === 'string' && surfaceRegex.test(m))
+  const defaultSurfacePrefix = mentions
+    .map(m => (typeof m === 'string' ? detectSurfacePrefix(m) : null))
+    .find(Boolean) || null
+
+  const surfaceMentions: string[] = []
   
   for (const mention of mentions) {
     if (!mention || typeof mention !== 'string') {
       continue
     }
     const mentionLower = mention.toLowerCase().trim()
+    const mentionNormalized = normalizeString(mention)
     
     let bestMatch = null
     let bestConfidence = 0
     let matchType = 'none'
     
-    const isSurfaceUnit = /\b(planche|rang|ligne|bande)\b/i.test(mention)
+    const isSurfaceUnit =
+      surfaceRegex.test(mention) ||
+      (hasSurfaceContext && /^\d+$/.test(mentionNormalized))
+    if (isSurfaceUnit) {
+      surfaceMentions.push(mention)
+    }
     
     for (const plot of context.plots) {
       if (plot.name.toLowerCase() === mentionLower) {
@@ -720,22 +879,82 @@ async function matchPlots(mentions: string[], context: UserContext, supabase: an
           match_type: matchType
         })
       }
-      
-      if (isSurfaceUnit) {
-        const surfaceUnits = context.surface_units.filter(su => su.plot_name === bestMatch.name)
-        
-        for (const su of surfaceUnits) {
-          if (su.name.toLowerCase().includes(mentionLower) || 
-              mentionLower.includes(su.name.toLowerCase())) {
+    }
+  }
+
+  const preferredPlotIds = new Set<number>(results.plot_ids)
+  for (const mention of surfaceMentions) {
+    const selectors = parseSurfaceSelectors(mention, defaultSurfacePrefix)
+    const explicitPlotIds = detectMentionPlotIds(mention)
+    const targetPlotIds = explicitPlotIds.length > 0
+      ? explicitPlotIds
+      : preferredPlotIds.size === 1
+      ? [...preferredPlotIds]
+      : (context.plots.length === 1 ? [context.plots[0].id] : [])
+
+    if (selectors.length === 0 || targetPlotIds.length === 0) {
+      continue
+    }
+
+    for (const selector of selectors) {
+      for (const plotId of targetPlotIds) {
+        const unitsInPlot = context.surface_units.filter((su) => su.plot_id === plotId)
+        if (unitsInPlot.length === 0) continue
+
+        if (selector.select_all) {
+          const prefixedUnits = unitsInPlot.filter((su) =>
+            new RegExp(`\\b${selector.prefix}s?\\b`, 'i').test(normalizeString(su.name))
+          )
+          const unitsToAdd = prefixedUnits.length > 0 ? prefixedUnits : unitsInPlot
+          for (const su of unitsToAdd) {
             if (!results.surface_unit_ids.includes(su.id)) {
               results.surface_unit_ids.push(su.id)
               results.matched_surface_units.push({
-                original: mention,
+                original: selector.original,
                 matched: su.name,
                 id: su.id,
+                plot_id: su.plot_id,
                 plot_name: su.plot_name,
-                confidence: 0.85
+                confidence: 0.9,
+                match_type: 'select_all'
               })
+            }
+          }
+          continue
+        }
+
+        for (const num of selector.numbers) {
+          let bestSurfaceMatch: any = null
+          let bestSurfaceScore = 0
+          let bestSurfaceMatchType = 'none'
+
+          const candidate = `${selector.prefix} ${num}`
+          for (const su of unitsInPlot) {
+            const suNorm = normalizeString(su.name)
+            const suNumbers = extractNumbers(suNorm)
+            if (!suNumbers.includes(String(num))) continue
+
+            const scoreResult = scoreSurfaceUnitMatch(candidate, su.name)
+            if (scoreResult.score > bestSurfaceScore) {
+              bestSurfaceMatch = su
+              bestSurfaceScore = scoreResult.score
+              bestSurfaceMatchType = scoreResult.matchType
+            }
+          }
+
+          if (bestSurfaceMatch && bestSurfaceScore >= 0.75) {
+            if (!results.surface_unit_ids.includes(bestSurfaceMatch.id)) {
+              results.surface_unit_ids.push(bestSurfaceMatch.id)
+              results.matched_surface_units.push({
+                original: selector.original,
+                matched: bestSurfaceMatch.name,
+                id: bestSurfaceMatch.id,
+                plot_id: bestSurfaceMatch.plot_id,
+                plot_name: bestSurfaceMatch.plot_name,
+                confidence: bestSurfaceScore,
+                match_type: bestSurfaceMatchType
+              })
+              console.log(`✅ [MATCH-PLOTS] Match surface unit: ${bestSurfaceMatch.name} (${bestSurfaceMatchType})`)
             }
           }
         }
@@ -751,7 +970,10 @@ async function matchMaterials(mentions: string[], context: UserContext) {
   console.log(`\n🔧 [MATCH-MATERIALS] Début matching matériels`)
   console.log(`🔧 [MATCH-MATERIALS] Mentions: ${mentions.length}`)
   
-  const results = {
+  const results: {
+    material_ids: number[]
+    matched_materials: any[]
+  } = {
     material_ids: [],
     matched_materials: []
   }
@@ -1046,8 +1268,67 @@ async function contextualizeAction(supabase: any, action: any, context: UserCont
     const contextData: any = {}
     const extractedData = { ...action.extracted_data }
 
-    if (extractedData.plots) {
-      const plotMentions = Array.isArray(extractedData.plots) ? extractedData.plots : [extractedData.plots]
+    const mergePlotMentions = (): string[] => {
+      const mentions = new Set<string>()
+      const explicitMentions = extractedData.plots
+        ? (Array.isArray(extractedData.plots) ? extractedData.plots : [extractedData.plots])
+        : []
+
+      explicitMentions
+        .filter((m: unknown) => typeof m === 'string' && String(m).trim().length > 0)
+        .forEach((m: string) => mentions.add(m))
+
+      const sourceText = `${action?.original_text || ''} ${action?.decomposed_text || ''}`.trim()
+      if (sourceText) {
+        const normalizedSource = normalizeString(sourceText)
+
+        for (const plot of context.plots) {
+          const candidates = [plot.name, ...(Array.isArray(plot.aliases) ? plot.aliases : [])]
+          for (const candidate of candidates) {
+            const normalizedCandidate = normalizeString(candidate || '')
+            if (normalizedCandidate && normalizedSource.includes(normalizedCandidate)) {
+              mentions.add(plot.name)
+            }
+          }
+        }
+
+        const surfacePattern = /\b(?:toutes?\s+les?\s+)?(?:planches?|rangs?|lignes?|bandes?)(?:\s+\d+(?:\s*(?:,|et)\s*\d+)*(?:\s*(?:à|a|-|au)\s*\d+)?)?/gi
+        for (const match of sourceText.matchAll(surfacePattern)) {
+          if (match[0]?.trim()) {
+            mentions.add(match[0].trim())
+          }
+        }
+
+        // Ajoute des mentions composées "parcelle + planche(s)" pour lier
+        // explicitement les sous-unités à la bonne parcelle en cas de multi-parcelles.
+        const surfacePatternText = '(?:toutes?\\s+les?\\s+)?(?:planches?|rangs?|lignes?|bandes?)(?:\\s+\\d+(?:\\s*(?:,|et)\\s*\\d+)*(?:\\s*(?:à|a|-|au)\\s*\\d+)?)?'
+        for (const plot of context.plots) {
+          const candidates = [plot.name, ...(Array.isArray(plot.aliases) ? plot.aliases : [])]
+          for (const candidate of candidates) {
+            const normalizedCandidate = normalizeString(candidate || '')
+            if (!normalizedCandidate) continue
+
+            let startIdx = normalizedSource.indexOf(normalizedCandidate)
+            while (startIdx !== -1) {
+              const endIdx = Math.min(normalizedSource.length, startIdx + normalizedCandidate.length + 90)
+              const windowText = normalizedSource.slice(startIdx, endIdx)
+              const localSurfaceRegex = new RegExp(surfacePatternText, 'gi')
+              for (const localMatch of windowText.matchAll(localSurfaceRegex)) {
+                if (localMatch[0]?.trim()) {
+                  mentions.add(`${plot.name} ${localMatch[0].trim()}`)
+                }
+              }
+              startIdx = normalizedSource.indexOf(normalizedCandidate, startIdx + normalizedCandidate.length)
+            }
+          }
+        }
+      }
+
+      return [...mentions]
+    }
+
+    const plotMentions = mergePlotMentions()
+    if (plotMentions.length > 0) {
       const plotMatches = await matchPlots(plotMentions, context, supabase)
       Object.assign(contextData, plotMatches)
     }
@@ -1514,34 +1795,28 @@ Conversions: ${context.conversions?.map((c: any) => `${c.container_name} de ${c.
 
 const HELP_CONTENT_BY_TOPIC: Record<string, { message: string; examples: string[]; app_path?: string }> = {
   manage_plot: {
-    message: 'Dis-moi par exemple :',
+    message: 'Utilise le bouton de raccourci ci-dessous pour ouvrir Profil > Configurer > Gestion des parcelles. Tu peux aussi me le demander directement dans le chat avec une phrase complète (nom, type, dimensions, planches).',
     examples: [
-      'Créer une serre plastique Serre 2 de 20m x 10m avec 10 planches',
-      'Ajouter un tunnel nord de 30 mètres de long et 5 de large',
-      'Modifier la serre 1',
+      'Ajoute une nouvelle parcelle, tunnel 3 de 30 m de long et 9m60 de large avec 6 planches de 30 m de long et 1 m de large',
     ],
     app_path: 'Profil > Configurer > Gestion des parcelles',
   },
   manage_material: {
-    message: 'Dis moi par par exemple :',
+    message: 'Utilise le bouton de raccourci ci-dessous pour ouvrir Profil > Configurer > Matériel. Tu peux aussi créer ou modifier un matériel en l\'écrivant directement dans le chat.',
     examples: [
-      'Ajouter un tracteur John Deere 6120M',
-      'Enregistrer une herse Kuhn en bon état',
-      'Ajouter un pulvérisateur de 500 litres',
+      'Ajoute un nouveau matériel: semoir 6 rangs Monosem, catégorie outils tracteur',
     ],
     app_path: 'Profil > Configurer > Matériel',
   },
   manage_conversion: {
-    message: 'Dis moi par exemple :',
+    message: 'Utilise le bouton de raccourci ci-dessous pour ouvrir Profil > Configurer > Conversions. Tu peux aussi me donner la conversion directement dans le chat en format "1 contenant = X unité".',
     examples: [
-      '1 caisse = 6 kg de tomates',
-      'Un panier de concombres fait 4 kg',
-      'Un bac de courgettes fait 15 kg',
+      'Ajoute la conversion: 1 bac de courgettes = 15 kg',
     ],
     app_path: 'Profil > Configurer > Conversions',
   },
   task: {
-    message: 'Pour enregistrer une tâche ou une récolte, dis-moi par exemple :',
+    message: 'Pour enregistrer une tâche ou une récolte, dis-moi l\'action, la culture, la zone et éventuellement la durée/quantité.',
     examples: [
       'J\'ai désherbé la serre 1 pendant 1 heure',
       'J\'ai récolté 4 caisses de concombres en serre 2',
@@ -1551,7 +1826,7 @@ const HELP_CONTENT_BY_TOPIC: Record<string, { message: string; examples: string[
     app_path: 'Onglet Tâches',
   },
   observation: {
-    message: 'Pour créer une observation, décris-moi le constat avec la culture et la localisation :',
+    message: 'Pour créer une observation, décris le problème, la culture concernée et la localisation.',
     examples: [
       'J\'ai observé des pucerons sur les tomates de la serre 1',
       'Il y a du mildiou sur les vignes du champ nord',
@@ -1560,7 +1835,7 @@ const HELP_CONTENT_BY_TOPIC: Record<string, { message: string; examples: string[
     app_path: 'Onglet Assistant IA (ou Tâches)',
   },
   team: {
-    message: 'Pour inviter un membre : Profil > Équipe de la ferme > bouton +. Saisis l\'email et choisis le rôle (Gestionnaire, Employé, Conseiller, Observateur).',
+    message: 'Pour inviter un membre: va dans Profil > Équipe de la ferme > bouton +. Saisis l\'email et choisis le rôle.',
     examples: [],
     app_path: 'Profil > Équipe de la ferme',
   },
@@ -1592,6 +1867,55 @@ const HELP_TOPIC_TO_SCREEN: Record<string, { screen: string; label: string }> = 
   manage_material: { screen: 'MaterialsSettings', label: 'Aller au Matériel' },
   manage_conversion: { screen: 'ConversionsSettings', label: 'Aller aux Conversions' },
   team: { screen: 'FarmMembers', label: 'Aller à l\'équipe' },
+}
+
+function normalizeHelpTopic(rawTopic: unknown): string | null {
+  if (typeof rawTopic !== 'string' || !rawTopic.trim()) return null
+
+  const topic = normalizeString(rawTopic)
+  if (!topic) return null
+
+  const aliases: Record<string, string[]> = {
+    manage_plot: ['manage_plot', 'plot', 'plots', 'parcelle', 'parcelles', 'serre', 'tunnel', 'planche', 'planches', 'surface_unit', 'surface_units'],
+    manage_material: ['manage_material', 'material', 'materials', 'materiel', 'materiaux', 'equipement', 'outil', 'outils'],
+    manage_conversion: ['manage_conversion', 'conversion', 'conversions', 'unite', 'unites', 'equivalence', 'poids'],
+    task: ['task', 'tasks', 'tache', 'taches', 'recolte', 'recoltes', 'action'],
+    observation: ['observation', 'observations', 'ravageur', 'ravageurs', 'maladie', 'maladies', 'probleme', 'problemes'],
+    team: ['team', 'equipe', 'member', 'members', 'membre', 'membres'],
+    app_features: ['app_features', 'fonctionnalites', 'navigation', 'ou trouver', 'menu']
+  }
+
+  for (const [canonical, values] of Object.entries(aliases)) {
+    if (values.some(v => topic === v || topic.includes(v))) return canonical
+  }
+  return null
+}
+
+function inferHelpTopicFromMessage(rawMessage: unknown, contextInferred?: any): string {
+  const subjectType = normalizeString(
+    typeof contextInferred?.subject_type === 'string' ? contextInferred.subject_type : ''
+  )
+  if (subjectType) {
+    if (/\b(material|materiel|equipment|outil)\b/.test(subjectType)) return 'manage_material'
+    if (/\b(plot|parcelle|surface|surface_unit|planche)\b/.test(subjectType)) return 'manage_plot'
+    if (/\b(conversion|unit|unite)\b/.test(subjectType)) return 'manage_conversion'
+    if (/\b(task|tache|recolte)\b/.test(subjectType)) return 'task'
+    if (/\b(observation|issue|maladie|ravageur)\b/.test(subjectType)) return 'observation'
+    if (/\b(team|member|membre|equipe)\b/.test(subjectType)) return 'team'
+  }
+
+  const message = normalizeString(typeof rawMessage === 'string' ? rawMessage : '')
+  if (!message) return 'general'
+
+  if (/\b(material|materiel|outils?|equipement|tracteur|pulverisateur|herse|semoir)\b/.test(message)) return 'manage_material'
+  if (/\b(parcelle|parcelles|serre|tunnel|planche|planches|rang|ligne)\b/.test(message)) return 'manage_plot'
+  if (/\b(conversion|conversions|caisse|caisses|panier|paniers|equivalence|kg|poids)\b/.test(message)) return 'manage_conversion'
+  if (/\b(tache|taches|recolte|recolter|planifier|desherber|traiter|planter|semer)\b/.test(message)) return 'task'
+  if (/\b(observation|observer|ravageur|ravageurs|maladie|maladies|puceron|mildiou)\b/.test(message)) return 'observation'
+  if (/\b(equipe|membre|membres|inviter|invitation|role|roles)\b/.test(message)) return 'team'
+  if (/\b(ou|où)\b.*\b(trouver|acceder|acces|menu|fonctionnalite|fonctionnalites)\b/.test(message)) return 'app_features'
+
+  return 'general'
 }
 
 // ============================================================================
@@ -1652,13 +1976,18 @@ async function executeTools(
           break
           
         case 'help': {
-          const helpTopic = (plan.parameters?.help_topic || 'general').toString().toLowerCase()
-          const topicKey = HELP_CONTENT_BY_TOPIC[helpTopic] ? helpTopic : 'general'
+          const requestedTopic = normalizeHelpTopic(plan.parameters?.help_topic)
+          const inferredTopic = inferHelpTopicFromMessage(
+            `${plan.reconstructed_message || ''} ${plan.original_user_message || ''}`.trim(),
+            plan.context_inferred
+          )
+          const topicKey = requestedTopic || inferredTopic
           const raw = HELP_CONTENT_BY_TOPIC[topicKey] ?? HELP_CONTENT_BY_TOPIC['general']
           const helpContent = raw ?? {
             message: 'Je peux t\'aider pour les parcelles, le matériel, les conversions, les tâches, les observations et l\'équipe. Dis-moi ce que tu veux faire.',
             examples: ['Comment ajouter une parcelle ?', 'Où enregistrer une récolte ?'],
           }
+          console.log(`ℹ️ [HELP] topic=${topicKey} (requested=${requestedTopic || 'none'}, inferred=${inferredTopic})`)
           result = {
             success: true,
             message: helpContent.message,
@@ -1730,6 +2059,8 @@ async function createObservationFromTool(
   // Contextualiser pour matching
   const actionForContext = {
     action_type: 'observation',
+    original_text: toolPlan.original_text,
+    decomposed_text: toolPlan.decomposed_text,
     extracted_data: {
       issue: params.issue,
       crop: params.crop,
@@ -1833,6 +2164,8 @@ async function createTaskFromTool(
   const isPlanned = toolPlan.tool_name === 'create_task_planned'
   const actionForContext = {
     action_type: isPlanned ? 'task_planned' : 'task_done',
+    original_text: toolPlan.original_text,
+    decomposed_text: toolPlan.decomposed_text,
     extracted_data: {
       action: params.action,
       crop: params.crop,
@@ -2697,7 +3030,7 @@ function buildHelpMessageFromToolResults(toolResults: any[]): string {
   lines.push('Bien sûr !')
   lines.push(message)
   if (examples.length) {
-    examples.forEach((ex: string) => lines.push(`* *${ex}*`))
+    examples.forEach((ex: string) => lines.push(`- ${ex}`))
   }
   if (app_path) {
     lines.push('')

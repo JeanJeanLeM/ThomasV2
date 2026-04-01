@@ -148,6 +148,11 @@ export interface Database {
           timezone: string | null;
           notification_preferences: Record<string, any>;
           latest_active_farm_id: number | null;
+          last_app_version: string | null;
+          last_build_version: string | null;
+          last_runtime_version: string | null;
+          last_update_id: string | null;
+          last_seen_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -164,6 +169,11 @@ export interface Database {
           timezone?: string | null;
           notification_preferences?: Record<string, any>;
           latest_active_farm_id?: number | null;
+          last_app_version?: string | null;
+          last_build_version?: string | null;
+          last_runtime_version?: string | null;
+          last_update_id?: string | null;
+          last_seen_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -180,6 +190,11 @@ export interface Database {
           timezone?: string | null;
           notification_preferences?: Record<string, any>;
           latest_active_farm_id?: number | null;
+          last_app_version?: string | null;
+          last_build_version?: string | null;
+          last_runtime_version?: string | null;
+          last_update_id?: string | null;
+          last_seen_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

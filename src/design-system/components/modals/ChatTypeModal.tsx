@@ -18,6 +18,7 @@ export interface ChatTypeModalProps {
   onClose: () => void;
   onCreatePrivateChat: () => void;
   onCreateSharedChat: () => void;
+  onCreateOnboardingChat: () => void;
 }
 
 export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
@@ -25,6 +26,7 @@ export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
   onClose,
   onCreatePrivateChat,
   onCreateSharedChat,
+  onCreateOnboardingChat,
 }) => {
   const handlePrivateChat = () => {
     onCreatePrivateChat();
@@ -33,6 +35,11 @@ export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
 
   const handleSharedChat = () => {
     onCreateSharedChat();
+    onClose();
+  };
+
+  const handleOnboardingChat = () => {
+    onCreateOnboardingChat();
     onClose();
   };
 
@@ -114,6 +121,25 @@ export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
                     </Text>
                     <Text variant="caption" color={colors.text.secondary}>
                       Conversation visible par tous les membres de la ferme
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.optionCard}
+                  onPress={handleOnboardingChat}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.optionIcon, { backgroundColor: '#ede9fe' }]}>
+                    <Ionicons name="rocket" size={24} color="#7c3aed" />
+                  </View>
+                  <View style={styles.optionContent}>
+                    <Text variant="h4" style={styles.optionTitle}>
+                      Chat onboarding
+                    </Text>
+                    <Text variant="caption" color={colors.text.secondary}>
+                      Crée un chat partagé avec un message de démarrage en 1 clic
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#9ca3af" />

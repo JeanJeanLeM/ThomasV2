@@ -75,6 +75,7 @@ const NewSimpleNavigator: React.FC = () => {
   const [farmEditId, setFarmEditId] = React.useState<number | null>(null);
   const [agentMethod, setAgentMethod] = React.useState<'simple' | 'pipeline' | null>(null);
   const [showOnboarding, setShowOnboarding] = React.useState(false);
+  const onboardingReturnRef = React.useRef<{ fromChat: boolean; returnChatId?: string } | null>(null);
 
   // Après profil + parcours ferme, l'utilisateur arrive ici : premier passage pour CE compte → onboarding
   React.useEffect(() => {
@@ -95,11 +96,52 @@ const NewSimpleNavigator: React.FC = () => {
     if (user?.id) {
       OnboardingService.markOnboardingSeen(user.id);
     }
-  }, [user?.id]);
+
+    const returnTarget = onboardingReturnRef.current;
+    onboardingReturnRef.current = null;
+
+    if (returnTarget?.fromChat) {
+      navigation.navigateToTab('Chat');
+      if (returnTarget.returnChatId) {
+        navigation.setNavigationParams({
+          openChatId: returnTarget.returnChatId,
+          fromOnboardingShortcut: true,
+        });
+      } else {
+        navigation.setNavigationParams({});
+      }
+    }
+  }, [navigation, user?.id]);
 
   const handleStartTutorial = React.useCallback(() => {
+    onboardingReturnRef.current = null;
     setShowOnboarding(true);
   }, []);
+
+  // Ouvre le tutoriel en un clic depuis un raccourci de chat.
+  React.useEffect(() => {
+    if (navigation.navigationParams?.openTutorial !== true) return;
+
+    const params = navigation.navigationParams as Record<string, unknown>;
+    onboardingReturnRef.current = {
+      fromChat: params.triggeredFromChat === true,
+      returnChatId: typeof params.returnChatId === 'string' ? params.returnChatId : undefined,
+    };
+
+    setShowOnboarding(true);
+
+    navigation.setNavigationParams((prev) => {
+      if (!prev || prev.openTutorial !== true) return prev;
+      const next = { ...prev };
+      delete next.openTutorial;
+      delete next.triggeredFromChat;
+      delete next.returnChatId;
+      return next;
+    });
+  }, [
+    navigation.navigationParams,
+    navigation.setNavigationParams,
+  ]);
 
   // Réinitialiser farmEditId quand on quitte FarmEdit
   React.useEffect(() => {

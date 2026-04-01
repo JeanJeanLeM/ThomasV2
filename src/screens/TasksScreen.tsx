@@ -488,6 +488,11 @@ export default function TasksScreen() {
     console.log('💾 [TASK-SAVE] Sauvegarde tâche:', updatedTask);
     
     try {
+      const toNumericIds = (values?: Array<string | number>) =>
+        (values || [])
+          .map((id) => (typeof id === 'number' ? id : parseInt(String(id), 10)))
+          .filter((id) => Number.isFinite(id));
+
       // Gérer la date - convertir en format YYYY-MM-DD
       let taskDate: string | undefined;
       if (updatedTask.date) {
@@ -523,8 +528,9 @@ export default function TasksScreen() {
         duration_minutes: updatedTask.duration_minutes,
         number_of_people: updatedTask.number_of_people,
         plants: updatedTask.plants,
-        plot_ids: updatedTask.plot_ids?.map(id => parseInt(id as string)),
-        material_ids: updatedTask.material_ids?.map(id => parseInt(id as string)),
+        plot_ids: toNumericIds(updatedTask.plot_ids as Array<string | number> | undefined),
+        surface_unit_ids: toNumericIds(updatedTask.surface_unit_ids as Array<string | number> | undefined),
+        material_ids: toNumericIds(updatedTask.material_ids as Array<string | number> | undefined),
         priority: updatedTask.priority,
         notes: updatedTask.notes,
       };
@@ -617,6 +623,7 @@ export default function TasksScreen() {
             material_ids: updatedAction.matched_entities?.material_ids,
             quantity_value: updatedAction.extracted_data?.quantity?.value,
             quantity_unit: updatedAction.extracted_data?.quantity?.unit,
+            standard_action: updatedAction.extracted_data?.standard_action ?? null,
             quantity_converted_value: updatedAction.extracted_data?.quantity_converted?.value,
             quantity_converted_unit: updatedAction.extracted_data?.quantity_converted?.unit,
             quantity_nature: updatedAction.extracted_data?.quantity_nature,

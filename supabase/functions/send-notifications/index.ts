@@ -8,7 +8,7 @@
  * - Envoie les push notifications via l'API Expo Push
  * - Logue les envois dans notification_logs
  * 
- * Cron Supabase (pg_cron): '*/5 * * * *'
+ * Cron Supabase (pg_cron): toutes les 5 minutes
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';

@@ -22,6 +22,7 @@ import { MaterialService } from '../../services/MaterialService';
 export interface ActionData {
   id?: string;
   action_type: 'observation' | 'task_done' | 'task_planned' | 'help' | 'manage_plot' | 'manage_conversion' | 'manage_material' | 'sale' | 'purchase';
+  onboarding_demo?: boolean;
   original_text?: string;
   decomposed_text?: string;
   confidence?: number;
@@ -29,6 +30,7 @@ export interface ActionData {
     // Données de base
     title?: string;
     action?: string;           // Action principale (récolter, planter, traiter...)
+    standard_action?: string | null; // Action standard normalisée (réf. task_standard_actions)
     crop?: string;             // Culture concernée
     crops?: string[];          // Plusieurs cultures (plants[] dans tasks)
     
@@ -649,6 +651,8 @@ export const AIResponseWithActions: React.FC<AIResponseWithActionsProps> = ({
   onRejectAction,
 }) => {
   const hasActions = actions && actions.length > 0;
+  const hasOnboardingDemoActions = actions.some((action) => action.onboarding_demo === true);
+  const hasVisibleMessage = typeof message === 'string' && message.trim().length > 0;
   const { activeFarm } = useFarm();
   const { user } = useAuth();
   
@@ -663,6 +667,14 @@ export const AIResponseWithActions: React.FC<AIResponseWithActionsProps> = ({
   const [showMaterialModal, setShowMaterialModal] = useState(false);
 
   const handleEditAction = useCallback((index: number, action: ActionData) => {
+    if ((action as any).onboarding_demo === true) {
+      Alert.alert(
+        'Exemple onboarding',
+        'Cette card est une simulation. Vous pouvez simplement observer le rendu.'
+      );
+      return;
+    }
+
     setEditingAction(action);
     setEditingIndex(index);
 
@@ -756,56 +768,58 @@ export const AIResponseWithActions: React.FC<AIResponseWithActionsProps> = ({
       marginBottom: spacing.lg,
       width: '100%',
     }}>
-      {/* Message court de l'IA */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: hasActions ? spacing.sm : 0,
-      }}>
-        {/* Avatar Thomas */}
+      {/* Message court de l'IA (optionnel) */}
+      {hasVisibleMessage && (
         <View style={{
-          width: 32,
-          height: 32,
-          borderRadius: 16,
-          backgroundColor: 'transparent',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginRight: spacing.sm,
-          overflow: 'hidden',
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          marginBottom: hasActions ? spacing.sm : 0,
         }}>
-          <Image
-            source={require('../../../assets/Logocolorfull.png')}
-            style={{
-              width: 32,
-              height: 32,
-              resizeMode: 'contain',
-            }}
-          />
-        </View>
-
-        {/* Bulle du message */}
-        <View style={{
-          flex: 1,
-          backgroundColor: '#ffffff',
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          borderRadius: 16,
-          borderTopLeftRadius: 4,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.05,
-          shadowRadius: 2,
-          elevation: 1,
-        }}>
-          <Text style={{
-            fontSize: 15,
-            color: '#1f2937',
-            lineHeight: 22,
+          {/* Avatar Thomas */}
+          <View style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            backgroundColor: 'transparent',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: spacing.sm,
+            overflow: 'hidden',
           }}>
-            {message}
-          </Text>
+            <Image
+              source={require('../../../assets/Logocolorfull.png')}
+              style={{
+                width: 32,
+                height: 32,
+                resizeMode: 'contain',
+              }}
+            />
+          </View>
+
+          {/* Bulle du message */}
+          <View style={{
+            flex: 1,
+            backgroundColor: '#ffffff',
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 16,
+            borderTopLeftRadius: 4,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 1,
+          }}>
+            <Text style={{
+              fontSize: 15,
+              color: '#1f2937',
+              lineHeight: 22,
+            }}>
+              {message}
+            </Text>
+          </View>
         </View>
-      </View>
+      )}
 
       {/* Cards des actions */}
       {hasActions && (
@@ -852,7 +866,7 @@ export const AIResponseWithActions: React.FC<AIResponseWithActionsProps> = ({
       )}
 
       {/* Cards raccourcis "Voir..." pour actions management (parcelle, matériel, conversion) */}
-      {onNavigateToHelp && (
+      {onNavigateToHelp && !hasOnboardingDemoActions && (
         <>
           {[...new Set(actions.map(a => a.action_type).filter((t): t is string => !!t && !!VIEW_SHORTCUTS[t]))].map((actionType) => {
             const config = VIEW_SHORTCUTS[actionType];

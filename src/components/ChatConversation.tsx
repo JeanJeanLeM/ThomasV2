@@ -80,6 +80,31 @@ interface Message {
 }
 
 type InputMode = 'vocal_direct' | 'dictation';
+const ONBOARDING_HELP_SHORTCUT_SCREEN = 'ONBOARDING_TUTORIAL';
+const ONBOARDING_INTRO_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_INTRO_CONTINUE';
+const ONBOARDING_TASK_EXAMPLE_SHORTCUT_SCREEN = 'ONBOARDING_TASK_EXAMPLE';
+const ONBOARDING_TASK_EXAMPLE_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_TASK_EXAMPLE_CONTINUE';
+const ONBOARDING_PLANNED_TASK_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_PLANNED_TASK_CONTINUE';
+const ONBOARDING_OBSERVATION_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_OBSERVATION_CONTINUE';
+const ONBOARDING_SETUP_PLOT_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_SETUP_PLOT_CONTINUE';
+const ONBOARDING_SETUP_MATERIAL_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_SETUP_MATERIAL_CONTINUE';
+const ONBOARDING_SETUP_CONVERSION_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_SETUP_CONVERSION_CONTINUE';
+const ONBOARDING_COMMERCE_SALE_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_COMMERCE_SALE_CONTINUE';
+const ONBOARDING_COMMERCE_PURCHASE_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_COMMERCE_PURCHASE_CONTINUE';
+const ONBOARDING_COMMERCE_PARTNER_INFO_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_COMMERCE_PARTNER_INFO_CONTINUE';
+const ONBOARDING_SIMPLE_TASK_EXAMPLE_TEXT = "J'ai récolté des tomates pendant 1 heure.";
+const ONBOARDING_ADVANCED_TASK_EXAMPLE_TEXT =
+  "J'ai récolté 10 caisses de tomates en serre 1 planche 2 à 4 pendant 1 heure30 avec mon stagiaire.";
+const ONBOARDING_PLANNED_TASK_EXAMPLE_TEXT = 'Demain je dois planter les laitues en Serre 1 P 10 à 16.';
+const ONBOARDING_OBSERVATION_EXAMPLE_TEXT =
+  "J'ai observé des pucerons dans les laitues serre 1 planche 10 et Planche 15.";
+const ONBOARDING_PLOT_EXAMPLE_TEXT =
+  'Ajoute une serre en plastique Serre 3 de 19 metres de large et 40 m de long avec 16 planches de 40 m de long et 1 m de large.';
+const ONBOARDING_MATERIAL_EXAMPLE_TEXT = 'Ajouter un tracteur John Deere 6120M dans mon matériel.';
+const ONBOARDING_CONVERSION_EXAMPLE_TEXT = 'Créer une conversion : 1 caisse de tomates = 12 kg.';
+const ONBOARDING_SALE_EXAMPLE_TEXT = "J'ai vendu 4 caisses de tomates à Bernard à 20 € la caisse.";
+const ONBOARDING_PURCHASE_EXAMPLE_TEXT = "J'ai acheté 10 sacs de ferti+ à 10 € l'unité au magasin BricoMMM.";
+const ONBOARDING_CHAT_TITLES = ['onboarding & aide rapide', 'bienvenue sur thomas'];
 
 interface PendingTranscribedAudio {
   audioAttachment: ChatAttachment;
@@ -445,6 +470,11 @@ export default function ChatConversation({
   const [isTranscriptionAutocorrectEnabled, setIsTranscriptionAutocorrectEnabled] = useState(true);
   const [showVoiceHelpOverlay, setShowVoiceHelpOverlay] = useState(false);
   const [voiceHelpExampleIndex, setVoiceHelpExampleIndex] = useState(0);
+  const isTemporaryOnboardingChat = !!chat?.id && chat.id.startsWith('temp-onboarding-');
+  const isOnboardingChat =
+    isTemporaryOnboardingChat ||
+    (typeof chat?.title === 'string' &&
+      ONBOARDING_CHAT_TITLES.includes(chat.title.trim().toLowerCase()));
 
   // ===== Mode d'enregistrement : Vocal direct (Whisper) ou Dictée (Web Speech en temps réel) =====
   const [inputMode, setInputMode] = useState<InputMode>('vocal_direct');
@@ -515,6 +545,9 @@ export default function ChatConversation({
 
   // Fonction unifiée pour scroller vers le bas
   const scrollToBottom = (animated: boolean = true, delay: number = 100) => {
+    // UX: auto-scroll uniquement pour le parcours onboarding.
+    if (!isOnboardingChat) return;
+
     // Annuler le scroll précédent pour éviter les conflits
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
@@ -2186,6 +2219,18 @@ export default function ChatConversation({
     const isTemporaryChat = chat.id.startsWith('temp-');
     
     if (isTemporaryChat) {
+      const isTemporaryOnboarding = chat.id.startsWith('temp-onboarding-');
+      if (isTemporaryOnboarding) {
+        console.log('⚡ [OPTIMISTIC] Temporary onboarding chat detected - showing loading state:', chat.id);
+        setMessages([]);
+        setHasMoreMessages(false);
+        setLoading(false);
+        setIsInitialLoad(false);
+        // Garder le loader visible jusqu'au remplacement transparent par le vrai chat
+        setIsLoadingMessages(true);
+        return;
+      }
+
       console.log('⚡ [OPTIMISTIC] Temporary chat detected - showing welcome message only:', chat.id);
       const welcomeMessage: Message = {
         id: 'welcome',
@@ -3691,6 +3736,7 @@ export default function ChatConversation({
             material_ids: updatedAction.matched_entities?.material_ids,
             quantity_value: updatedAction.extracted_data?.quantity?.value,
             quantity_unit: updatedAction.extracted_data?.quantity?.unit,
+            standard_action: updatedAction.extracted_data?.standard_action ?? null,
             quantity_nature: updatedAction.extracted_data?.quantity_nature,
             quantity_type: sanitizeQuantityType(updatedAction.extracted_data),
             notes: updatedAction.extracted_data?.notes
@@ -3787,6 +3833,1221 @@ export default function ChatConversation({
     } catch (error) {
       console.error('❌ [CHAT] Erreur envoi message tâche:', error);
       Alert.alert('Erreur', 'Impossible d\'envoyer la tâche');
+    }
+  };
+
+  // Simule un échange onboarding: message user factice + réponse Thomas avec card d'action.
+  const waitOnboardingMessageDelay = async () => {
+    const delayMs = 1000 + Math.floor(Math.random() * 1001); // 1000ms -> 2000ms
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+  };
+
+  // Étape intro onboarding: au clic sur "Continuer", affiche seulement le 2e message de Thomas.
+  const triggerOnboardingIntroContinue = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) =>
+        (msg.isUser && msg.text === ONBOARDING_SIMPLE_TASK_EXAMPLE_TEXT) ||
+        (msg.isAI && msg.text.includes('exemple de tâche simple'))
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    try {
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantPrompt = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: '🎯 Parfait, on va maintenant vous montrer un exemple de tâche simple.',
+        ai_confidence: 1,
+        metadata: {
+          type: 'welcome_onboarding_example_intro',
+          has_actions: false,
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantPrompt = adaptChatMessageToMessage(dbAssistantPrompt);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantPrompt.id) ? prev : [...prev, adaptedAssistantPrompt]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: "Annonce exemple simple affichée",
+        timestamp: new Date(),
+        messageCount: messages.length + 1,
+      });
+
+      scrollToBottom(true);
+      await waitOnboardingMessageDelay();
+      await triggerOnboardingTaskExample();
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur affichage message exemple:', error);
+      Alert.alert('Erreur', "Impossible d'afficher le message d'exemple pour le moment.");
+    }
+  };
+
+  // Simule un échange onboarding: message user factice + réponse Thomas avec card d'action.
+  const triggerOnboardingTaskExample = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_SIMPLE_TASK_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const demoUserText = ONBOARDING_SIMPLE_TASK_EXAMPLE_TEXT;
+    const todayISO = new Date().toISOString().split('T')[0];
+    const tempActionId = `temp_onboarding_action_${Date.now()}`;
+
+    const simulatedAction = {
+      id: tempActionId,
+      action_type: 'task_done',
+      original_text: demoUserText,
+      decomposed_text: demoUserText,
+      confidence: 1,
+      extracted_data: {
+        action: 'récolter',
+        crop: 'tomates',
+        duration: { value: 1, unit: 'heure' },
+        number_of_people: 1,
+        date: todayISO,
+        task_type: 'done',
+        notes: 'Exemple onboarding (factice)',
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: demoUserText,
+        metadata: {
+          type: 'onboarding_demo_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Parfait, j'ai identifié 1 action dans votre message.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_ai_result',
+          has_actions: true,
+          actions: [simulatedAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbContinuePromptMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "✅ Exemple terminé.\n\nAppuyez sur le bouton ci-dessous pour voir un exemple plus complet.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_continue_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_TASK_EXAMPLE_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedContinuePromptMessage = adaptChatMessageToMessage(dbContinuePromptMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedContinuePromptMessage.id) ? prev : [...prev, adaptedContinuePromptMessage]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: "Exemple de tâche simulé",
+        timestamp: new Date(),
+        messageCount: messages.length + 3,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur simulation exemple de tâche:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'exemple de tâche pour le moment.");
+    }
+  };
+
+  // Suite onboarding: au clic "Continuer", enchaîne directement la suite côté Thomas.
+  const triggerOnboardingTaskExampleContinue = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const fullExampleAlreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_ADVANCED_TASK_EXAMPLE_TEXT
+    );
+    if (fullExampleAlreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const todayISO = new Date().toISOString().split('T')[0];
+    const advancedActionId = `temp_onboarding_action_advanced_${Date.now()}`;
+    const advancedSimulatedAction = {
+      id: advancedActionId,
+      action_type: 'task_done',
+      original_text: ONBOARDING_ADVANCED_TASK_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_ADVANCED_TASK_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        action: 'récolter',
+        crop: 'tomates',
+        crops: ['tomates'],
+        plot_names: ['Serre 1'],
+        surface_units: ['Planche 2', 'Planche 3', 'Planche 4'],
+        surface_unit_count: 3,
+        quantity: { value: 10, unit: 'caisses' },
+        quantity_nature: 'tomates',
+        quantity_type: 'recolte',
+        quantity_converted: { value: 120, unit: 'kg' },
+        duration: { value: 1.5, unit: 'heures' },
+        number_of_people: 2,
+        total_work_time: { value: 3, unit: 'heures' },
+        date: todayISO,
+        task_type: 'done',
+        notes: 'Exemple onboarding (factice) - 1 caisse = 12 kg, 2 personnes = 3 heures',
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantAnnouncement = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "Parfait 👍\n\nOn passe maintenant à un exemple de tâche complet.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_next_example_announcement',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantAnnouncement = adaptChatMessageToMessage(dbAssistantAnnouncement);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantAnnouncement.id) ? prev : [...prev, adaptedAssistantAnnouncement]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAdvancedUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_ADVANCED_TASK_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_advanced_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAdvancedUserMessage = adaptChatMessageToMessage(dbAdvancedUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAdvancedUserMessage.id) ? prev : [...prev, adaptedAdvancedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAdvancedAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "Excellent, j'ai identifié 1 action complète avec quantité convertie, zone de travail et temps total.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_advanced_ai_result',
+          has_actions: true,
+          actions: [advancedSimulatedAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAdvancedAssistantResult = adaptChatMessageToMessage(dbAdvancedAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAdvancedAssistantResult.id) ? prev : [...prev, adaptedAdvancedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbPlannedTaskIntroMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          'Étape suivante : planifier une tâche.\n\nAppuyez sur Continuer.',
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_planned_task_intro_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_PLANNED_TASK_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedPlannedTaskIntroMessage = adaptChatMessageToMessage(dbPlannedTaskIntroMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedPlannedTaskIntroMessage.id) ? prev : [...prev, adaptedPlannedTaskIntroMessage]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: "Exemple complet simulé",
+        timestamp: new Date(),
+        messageCount: messages.length + 4,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur simulation du message continuer:', error);
+      Alert.alert('Erreur', "Impossible de continuer l'exemple pour le moment.");
+    }
+  };
+
+  const triggerOnboardingPlannedTaskStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_PLANNED_TASK_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowISO = tomorrow.toISOString().split('T')[0];
+
+    const plannedAction = {
+      id: `temp_onboarding_planned_${Date.now()}`,
+      action_type: 'task_planned',
+      original_text: ONBOARDING_PLANNED_TASK_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_PLANNED_TASK_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        action: 'planter',
+        crop: 'laitues',
+        crops: ['laitues'],
+        plot_names: ['Serre 1'],
+        surface_units: ['Planche 10', 'Planche 11', 'Planche 12', 'Planche 13', 'Planche 14', 'Planche 15', 'Planche 16'],
+        surface_unit_count: 7,
+        task_type: 'planned',
+        scheduled_date: tomorrowISO,
+        date: tomorrowISO,
+        notes: 'Exemple onboarding (factice)',
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_PLANNED_TASK_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_planned_task_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Parfait, j'ai identifié une tâche planifiée.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_planned_task_ai_result',
+          has_actions: true,
+          actions: [plannedAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbObservationIntroMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: 'Étape suivante : enregistrer une observation.\n\nAppuyez sur Continuer.',
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_observation_intro_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_OBSERVATION_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedObservationIntroMessage = adaptChatMessageToMessage(dbObservationIntroMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedObservationIntroMessage.id) ? prev : [...prev, adaptedObservationIntroMessage]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Tache planifiee simulee',
+        timestamp: new Date(),
+        messageCount: messages.length + 3,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape tâche planifiée:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'étape tâche planifiée pour le moment.");
+    }
+  };
+
+  const triggerOnboardingObservationStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_OBSERVATION_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const todayISO = new Date().toISOString().split('T')[0];
+    const observationAction = {
+      id: `temp_onboarding_observation_${Date.now()}`,
+      action_type: 'observation',
+      original_text: ONBOARDING_OBSERVATION_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_OBSERVATION_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        issue: 'pucerons',
+        category: 'ravageurs',
+        severity: 'moyenne',
+        crop: 'laitues',
+        crops: ['laitues'],
+        plot_names: ['Serre 1'],
+        surface_units: ['Planche 10', 'Planche 15'],
+        surface_unit_count: 2,
+        date: todayISO,
+        notes: 'Exemple onboarding (factice)',
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_OBSERVATION_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_observation_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Parfait, j'ai identifié une observation de pucerons.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_observation_ai_result',
+          has_actions: true,
+          actions: [observationAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbSetupIntroMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "Top 👌\n\n" +
+          "Maintenant, on va faire le paramétrage étape par étape : parcelles, matériel, puis conversions.\n\n" +
+          "Paramétrer les parcelles, le matériel et les conversions permet à l'IA de mieux les identifier. " +
+          "Ce n'est pas obligatoire mais vivement conseillé.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_intro_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_SETUP_PLOT_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedSetupIntroMessage = adaptChatMessageToMessage(dbSetupIntroMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedSetupIntroMessage.id) ? prev : [...prev, adaptedSetupIntroMessage]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Observation simulee',
+        timestamp: new Date(),
+        messageCount: messages.length + 3,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape observation:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'étape observation pour le moment.");
+    }
+  };
+
+  const triggerOnboardingSetupPlotStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_PLOT_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const plotAction = {
+      id: `temp_onboarding_plot_${Date.now()}`,
+      action_type: 'manage_plot',
+      original_text: ONBOARDING_PLOT_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_PLOT_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        name: 'Serre 3',
+        type: 'serre_plastique',
+        length: 40,
+        width: 19,
+        surface_units_config: {
+          count: 16,
+          type: 'planche',
+          naming_pattern: 'numeric',
+          sequence_start: 1,
+          length: 40,
+          width: 1,
+        },
+        surface_unit_count: 16,
+        card_summary: {
+          action_type: 'manage_plot',
+          title: 'Parcelle Serre 3 creee',
+          subtitle: 'Serre plastique • 19m × 40m',
+          highlights: [
+            { label: 'Type', value: 'Serre plastique' },
+            { label: 'Dimensions', value: '19m × 40m' },
+            { label: 'Planches', value: '16 planches (40m × 1m)' },
+          ],
+          record_type: 'plot',
+        },
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      await waitOnboardingMessageDelay();
+
+      const dbPlotImportanceIntro = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "On commence par paramétrer une parcelle, c'est le plus important car cela te permettra d'avoir des chiffres de temps de travail par m².",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_plot_importance_intro',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedPlotImportanceIntro = adaptChatMessageToMessage(dbPlotImportanceIntro);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedPlotImportanceIntro.id) ? prev : [...prev, adaptedPlotImportanceIntro]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_PLOT_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_setup_plot_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Parfait, j'ai détecté un ajout de parcelle avec ses planches.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_plot_ai_result',
+          has_actions: true,
+          actions: [plotAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbContinuePrompt = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: '',
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_material_continue_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_SETUP_MATERIAL_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedContinuePrompt = adaptChatMessageToMessage(dbContinuePrompt);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedContinuePrompt.id) ? prev : [...prev, adaptedContinuePrompt]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Paramétrage parcelle simulé',
+        timestamp: new Date(),
+        messageCount: messages.length + 4,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape paramétrage parcelle:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'étape parcelle pour le moment.");
+    }
+  };
+
+  const triggerOnboardingSetupMaterialStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_MATERIAL_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const materialAction = {
+      id: `temp_onboarding_material_${Date.now()}`,
+      action_type: 'manage_material',
+      original_text: ONBOARDING_MATERIAL_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_MATERIAL_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        name: 'Tracteur John Deere 6120M',
+        category: 'tracteurs',
+        custom_category: 'Tracteur',
+        brand: 'John Deere',
+        model: '6120M',
+        card_summary: {
+          action_type: 'manage_material',
+          title: 'Matériel Tracteur John Deere 6120M',
+          subtitle: 'Tracteur • John Deere',
+          highlights: [
+            { label: 'Catégorie', value: 'Tracteur' },
+            { label: 'Marque', value: 'John Deere' },
+            { label: 'Modèle', value: '6120M' },
+          ],
+          record_type: 'material',
+        },
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      await waitOnboardingMessageDelay();
+
+      const dbMaterialIntro = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "On va maintenant ajouter du matériel, cela te permet de garder une trace de leur usage.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_material_intro',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedMaterialIntro = adaptChatMessageToMessage(dbMaterialIntro);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedMaterialIntro.id) ? prev : [...prev, adaptedMaterialIntro]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_MATERIAL_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_setup_material_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Parfait, j'ai identifié l'ajout du matériel.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_material_ai_result',
+          has_actions: true,
+          actions: [materialAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbContinuePrompt = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: '',
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_conversion_continue_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_SETUP_CONVERSION_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedContinuePrompt = adaptChatMessageToMessage(dbContinuePrompt);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedContinuePrompt.id) ? prev : [...prev, adaptedContinuePrompt]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Paramétrage matériel simulé',
+        timestamp: new Date(),
+        messageCount: messages.length + 4,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape paramétrage matériel:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'étape matériel pour le moment.");
+    }
+  };
+
+  const triggerOnboardingSetupConversionStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_CONVERSION_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const conversionAction = {
+      id: `temp_onboarding_conversion_${Date.now()}`,
+      action_type: 'manage_conversion',
+      original_text: ONBOARDING_CONVERSION_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_CONVERSION_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        container_name: 'caisse',
+        crop_name: 'tomates',
+        conversion_value: 12,
+        conversion_unit: 'kg',
+        card_summary: {
+          action_type: 'manage_conversion',
+          title: 'Conversion caisse tomates',
+          subtitle: '1 caisse = 12 kg',
+          highlights: [
+            { label: 'Contenant', value: 'caisse' },
+            { label: 'Culture', value: 'tomates' },
+            { label: 'Équivalent', value: '12 kg' },
+          ],
+          record_type: 'conversion',
+        },
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      await waitOnboardingMessageDelay();
+
+      const dbConversionIntro = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "On va ajouter une conversion, les conversions te permettent d'utiliser tes unités du quotidien (une caisse, une grande caisse, un bac) en unités universelles (kg, plants, bottes, etc).",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_conversion_intro',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedConversionIntro = adaptChatMessageToMessage(dbConversionIntro);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedConversionIntro.id) ? prev : [...prev, adaptedConversionIntro]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_CONVERSION_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_setup_conversion_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Excellent, la conversion est bien configurée.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_setup_conversion_ai_result',
+          has_actions: true,
+          actions: [conversionAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbContinuePrompt = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "Parfait 👌\n\n" +
+          "On passe maintenant aux ventes et aux achats, étape par étape.\n\n" +
+          "Objectif : bien structurer le suivi commercial (factures, encaissements et paiements).\n\n" +
+          "Une vente/achat bien saisi comprend en général : quantité, unité, nature, client ou fournisseur, prix et statut de paiement.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_commerce_sale_continue_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_COMMERCE_SALE_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedContinuePrompt = adaptChatMessageToMessage(dbContinuePrompt);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedContinuePrompt.id) ? prev : [...prev, adaptedContinuePrompt]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Paramétrage conversion simulé',
+        timestamp: new Date(),
+        messageCount: messages.length + 4,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape paramétrage conversion:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'étape conversion pour le moment.");
+    }
+  };
+
+  const triggerOnboardingCommerceSaleStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_SALE_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const saleAction = {
+      id: `temp_onboarding_sale_${Date.now()}`,
+      action_type: 'sale',
+      original_text: ONBOARDING_SALE_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_SALE_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        customer_name: 'Bernard',
+        quantity: { value: 4, unit: 'caisses' },
+        quantity_nature: 'tomates',
+        quantity_type: 'vente',
+        quantity_converted: { value: 48, unit: 'kg' },
+        total_ttc: 80,
+        payment_status: 'to_be_paid',
+        notes: 'Exemple onboarding (factice)',
+        card_summary: {
+          action_type: 'sale',
+          title: 'Vente à Bernard',
+          subtitle: '4 caisses de tomates • 80 € TTC',
+          highlights: [
+            { label: 'Client', value: 'Bernard' },
+            { label: 'Montant', value: '80 € TTC' },
+            { label: 'Statut', value: 'À encaisser' },
+          ],
+          record_type: 'invoice',
+        },
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_SALE_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_commerce_sale_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Parfait, j'ai identifié une vente.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_commerce_sale_ai_result',
+          has_actions: true,
+          actions: [saleAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbContinuePrompt = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: '',
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_commerce_purchase_continue_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_COMMERCE_PURCHASE_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedContinuePrompt = adaptChatMessageToMessage(dbContinuePrompt);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedContinuePrompt.id) ? prev : [...prev, adaptedContinuePrompt]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Vente simulée',
+        timestamp: new Date(),
+        messageCount: messages.length + 3,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape vente:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'étape vente pour le moment.");
+    }
+  };
+
+  const triggerOnboardingCommercePurchaseStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isUser && msg.text === ONBOARDING_PURCHASE_EXAMPLE_TEXT
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    const purchaseAction = {
+      id: `temp_onboarding_purchase_${Date.now()}`,
+      action_type: 'purchase',
+      original_text: ONBOARDING_PURCHASE_EXAMPLE_TEXT,
+      decomposed_text: ONBOARDING_PURCHASE_EXAMPLE_TEXT,
+      confidence: 1,
+      extracted_data: {
+        supplier_name: 'Magasin BricoMMM',
+        quantity: { value: 10, unit: 'sacs' },
+        quantity_nature: 'ferti+',
+        quantity_type: 'achat',
+        total_ttc: 100,
+        payment_status: 'to_be_paid',
+        notes: 'Exemple onboarding (factice)',
+        card_summary: {
+          action_type: 'purchase',
+          title: 'Achat chez Magasin BricoMMM',
+          subtitle: '10 sacs de ferti+ • 100 € TTC',
+          highlights: [
+            { label: 'Fournisseur', value: 'Magasin BricoMMM' },
+            { label: 'Montant', value: '100 € TTC' },
+            { label: 'Statut', value: 'À régler' },
+          ],
+          record_type: 'invoice',
+        },
+      },
+      user_status: 'pending',
+      onboarding_demo: true,
+    } as any;
+
+    try {
+      const dbUserMessage = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'user',
+        content: ONBOARDING_PURCHASE_EXAMPLE_TEXT,
+        metadata: {
+          type: 'onboarding_demo_commerce_purchase_user_message',
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedUserMessage = adaptChatMessageToMessage(dbUserMessage);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedUserMessage.id) ? prev : [...prev, adaptedUserMessage]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantResult = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: "Parfait, j'ai identifié un achat.",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_commerce_purchase_ai_result',
+          has_actions: true,
+          actions: [purchaseAction],
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantResult = adaptChatMessageToMessage(dbAssistantResult);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantResult.id) ? prev : [...prev, adaptedAssistantResult]));
+      scrollToBottom(true);
+
+      await waitOnboardingMessageDelay();
+
+      const dbContinuePrompt = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: '',
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_commerce_partner_info_continue_prompt',
+          has_actions: false,
+          is_help_request: true,
+          help_shortcut: {
+            screen: ONBOARDING_COMMERCE_PARTNER_INFO_CONTINUE_SHORTCUT_SCREEN,
+            label: 'Continuer',
+          },
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedContinuePrompt = adaptChatMessageToMessage(dbContinuePrompt);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedContinuePrompt.id) ? prev : [...prev, adaptedContinuePrompt]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Achat simulé',
+        timestamp: new Date(),
+        messageCount: messages.length + 3,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape achat:', error);
+      Alert.alert('Erreur', "Impossible de lancer l'étape achat pour le moment.");
+    }
+  };
+
+  const triggerOnboardingCommercePartnerInfoStep = async () => {
+    if (!chat?.id || chat.id.startsWith('temp-')) {
+      Alert.alert('Patientez', 'Le chat onboarding est encore en cours de création.');
+      return;
+    }
+
+    const alreadyShown = messages.some(
+      (msg) => msg.isAI && msg.text.includes('Pour ajouter un client ou un fournisseur')
+    );
+    if (alreadyShown) {
+      scrollToBottom(true);
+      return;
+    }
+
+    try {
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantInfo = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content:
+          "Pour ajouter un client ou un fournisseur, vous pouvez :\n\n" +
+          "• utiliser le menu Commerce > Clients/Fournisseurs\n" +
+          "• ou me le dire directement dans le chat (ex: \"Ajouter le client Bernard\", \"Ajouter le fournisseur BricoMMM\").",
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_commerce_partner_info',
+          has_actions: false,
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantInfo = adaptChatMessageToMessage(dbAssistantInfo);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantInfo.id) ? prev : [...prev, adaptedAssistantInfo]));
+
+      await waitOnboardingMessageDelay();
+
+      const dbAssistantFinalNote = await ChatServiceDirect.sendMessage({
+        session_id: chat.id,
+        role: 'assistant',
+        content: 'La suite du onboarding est en construction, encore un peu de patience.',
+        ai_confidence: 1,
+        metadata: {
+          type: 'onboarding_demo_in_progress_final_note',
+          has_actions: false,
+          onboarding_simulation: true,
+        },
+      });
+
+      const adaptedAssistantFinalNote = adaptChatMessageToMessage(dbAssistantFinalNote);
+      setMessages(prev => (prev.some(msg => msg.id === adaptedAssistantFinalNote.id) ? prev : [...prev, adaptedAssistantFinalNote]));
+
+      onUpdateChat(chat.id, {
+        lastMessage: 'Onboarding en construction',
+        timestamp: new Date(),
+        messageCount: messages.length + 2,
+      });
+
+      scrollToBottom(true);
+    } catch (error) {
+      console.error('❌ [ONBOARDING-DEMO] Erreur étape info client/fournisseur:', error);
+      Alert.alert('Erreur', "Impossible d'afficher l'étape client/fournisseur pour le moment.");
     }
   };
 
@@ -4009,27 +5270,27 @@ export default function ChatConversation({
           paddingHorizontal: Platform.select({ web: spacing.sm, default: spacing.md }),
           paddingTop: spacing.sm,
           paddingBottom: spacing.lg,
-          ...(isLoadingMessages && messages.length === 0 ? { flex: 1, justifyContent: 'center' } : {})
+          ...(isTemporaryOnboardingChat && messages.length === 0
+            ? {
+                flex: 1,
+                justifyContent: 'flex-end',
+              }
+            : {})
         }}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* Indicateur de chargement des messages */}
-        {isLoadingMessages && messages.length === 0 && (
+        {/* Placeholder onboarding: une seule bulle Thomas a gauche */}
+        {isTemporaryOnboardingChat && messages.length === 0 && (
           <View style={{ 
             flex: 1, 
-            justifyContent: 'center', 
-            alignItems: 'center',
+            justifyContent: 'flex-end',
+            alignItems: 'stretch',
             paddingVertical: spacing.xl * 2,
           }}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={{ 
-              marginTop: spacing.md, 
-              color: colors.text.secondary,
-              fontSize: 16,
-            }}>
-              Chargement des messages...
-            </Text>
+            <View style={{ alignSelf: 'flex-start' }}>
+              <TypingIndicator message="Thomas écrit..." />
+            </View>
           </View>
         )}
 
@@ -4087,6 +5348,59 @@ export default function ChatConversation({
                 actions={message.actions || []}
                 helpShortcut={message.helpShortcut}
                 onNavigateToHelp={(screen) => {
+                  if (screen === ONBOARDING_INTRO_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingIntroContinue();
+                    return;
+                  }
+                  if (screen === ONBOARDING_PLANNED_TASK_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingPlannedTaskStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_OBSERVATION_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingObservationStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_SETUP_PLOT_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingSetupPlotStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_SETUP_MATERIAL_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingSetupMaterialStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_SETUP_CONVERSION_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingSetupConversionStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_COMMERCE_SALE_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingCommerceSaleStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_COMMERCE_PURCHASE_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingCommercePurchaseStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_COMMERCE_PARTNER_INFO_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingCommercePartnerInfoStep();
+                    return;
+                  }
+                  if (screen === ONBOARDING_TASK_EXAMPLE_SHORTCUT_SCREEN) {
+                    triggerOnboardingTaskExample();
+                    return;
+                  }
+                  if (screen === ONBOARDING_TASK_EXAMPLE_CONTINUE_SHORTCUT_SCREEN) {
+                    triggerOnboardingTaskExampleContinue();
+                    return;
+                  }
+
+                  if (screen === ONBOARDING_HELP_SHORTCUT_SCREEN) {
+                    navigation.setNavigationParams({
+                      openTutorial: true,
+                      triggeredFromChat: true,
+                      returnChatId: chat.id,
+                    });
+                    return;
+                  }
                   navigation.navigateToTab('Profil');
                   navigation.navigateToScreen(screen as ScreenName);
                 }}
@@ -4441,7 +5755,7 @@ export default function ChatConversation({
         })}
         
         {/* Indicateur d'analyse avec animation moderne */}
-        {isAnalyzing && (
+        {isAnalyzing && !(isTemporaryOnboardingChat && messages.length === 0) && (
           <View style={{ alignSelf: 'flex-start', marginBottom: spacing.lg }}>
             <TypingIndicator />
           </View>

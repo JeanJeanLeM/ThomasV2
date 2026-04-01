@@ -8,6 +8,13 @@ import { sanitizeQuantityType } from './quantityUtils';
  * avec les données d'une tâche existante
  */
 export const convertTaskToAction = (task: TaskData): ActionData => {
+  const toNumberIds = (values?: Array<string | number>): number[] => {
+    if (!Array.isArray(values)) return [];
+    return values
+      .map((value) => (typeof value === 'number' ? value : parseInt(String(value), 10)))
+      .filter((value) => Number.isFinite(value));
+  };
+
   // Déterminer le type d'action basé sur le statut de la tâche
   const getActionType = (): ActionData['action_type'] => {
     if (task.type === 'completed') {
@@ -69,6 +76,7 @@ export const convertTaskToAction = (task: TaskData): ActionData => {
     extracted_data: {
       title: task.title,
       action: task.action,
+      standard_action: task.standard_action,
       
       // Cultures
       crops: task.plants || [],
@@ -100,8 +108,9 @@ export const convertTaskToAction = (task: TaskData): ActionData => {
     },
     user_status: 'validated', // Tâche existante = déjà validée
     matched_entities: {
-      plot_ids: task.plot_ids?.map(id => parseInt(id)) || [],
-      material_ids: task.material_ids?.map(id => parseInt(id)) || [],
+      plot_ids: toNumberIds(task.plot_ids as Array<string | number> | undefined),
+      surface_unit_ids: toNumberIds(task.surface_unit_ids as Array<string | number> | undefined),
+      material_ids: toNumberIds(task.material_ids as Array<string | number> | undefined),
     }
   };
 
@@ -113,6 +122,21 @@ export const convertTaskToAction = (task: TaskData): ActionData => {
  */
 export const convertActionToTask = (action: ActionData, originalTask?: TaskData): TaskData => {
   const data = action.extracted_data || {};
+
+  const toIdStrings = (values?: unknown): string[] | undefined => {
+    if (!Array.isArray(values)) return undefined;
+    const normalized = values
+      .map((value) => (typeof value === 'number' ? String(value) : String(value || '').trim()))
+      .filter((value) => /^\d+$/.test(value));
+    return normalized.length > 0 ? normalized : undefined;
+  };
+
+  const matchedPlotIds = toIdStrings(action.matched_entities?.plot_ids);
+  const matchedSurfaceUnitIds = toIdStrings(action.matched_entities?.surface_unit_ids);
+  const matchedMaterialIds = toIdStrings(action.matched_entities?.material_ids);
+  const extractedPlotIds = toIdStrings(data.plots as unknown);
+  const extractedSurfaceUnitIds = toIdStrings((data as any).surface_units as unknown);
+  const extractedMaterialIds = toIdStrings(data.materials as unknown);
   
   // Convertir la date string + time vers Date
   const buildDate = (): Date | string => {
@@ -157,13 +181,15 @@ export const convertActionToTask = (action: ActionData, originalTask?: TaskData)
     id: action.id || originalTask?.id || '',
     title: data.title || originalTask?.title || '',
     action: data.action || originalTask?.action,
+    standard_action: data.standard_action ?? originalTask?.standard_action ?? null,
     type: action.action_type === 'task_done' ? 'completed' : 'planned',
     date: buildDate(),
     duration_minutes: convertToMinutes(data.duration) || originalTask?.duration_minutes,
     number_of_people: data.number_of_people || originalTask?.number_of_people,
     plants: data.crops || originalTask?.plants,
-    plot_ids: data.plots || originalTask?.plot_ids,
-    material_ids: data.materials || originalTask?.material_ids,
+    plot_ids: matchedPlotIds || extractedPlotIds || originalTask?.plot_ids,
+    surface_unit_ids: matchedSurfaceUnitIds || extractedSurfaceUnitIds || originalTask?.surface_unit_ids,
+    material_ids: matchedMaterialIds || extractedMaterialIds || originalTask?.material_ids,
     quantity: data.quantity || originalTask?.quantity,
     quantity_converted: data.quantity_converted || originalTask?.quantity_converted,
     quantity_nature: data.quantity_nature || originalTask?.quantity_nature,

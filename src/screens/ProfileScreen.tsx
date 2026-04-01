@@ -24,6 +24,7 @@ import { useFarm } from '../contexts/FarmContext';
 import { authService } from '../services/auth';
 import { userInvitationService } from '../services/UserInvitationService';
 import { showAlert } from '../utils/webAlert';
+import { getAppVersionInfo } from '../services/AppVersionService';
 
 interface ProfileScreenProps {
   onProfileAndFarmPress?: () => void;
@@ -46,6 +47,7 @@ interface ProfileScreenProps {
 export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, onAgentSettingsPress, onFarmMembersPress, onMyInvitationsPress, onFarmEditPress, onAideEtSupportPress, onAProposPress, onDocumentsPress, onCommercePress, onCommunityPress, onNotificationsPress, openEditProfileFromNav, onClearOpenEditProfile }: ProfileScreenProps) {
   const { user: authUser, signOut } = useAuth();
   const { activeFarm, updateFarm, deleteFarm, createFarm, farmData } = useFarm();
+  const appVersionInfo = getAppVersionInfo();
   const [isEditProfileVisible, setIsEditProfileVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [invitationCount, setInvitationCount] = useState(0);
@@ -479,7 +481,7 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
           {/* Footer avec informations app */}
           <View style={styles.footerSection}>
             <Text style={styles.footerTitle}>Thomas - Assistant Agricole</Text>
-            <Text style={styles.footerSubtitle}>Version 1.0.28</Text>
+            <Text style={styles.footerSubtitle}>{appVersionInfo.displayVersion}</Text>
             <Text style={styles.footerDescription}>
               Votre compagnon numérique pour une agriculture moderne et efficace
             </Text>

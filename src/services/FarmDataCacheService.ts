@@ -31,6 +31,7 @@ export interface TaskData {
   number_of_people?: number; // Nombre de personnes
   plants?: string[]; // Cultures/plantes
   plot_ids?: string[]; // IDs des parcelles
+  surface_unit_ids?: string[]; // IDs des planches/rangs/lignes
   material_ids?: string[]; // IDs des matériels/outils
   quantity?: { value: number; unit: string }; // Quantité avec unité
   quantity_converted?: { value: number; unit: string }; // Quantité convertie (ex: bottes -> kg)
@@ -263,7 +264,7 @@ export class FarmDataCacheService {
     try {
       const tasksResult = await DirectSupabaseService.directSelect(
         'tasks',
-        'id,title,date,status,type,priority,action,standard_action,duration_minutes,number_of_people,plants,plot_ids,material_ids,quantity_value,quantity_unit,quantity_converted_value,quantity_converted_unit,quantity_nature,quantity_type,phytosanitary_product_amm',
+        'id,title,date,status,type,priority,action,standard_action,duration_minutes,number_of_people,plants,plot_ids,surface_unit_ids,material_ids,quantity_value,quantity_unit,quantity_converted_value,quantity_converted_unit,quantity_nature,quantity_type,phytosanitary_product_amm',
         [
           { column: 'farm_id', value: farmId },
           { column: 'is_active', value: true } // Filtrer uniquement les tâches actives
@@ -276,6 +277,23 @@ export class FarmDataCacheService {
       }
       
       const tasks = (tasksResult.data || []).map((task: any) => {
+        const normalizeIdArray = (value: unknown): string[] => {
+          if (Array.isArray(value)) {
+            return value.map((v) => String(v)).filter((v) => /^\d+$/.test(v));
+          }
+          if (typeof value === 'string') {
+            try {
+              const parsed = JSON.parse(value);
+              if (Array.isArray(parsed)) {
+                return parsed.map((v) => String(v)).filter((v) => /^\d+$/.test(v));
+              }
+            } catch {
+              // Ignore malformed payload and fallback to empty array
+            }
+          }
+          return [];
+        };
+
         return {
           id: task.id,
           title: task.title,
@@ -289,8 +307,9 @@ export class FarmDataCacheService {
           duration_minutes: task.duration_minutes, // Durée
           number_of_people: task.number_of_people, // Nombre de personnes
           plants: task.plants || [], // Cultures/plantes
-          plot_ids: task.plot_ids || [], // Parcelles
-          material_ids: task.material_ids || [], // Matériels
+          plot_ids: normalizeIdArray(task.plot_ids), // Parcelles
+          surface_unit_ids: normalizeIdArray(task.surface_unit_ids), // Planches/rangs/lignes
+          material_ids: normalizeIdArray(task.material_ids), // Matériels
           // Reconstruire l'objet quantity depuis les colonnes séparées
           quantity: task.quantity_value && task.quantity_unit 
             ? { value: task.quantity_value, unit: task.quantity_unit }
