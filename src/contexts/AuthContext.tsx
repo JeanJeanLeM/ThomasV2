@@ -3,6 +3,7 @@ import { supabase } from '../utils/supabase';
 import { DirectSupabaseService } from '../services/DirectSupabaseService';
 import type { User, Session } from '@supabase/supabase-js';
 import { setItem, deleteItem, getItem } from '../utils/secureStore';
+import { getAppVersionInfo } from '../services/AppVersionService';
 
 interface AuthContextType {
   user: User | null;
@@ -36,6 +37,31 @@ export function AuthProvider({ children, initialUser, initialSession }: AuthProv
   const [user, setUser] = useState<User | null>(initialUser || null);
   const [session, setSession] = useState<Session | null>(initialSession || null);
   const [loading, setLoading] = useState(!initialUser); // Pas de loading si initialisé
+
+  const trackAppVersionForUser = async (userId: string) => {
+    try {
+      const versionInfo = getAppVersionInfo();
+      const trackingPayload = {
+        last_app_version: versionInfo.appVersion,
+        last_build_version: versionInfo.buildVersion,
+        last_runtime_version: versionInfo.runtimeVersion,
+        last_update_id: versionInfo.updateId,
+        last_seen_at: new Date().toISOString(),
+      };
+
+      const { error } = await DirectSupabaseService.directUpdate(
+        'profiles',
+        trackingPayload,
+        [{ column: 'id', value: userId }]
+      );
+
+      if (error) {
+        console.warn('Erreur tracking version applicative (Direct API):', error);
+      }
+    } catch (error) {
+      console.warn('Erreur trackAppVersionForUser:', error);
+    }
+  };
 
   // Crée un profil applicatif minimal dans public.profiles si aucune ligne n'existe encore
   const ensureProfileForUser = async (supabaseUser: User) => {
@@ -142,8 +168,9 @@ export function AuthProvider({ children, initialUser, initialSession }: AuthProv
                   setSession(data.session);
                   setUser(data.session.user);
                   
-                  // Créer profil si nécessaire
+                  // Créer profil si nécessaire + tracer la version réellement utilisée
                   await ensureProfileForUser(data.session.user);
+                  await trackAppVersionForUser(data.session.user.id);
                   
                   if (mounted) {
                     setLoading(false);
@@ -201,6 +228,7 @@ export function AuthProvider({ children, initialUser, initialSession }: AuthProv
               setSession(session);
               setUser(user);
               await ensureProfileForUser(user);
+              await trackAppVersionForUser(user.id);
             } else {
               setSession(session);
               setUser(session.user);
@@ -211,6 +239,7 @@ export function AuthProvider({ children, initialUser, initialSession }: AuthProv
             setUser(session.user);
             if (session.user) {
               ensureProfileForUser(session.user).catch(console.error);
+              trackAppVersionForUser(session.user.id).catch(console.error);
             }
           }
         }
@@ -244,6 +273,7 @@ export function AuthProvider({ children, initialUser, initialSession }: AuthProv
       if (session?.user) {
         // Créer le profil applicatif si nécessaire lors de la création de compte / connexion
         await ensureProfileForUser(session.user);
+        await trackAppVersionForUser(session.user.id);
         }
       }
       

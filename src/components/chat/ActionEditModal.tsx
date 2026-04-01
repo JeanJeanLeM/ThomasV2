@@ -22,6 +22,53 @@ const ACTION_TYPES: DropdownItem[] = [
   { id: 'help', label: 'Aide', type: 'autre', color: '#6b7280' },
 ];
 
+// Actions standard — codes alignés avec task_standard_actions (DB)
+const COMMON_ACTIONS: DropdownItem[] = [
+  { id: 'recolter', label: 'Récolter', category: 'production', color: '#10b981' },
+  { id: 'cueillir', label: 'Cueillir', category: 'production', color: '#059669' },
+  { id: 'planter', label: 'Planter', category: 'production', color: '#22c55e' },
+  { id: 'semer', label: 'Semer', category: 'production', color: '#16a34a' },
+  { id: 'labourer', label: 'Labourer', category: 'production', color: '#7c3aed' },
+  { id: 'fraiser', label: 'Fraiser / préparer sol', category: 'production', color: '#6d28d9' },
+  { id: 'desherber', label: 'Désherber', category: 'production', color: '#eab308' },
+  { id: 'biner', label: 'Biner', category: 'production', color: '#ca8a04' },
+  { id: 'butter', label: 'Butter', category: 'production', color: '#a16207' },
+  { id: 'tailler', label: 'Tailler', category: 'production', color: '#92400e' },
+  { id: 'eclaircir', label: 'Éclaircir', category: 'production', color: '#78350f' },
+  { id: 'attacher', label: 'Attacher / tuteurer', category: 'production', color: '#713f12' },
+  { id: 'arroser', label: 'Arroser', category: 'production', color: '#0ea5e9' },
+  { id: 'irriguer', label: 'Irriguer', category: 'production', color: '#0284c7' },
+  { id: 'traiter', label: 'Traiter', category: 'production', color: '#dc2626' },
+  { id: 'fertiliser', label: 'Fertiliser', category: 'production', color: '#15803d' },
+  { id: 'amender', label: 'Amender le sol', category: 'production', color: '#166534' },
+  { id: 'mulcher', label: 'Pailler / mulcher', category: 'production', color: '#14532d' },
+  { id: 'ouvrir_serre', label: 'Ouvrir la serre', category: 'production', color: '#0891b2' },
+  { id: 'fermer_serre', label: 'Fermer la serre', category: 'production', color: '#0e7490' },
+  { id: 'installer', label: 'Installer / poser', category: 'production', color: '#155e75' },
+  { id: 'retirer', label: 'Retirer / enlever', category: 'production', color: '#164e63' },
+  { id: 'nettoyer', label: 'Nettoyer', category: 'production', color: '#06b6d4' },
+  { id: 'trier', label: 'Trier', category: 'production', color: '#0891b2' },
+  { id: 'composter', label: 'Composter', category: 'production', color: '#047857' },
+  { id: 'nourrir', label: 'Nourrir', category: 'production', color: '#f59e0b' },
+  { id: 'soigner', label: 'Soigner', category: 'production', color: '#d97706' },
+  { id: 'recolter_oeufs', label: 'Ramasser les oeufs', category: 'production', color: '#b45309' },
+  { id: 'tondre', label: 'Tondre', category: 'production', color: '#92400e' },
+  { id: 'faucher', label: 'Faucher', category: 'production', color: '#78350f' },
+  { id: 'preparer_commande', label: 'Préparer les commandes', category: 'commercialisation', color: '#8b5cf6' },
+  { id: 'livrer', label: 'Livrer', category: 'commercialisation', color: '#7c3aed' },
+  { id: 'vendre', label: 'Vendre', category: 'commercialisation', color: '#6d28d9' },
+  { id: 'conditionner', label: 'Conditionner', category: 'commercialisation', color: '#5b21b6' },
+  { id: 'facturer', label: 'Facturer', category: 'administratif', color: '#3b82f6' },
+  { id: 'inventorier', label: 'Inventorier', category: 'administratif', color: '#2563eb' },
+  { id: 'declarer', label: 'Déclarer', category: 'administratif', color: '#1d4ed8' },
+  { id: 'planifier', label: 'Planifier', category: 'administratif', color: '#1e40af' },
+  { id: 'reparer', label: 'Réparer', category: 'general', color: '#6b7280' },
+  { id: 'entretenir', label: 'Entretenir', category: 'general', color: '#4b5563' },
+  { id: 'transporter', label: 'Transporter', category: 'general', color: '#374151' },
+  { id: 'surveiller', label: 'Surveiller', category: 'general', color: '#1f2937' },
+  { id: 'autre', label: 'Autre', category: 'general', color: '#9ca3af' },
+];
+
 // Cultures communes disponibles
 const COMMON_CROPS: DropdownItem[] = [
   // Légumes feuilles
@@ -107,6 +154,7 @@ interface ActionEditModalProps {
 interface FormData {
   action_type: string;
   action_verb: string;
+  standard_action: string;
   crop: string;
   plot_ids: number[];
   surface_unit_ids: number[];
@@ -159,6 +207,7 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
   const [formData, setFormData] = useState<FormData>({
     action_type: 'task_done',
     action_verb: '',
+    standard_action: '',
     crop: '',
     plot_ids: [],
     surface_unit_ids: [],
@@ -363,6 +412,7 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
       setFormData({
         action_type: action.action_type || 'task_done',
         action_verb: data.action || '',
+        standard_action: data.standard_action || '',
         crop: normalizedCrop,
         plot_ids: entities.plot_ids || [],
         surface_unit_ids: entities.surface_unit_ids || [],
@@ -566,6 +616,7 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
         action_type: formData.action_type as ActionData['action_type'],
         extracted_data: {
           ...(formData.action_verb ? { action: formData.action_verb } : {}),
+          ...(formData.standard_action ? { standard_action: formData.standard_action } : {}),
           ...(getCropLabel() ? { crop: getCropLabel().toLowerCase() } : {}),
           plots: formData.plot_ids.length > 0 
             ? plots.filter(p => formData.plot_ids.includes(parseInt(p.id))).map(p => p.label)
@@ -680,6 +731,88 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
               onChangeText={(value) => updateFormData('action_verb', value)}
               hint="Verbe décrivant l'action effectuée"
             />
+
+            {formData.action_type !== 'observation' && (
+              <DropdownSelector
+                label="Action standard"
+                placeholder="Sélectionner une action standard..."
+                items={COMMON_ACTIONS}
+                selectedItems={formData.standard_action
+                  ? COMMON_ACTIONS.filter(item => item.id === formData.standard_action)
+                  : []}
+                onSelectionChange={(items) => updateFormData('standard_action', items[0]?.id || '')}
+                searchable
+                filterable
+                hint="Liste normalisée des actions (recherche incluse)"
+              />
+            )}
+          </View>
+
+          {/* Section Temps de travail */}
+          <View>
+            <Text variant="h3" style={{ 
+              color: colors.text.primary,
+              marginBottom: spacing.md,
+              fontSize: 18,
+              fontWeight: '600'
+            }}>
+              Temps de travail
+            </Text>
+            
+            <View style={{ flexDirection: 'row', gap: spacing.md }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="Durée"
+                  placeholder="Ex: 45"
+                  value={formData.duration_value}
+                  onChangeText={(value) => updateFormData('duration_value', value)}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <DropdownSelector
+                  label="Unité"
+                  placeholder="unité"
+                  items={DURATION_UNITS}
+                  selectedItems={DURATION_UNITS.filter(u => u.id === formData.duration_unit)}
+                  onSelectionChange={(items) => updateFormData('duration_unit', items[0]?.id || 'minutes')}
+                />
+              </View>
+            </View>
+            
+            <Input
+              label="Nombre de personnes"
+              placeholder="Ex: 2"
+              value={formData.number_of_people}
+              onChangeText={(value) => updateFormData('number_of_people', value)}
+              keyboardType="numeric"
+              hint="Incluez vous-même dans le compte"
+            />
+
+            {/* Affichage du temps total calculé */}
+            {formData.duration_value && parseInt(formData.number_of_people) > 0 && (
+              <View style={{
+                backgroundColor: colors.primary[50],
+                padding: spacing.md,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+              }}>
+                <Text style={{ fontSize: 20 }}>⏱️</Text>
+                <View>
+                  <Text variant="label" style={{ color: colors.primary[700] }}>
+                    Temps total de travail
+                  </Text>
+                  <Text variant="body" style={{ color: colors.primary[800], fontWeight: '600' }}>
+                    {calculateTotalWorkTime()} {formData.duration_unit}
+                  </Text>
+                  <Text variant="caption" style={{ color: colors.primary[600] }}>
+                    ({formData.duration_value} {formData.duration_unit} × {formData.number_of_people} personne{parseInt(formData.number_of_people) > 1 ? 's' : ''})
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Section Culture et Localisation */}
@@ -886,73 +1019,6 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
                 }
               </Text>
             </View>
-          </View>
-
-          {/* Section Temps de travail */}
-          <View>
-            <Text variant="h3" style={{ 
-              color: colors.text.primary,
-              marginBottom: spacing.md,
-              fontSize: 18,
-              fontWeight: '600'
-            }}>
-              Temps de travail
-            </Text>
-            
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="Durée"
-                  placeholder="Ex: 45"
-                  value={formData.duration_value}
-                  onChangeText={(value) => updateFormData('duration_value', value)}
-                  keyboardType="numeric"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <DropdownSelector
-                  label="Unité"
-                  placeholder="unité"
-                  items={DURATION_UNITS}
-                  selectedItems={DURATION_UNITS.filter(u => u.id === formData.duration_unit)}
-                  onSelectionChange={(items) => updateFormData('duration_unit', items[0]?.id || 'minutes')}
-                />
-              </View>
-            </View>
-            
-            <Input
-              label="Nombre de personnes"
-              placeholder="Ex: 2"
-              value={formData.number_of_people}
-              onChangeText={(value) => updateFormData('number_of_people', value)}
-              keyboardType="numeric"
-              hint="Incluez vous-même dans le compte"
-            />
-
-            {/* Affichage du temps total calculé */}
-            {formData.duration_value && parseInt(formData.number_of_people) > 0 && (
-              <View style={{
-                backgroundColor: colors.primary[50],
-                padding: spacing.md,
-                borderRadius: 12,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: spacing.sm,
-              }}>
-                <Text style={{ fontSize: 20 }}>⏱️</Text>
-                <View>
-                  <Text variant="label" style={{ color: colors.primary[700] }}>
-                    Temps total de travail
-                  </Text>
-                  <Text variant="body" style={{ color: colors.primary[800], fontWeight: '600' }}>
-                    {calculateTotalWorkTime()} {formData.duration_unit}
-                  </Text>
-                  <Text variant="caption" style={{ color: colors.primary[600] }}>
-                    ({formData.duration_value} {formData.duration_unit} × {formData.number_of_people} personne{parseInt(formData.number_of_people) > 1 ? 's' : ''})
-                  </Text>
-                </View>
-              </View>
-            )}
           </View>
 
           {/* Section Matériel */}

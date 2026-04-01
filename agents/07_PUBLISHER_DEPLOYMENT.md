@@ -164,8 +164,9 @@ APPLE_CERTIFICATES=xxx
 ## ✅ **CHECKLIST BUILD ANDROID**
 
 ### **Pré-Build**
-- [ ] Version code incrémenté (android.versionCode dans app.json)
-- [ ] Version name correct (android.version dans app.json)
+- [ ] Version code incrémenté (expo.android.versionCode dans app.json)
+- [ ] Version name correct (expo.version dans app.json)
+- [ ] Vérifier dans Google Play Console que le nouveau versionCode est strictement supérieur au dernier publié
 - [ ] Package name correct (android.package)
 - [ ] Permissions Android vérifiées (android.permissions)
 - [ ] Icon et splash screen présents (1024x1024)
@@ -600,6 +601,7 @@ Exemples:
 Android versionCode:
 - Incrément +1 à chaque release
 - 1, 2, 3, 4...
+- Obligation Google Play Console: chaque publication doit avoir un versionCode unique et supérieur au précédent (même pour les tests internes)
 
 iOS buildNumber:
 - Incrément +1 à chaque build

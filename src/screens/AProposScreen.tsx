@@ -13,16 +13,18 @@ import {
   CodeBracketIcon
 } from '../design-system/icons';
 import { Text } from '../design-system/components';
+import { getAppVersionInfo } from '../services/AppVersionService';
 
 export default function AProposScreen() {
+  const appVersionInfo = getAppVersionInfo();
   const handleLinkPress = (url: string) => {
     Linking.openURL(url);
   };
 
   const appInfo = {
     name: 'Thomas - Assistant Agricole',
-    version: '1.0.28',
-    build: '2024.11.19',
+    version: appVersionInfo.appVersion,
+    build: appVersionInfo.buildVersion || 'N/A',
     description: 'Votre compagnon numérique pour une agriculture moderne et efficace'
   };
 
@@ -101,6 +103,11 @@ export default function AProposScreen() {
                 <Text variant="body" style={styles.versionValue}>{appInfo.build}</Text>
               </View>
             </View>
+            {!!appVersionInfo.updateId && (
+              <Text variant="caption" style={styles.footerSubtext}>
+                Update OTA: {appVersionInfo.updateId}
+              </Text>
+            )}
           </View>
 
           {/* À propos de nous */}

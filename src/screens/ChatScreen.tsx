@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Dimensions } from 'react-native';
 import { Screen } from '../design-system/components';
 import { colors } from '../design-system/colors';
@@ -47,7 +47,7 @@ export default function ChatScreen({
     // La logique de création est maintenant gérée dans ChatList
   };
 
-  const handleSelectChat = async (chatId: string) => {
+  const handleSelectChat = useCallback(async (chatId: string) => {
     console.log('💬 [CHAT-SCREEN] Chat selected:', chatId);
     setSelectedChatId(chatId);
     
@@ -74,7 +74,42 @@ export default function ChatScreen({
     
     // Notifier qu'on passe en mode conversation
     onStateChange?.('conversation');
-  };
+  }, [onStateChange]);
+
+  // Retour depuis onboarding: rouvrir automatiquement la conversation d'origine.
+  useEffect(() => {
+    if (navigation.currentScreen !== 'Chat') return;
+    const requestedChatId = navigation.navigationParams?.openChatId;
+    if (typeof requestedChatId !== 'string' || requestedChatId.length === 0) return;
+
+    if (selectedChatId === requestedChatId) {
+      navigation.setNavigationParams((prev) => {
+        if (!prev || prev.openChatId !== requestedChatId) return prev;
+        const next = { ...prev };
+        delete next.openChatId;
+        delete next.fromOnboardingShortcut;
+        return next;
+      });
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      await handleSelectChat(requestedChatId);
+      if (cancelled) return;
+      navigation.setNavigationParams((prev) => {
+        if (!prev || prev.openChatId !== requestedChatId) return prev;
+        const next = { ...prev };
+        delete next.openChatId;
+        delete next.fromOnboardingShortcut;
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigation, selectedChatId, handleSelectChat]);
 
   const handleUpdateChat = (chatId: string, updates: Partial<Chat>) => {
     // Mettre à jour le chat local si c'est celui sélectionné

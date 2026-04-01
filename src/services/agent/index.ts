@@ -68,11 +68,6 @@ export class ThomasAgentFactory {
         matchingServices.conversionMatching,
         matchingServices.phytosanitaryMatching
       );
-        supabaseClient,
-        matchingServices.plotMatching,
-        matchingServices.materialMatching,
-        matchingServices.conversionMatching
-      );
 
       // 6. Validation des tools
       const toolValidation = AgentToolsFactory.validateTools(tools);

@@ -259,9 +259,15 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         time: '',
         crops: task.crops || [],
         plots: task.plots || [],
-        plot_ids: [],
-        surface_unit_ids: [],
-        material_ids: [],
+        plot_ids: Array.isArray((task as any).plot_ids)
+          ? (task as any).plot_ids.map((id: string | number) => parseInt(String(id), 10)).filter((id: number) => Number.isFinite(id))
+          : [],
+        surface_unit_ids: Array.isArray((task as any).surface_unit_ids)
+          ? (task as any).surface_unit_ids.map((id: string | number) => parseInt(String(id), 10)).filter((id: number) => Number.isFinite(id))
+          : [],
+        material_ids: Array.isArray((task as any).material_ids)
+          ? (task as any).material_ids.map((id: string | number) => parseInt(String(id), 10)).filter((id: number) => Number.isFinite(id))
+          : [],
         quantity_value: '',
         quantity_unit: 'kg',
         converted_value: '',
@@ -438,6 +444,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         people: formData.people,
         crops: selectedCultures.map(c => c.culture?.name || c.label),
         plots: formData.plots,
+        plot_ids: (formData.plot_ids || []).map((id) => String(id)),
+        surface_unit_ids: (formData.surface_unit_ids || []).map((id) => String(id)),
+        material_ids: (formData.material_ids || []).map((id) => String(id)),
         category: formData.category,
         notes: formData.notes,
         status: formData.status,

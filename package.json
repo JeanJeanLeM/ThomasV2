@@ -1,6 +1,6 @@
 {
   "name": "thomas-v2-mobile",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -28,6 +28,7 @@
     "@supabase/supabase-js": "^2.81.1",
     "dotenv": "^17.2.3",
     "expo": "~53.0.0",
+    "expo-application": "~6.1.5",
     "expo-auth-session": "~6.2.1",
     "expo-av": "~15.1.7",
     "expo-constants": "~17.1.8",

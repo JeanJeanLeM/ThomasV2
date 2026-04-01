@@ -47,6 +47,7 @@ export const Input: React.FC<InputProps> = ({
   labelStyle,
   value,
   onChangeText,
+  keyboardType,
   secureTextEntry,
   ...props
 }) => {
@@ -151,6 +152,23 @@ export const Input: React.FC<InputProps> = ({
     color: hasError ? colors.text.error : colors.text.secondary,
   });
 
+  // iOS: `numeric` / `number-pad` n'affichent pas toujours de séparateur décimal.
+  // On force un clavier décimal pour permettre la saisie de valeurs non entières.
+  const effectiveKeyboardType =
+    Platform.OS === 'ios' && keyboardType === 'numeric'
+      ? 'decimal-pad'
+      : keyboardType;
+
+  const handleChangeText = (text: string) => {
+    if (!onChangeText) return;
+    // Permet `,` ou `.` sur iOS tout en gardant un format exploitable par parseFloat.
+    const normalizedText =
+      Platform.OS === 'ios' && effectiveKeyboardType === 'decimal-pad'
+        ? text.replace(',', '.')
+        : text;
+    onChangeText(normalizedText);
+  };
+
   const toggleSecureEntry = () => {
     setIsSecure(!isSecure);
   };
@@ -198,13 +216,14 @@ export const Input: React.FC<InputProps> = ({
           // Classe CSS spécifique pour supprimer tous les styles natifs
           {...(typeof window !== 'undefined' && { className: 'thomas-input' })}
           value={value}
-          onChangeText={onChangeText}
+          onChangeText={handleChangeText}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           editable={!disabled}
           secureTextEntry={isSecure}
           placeholderTextColor={colors.text.tertiary}
           {...props}
+          keyboardType={effectiveKeyboardType}
         />
 
         {/* Right Icon */}

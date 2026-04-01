@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ScrollView, TextInput, TouchableOpacity, Alert, LayoutAnimation, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, ChatTypeModal } from '../design-system/components';
@@ -7,6 +7,7 @@ import { spacing } from '../design-system/spacing';
 import { ChatCardMinimal, ChatData } from '../design-system/components/cards/ChatCardMinimal';
 import { ChatServiceDirect as ChatService, ChatSession } from '../services/ChatServiceDirect';
 import { useFarm } from '../contexts/FarmContext';
+import { useAuth } from '../contexts/AuthContext';
 import { ChatCacheService } from '../services/ChatCacheService';
 
 // Adapter ChatSession vers ChatData pour compatibilité UI
@@ -22,6 +23,33 @@ function adaptChatSessionToChatData(session: ChatSession): ChatData {
 }
 
 export type Chat = ChatData;
+
+const ONBOARDING_HELP_SHORTCUT_SCREEN = 'ONBOARDING_TUTORIAL';
+const ONBOARDING_INTRO_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_INTRO_CONTINUE';
+const ONBOARDING_CHAT_TITLE = 'Onboarding & aide rapide';
+
+function getUserFirstName(
+  userMetadata: Record<string, unknown> | undefined,
+  email: string | undefined
+): string {
+  if (userMetadata) {
+    const firstName = userMetadata.first_name;
+    if (typeof firstName === 'string' && firstName.trim().length > 0) {
+      return firstName.trim();
+    }
+
+    const fullName = userMetadata.full_name;
+    if (typeof fullName === 'string' && fullName.trim().length > 0) {
+      return fullName.trim().split(' ')[0];
+    }
+  }
+
+  if (email && email.includes('@')) {
+    return email.split('@')[0];
+  }
+
+  return '';
+}
 
 interface ChatListProps {
   selectedChatId: string | null;
@@ -43,6 +71,126 @@ export default function ChatList({
   const [showChatTypeModal, setShowChatTypeModal] = useState(false);
   const [isArchivingInProgress, setIsArchivingInProgress] = useState(false);
   const { activeFarm } = useFarm();
+  const { user } = useAuth();
+  const creatingDefaultChatRef = useRef(false);
+
+  const sendOnboardingAssistantShortcutMessage = async ({
+    sessionId,
+    text,
+    shortcutScreen,
+    shortcutLabel,
+    stepType,
+  }: {
+    sessionId: string;
+    text: string;
+    shortcutScreen: string;
+    shortcutLabel: string;
+    stepType: string;
+  }) => {
+    await ChatService.sendMessage({
+      session_id: sessionId,
+      role: 'assistant',
+      content: text,
+      ai_confidence: 1,
+      metadata: {
+        type: stepType,
+        has_actions: false,
+        is_help_request: true,
+        help_shortcut: {
+          screen: shortcutScreen,
+          label: shortcutLabel,
+        },
+        onboarding_simulation: true,
+      },
+    });
+  };
+
+  const createOnboardingChatWithWelcome = async ({
+    title,
+    isShared,
+  }: {
+    title: string;
+    isShared: boolean;
+  }): Promise<ChatSession> => {
+    if (!activeFarm?.farm_id) {
+      throw new Error('Aucune ferme sélectionnée');
+    }
+
+    const firstName = getUserFirstName(
+      user?.user_metadata as Record<string, unknown> | undefined,
+      user?.email
+    );
+    const welcomeName = firstName ? ` ${firstName}` : '';
+    const farmName = activeFarm.farm_name || 'votre ferme';
+
+    const session = await ChatService.createChatSession({
+      farm_id: activeFarm.farm_id,
+      title,
+      chat_type: 'general',
+      is_shared: isShared,
+    });
+
+    await ChatService.sendMessage({
+      session_id: session.id,
+      role: 'assistant',
+      content:
+        `👋 Bonjour${welcomeName} !\n\n` +
+        `Je suis Thomas, votre assistant pour ${farmName}.\n` +
+        `Nouveau dans cette ferme ?\n` +
+        `Utilisez le raccourci ci-dessous pour lancer l'onboarding en un clic.`,
+      ai_confidence: 1,
+      metadata: {
+        type: 'welcome_onboarding',
+        has_actions: false,
+        is_help_request: true,
+        help_shortcut: {
+          screen: ONBOARDING_HELP_SHORTCUT_SCREEN,
+          label: 'Onboarding',
+        },
+        onboarding_message_key: `${user?.id || 'unknown'}:${activeFarm.farm_id}:${Date.now()}`,
+      },
+    });
+
+    await sendOnboardingAssistantShortcutMessage({
+      sessionId: session.id,
+      text: 'Ensuite, appuyez sur Continuer pour voir des exemples de messages.',
+      shortcutScreen: ONBOARDING_INTRO_CONTINUE_SHORTCUT_SCREEN,
+      shortcutLabel: 'Continuer',
+      stepType: 'onboarding_intro_continue_prompt',
+    });
+
+    return session;
+  };
+
+  const ensureDefaultChatSession = async (
+    sessions: ChatSession[]
+  ): Promise<{ sessions: ChatSession[]; createdSessionId?: string }> => {
+    if (showArchived || sessions.length > 0 || !activeFarm?.farm_id) {
+      return { sessions };
+    }
+
+    if (creatingDefaultChatRef.current) {
+      console.log('⏳ [DEFAULT-CHAT] Creation already in progress, skipping');
+      return { sessions };
+    }
+
+    creatingDefaultChatRef.current = true;
+
+    try {
+      const session = await createOnboardingChatWithWelcome({
+        title: 'Bienvenue sur Thomas',
+        isShared: true,
+      });
+
+      console.log('✅ [DEFAULT-CHAT] Created default chat with onboarding shortcut:', session.id);
+      return { sessions: [session], createdSessionId: session.id };
+    } catch (error) {
+      console.error('❌ [DEFAULT-CHAT] Failed to create default chat:', error);
+      return { sessions };
+    } finally {
+      creatingDefaultChatRef.current = false;
+    }
+  };
 
   // Charger les chats depuis la base de données (avec cache intelligent)
   const loadChats = async () => {
@@ -80,17 +228,33 @@ export default function ChatList({
       // Étape 2: Charger les chats frais depuis la DB (en arrière-plan si cache)
       console.log('🌐 [DB-LOAD] Loading fresh chat sessions from database... (showArchived:', showArchived, ')');
       const freshSessions = await ChatService.getChatSessions(activeFarm.farm_id, showArchived);
-      console.log('✅ [DB-LOAD] Loaded', freshSessions.length, 'fresh sessions');
-      
-      const adaptedFreshChats = freshSessions.map(adaptChatSessionToChatData);
+
+      let sessionsToDisplay = freshSessions;
+      let createdSessionId: string | undefined;
+
+      if (!showArchived && freshSessions.length === 0) {
+        console.log('🆕 [DEFAULT-CHAT] No active session found, creating default onboarding chat');
+        const ensured = await ensureDefaultChatSession(freshSessions);
+        sessionsToDisplay = ensured.sessions;
+        createdSessionId = ensured.createdSessionId;
+      }
+
+      console.log('✅ [DB-LOAD] Loaded', sessionsToDisplay.length, 'fresh sessions');
+
+      const adaptedFreshChats = sessionsToDisplay.map(adaptChatSessionToChatData);
       setChats(adaptedFreshChats);
       
       // Sauvegarder en cache pour la prochaine fois (seulement les actives)
       if (!showArchived) {
-        await ChatCacheService.cacheChatList(activeFarm.farm_id, freshSessions);
-        console.log('💾 [CACHE-SAVE] Saved', freshSessions.length, 'ACTIVE sessions to cache');
+        await ChatCacheService.cacheChatList(activeFarm.farm_id, sessionsToDisplay);
+        console.log('💾 [CACHE-SAVE] Saved', sessionsToDisplay.length, 'ACTIVE sessions to cache');
       } else {
         console.log('📭 [CACHE-SKIP] Not caching ARCHIVED sessions');
+      }
+
+      if (createdSessionId) {
+        console.log('🚀 [DEFAULT-CHAT] Opening newly created default chat:', createdSessionId);
+        onSelectChat(createdSessionId);
       }
       
     } catch (error) {
@@ -413,6 +577,61 @@ export default function ChatList({
     }
   };
 
+  // Créer un chat onboarding partagé avec message d'aide en un clic
+  const handleCreateOnboardingChat = async () => {
+    console.log('🚀 [OPTIMISTIC] Creating onboarding chat - INSTANT navigation');
+
+    setShowChatTypeModal(false);
+
+    if (!activeFarm?.farm_id) {
+      Alert.alert('Erreur', 'Aucune ferme sélectionnée');
+      return;
+    }
+
+    const tempChatId = `temp-onboarding-${Date.now()}`;
+    const tempTitle = ONBOARDING_CHAT_TITLE;
+
+    console.log('⚡ [OPTIMISTIC] Opening temporary onboarding chat instantly:', tempChatId);
+
+    const tempChat: Chat = {
+      id: tempChatId,
+      title: tempTitle,
+      lastMessage: '',
+      timestamp: new Date(),
+      isArchived: false,
+      messageCount: 0,
+    };
+
+    setChats(prev => [tempChat, ...prev]);
+    onSelectChat(tempChatId);
+    onCreateChat(tempTitle, true);
+
+    try {
+      console.log('🔄 [BACKGROUND] Starting real onboarding chat creation...');
+
+      const session = await createOnboardingChatWithWelcome({
+        title: tempTitle,
+        isShared: true,
+      });
+
+      console.log('✅ [BACKGROUND] Real onboarding chat created:', session.id);
+
+      const realChatData = adaptChatSessionToChatData(session);
+      setChats(prev => prev.map(chat =>
+        chat.id === tempChatId ? realChatData : chat
+      ));
+
+      onSelectChat(session.id);
+
+      await ChatCacheService.invalidateChatListCache(activeFarm.farm_id);
+      console.log('🔄 [CACHE] Invalidated chat list cache after onboarding chat creation');
+    } catch (error) {
+      console.error('❌ [BACKGROUND] Error creating onboarding chat:', error);
+      setChats(prev => prev.filter(chat => chat.id !== tempChatId));
+      Alert.alert('Erreur', `Impossible de créer le chat onboarding: ${error.message || error}`);
+    }
+  };
+
   // Gérer l'édition du titre avec optimisme
   const handleTitleEdit = async (chatId: string, newTitle: string, onSuccess?: () => void, onError?: () => void) => {
     try {
@@ -647,6 +866,7 @@ export default function ChatList({
         onClose={() => setShowChatTypeModal(false)}
         onCreatePrivateChat={handleCreatePrivateChat}
         onCreateSharedChat={handleCreateSharedChat}
+        onCreateOnboardingChat={handleCreateOnboardingChat}
       />
     </View>
   );

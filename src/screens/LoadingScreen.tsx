@@ -4,6 +4,7 @@ import { Text } from '@/design-system/components';
 import { colors } from '@/design-system/colors';
 import { spacing } from '@/design-system/spacing';
 import { Ionicons } from '@expo/vector-icons';
+import { getAppVersionInfo } from '@/services/AppVersionService';
 
 interface LoadingScreenProps {
   onLoadingComplete: () => void;
@@ -16,6 +17,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
   currentStep = 'Initialisation...', 
   progress = 0 
 }) => {
+  const appVersionInfo = getAppVersionInfo();
   const [loadingStep, setLoadingStep] = useState(currentStep);
   const [currentProgress, setCurrentProgress] = useState(progress);
   // Initialiser avec opacity 1 pour que le contenu soit visible immédiatement
@@ -188,7 +190,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
           variant="caption" 
           color={colors.text.tertiary}
         >
-          Version 2.0.0
+          {appVersionInfo.displayVersion}
         </Text>
       </View>
     </View>
