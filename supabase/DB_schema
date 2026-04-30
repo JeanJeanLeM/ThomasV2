@@ -490,7 +490,7 @@ CREATE TABLE public.documents (
 CREATE TABLE public.farm_agent_config (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   farm_id integer NOT NULL UNIQUE,
-  agent_method character varying NOT NULL DEFAULT 'simple'::character varying CHECK (agent_method::text = ANY (ARRAY['simple'::character varying, 'pipeline'::character varying]::text[])),
+  agent_method character varying NOT NULL DEFAULT 'pipeline'::character varying CHECK (agent_method::text = ANY (ARRAY['simple'::character varying, 'pipeline'::character varying]::text[])),
   simple_success_count integer DEFAULT 0 CHECK (simple_success_count >= 0),
   simple_total_count integer DEFAULT 0 CHECK (simple_total_count >= 0),
   pipeline_success_count integer DEFAULT 0 CHECK (pipeline_success_count >= 0),
@@ -555,6 +555,17 @@ CREATE TABLE public.farm_members (
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
   CONSTRAINT farm_members_pkey PRIMARY KEY (id),
   CONSTRAINT farm_members_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
+CREATE TABLE public.farm_sale_channels (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  farm_id integer NOT NULL,
+  canal_code character varying NOT NULL CHECK (canal_code::text = ANY (ARRAY['vente_directe'::character varying, 'restauration'::character varying, 'marche'::character varying, 'panier'::character varying, 'grossiste'::character varying, 'magasin_bio'::character varying, 'cooperative'::character varying, 'autre'::character varying]::text[])),
+  is_active boolean NOT NULL DEFAULT true,
+  default_pourcentage_vente numeric NOT NULL DEFAULT 0 CHECK (default_pourcentage_vente >= 0::numeric AND default_pourcentage_vente <= 100::numeric),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT farm_sale_channels_pkey PRIMARY KEY (id),
+  CONSTRAINT farm_sale_channels_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
 );
 CREATE TABLE public.farm_standard_charges (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -875,6 +886,24 @@ CREATE TABLE public.prix_vente (
   CONSTRAINT prix_vente_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
   CONSTRAINT prix_vente_culture_id_fkey FOREIGN KEY (culture_id) REFERENCES public.cultures(id)
 );
+CREATE TABLE public.product_sale_prices (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  product_id uuid NOT NULL,
+  farm_id integer NOT NULL,
+  canal_de_vente character varying NOT NULL,
+  prix numeric NOT NULL CHECK (prix > 0::numeric),
+  unite_prix character varying NOT NULL,
+  pourcentage_vente numeric NOT NULL DEFAULT 0 CHECK (pourcentage_vente >= 0::numeric AND pourcentage_vente <= 100::numeric),
+  valid_week_start smallint CHECK (valid_week_start IS NULL OR valid_week_start >= 1 AND valid_week_start <= 53),
+  valid_week_end smallint CHECK (valid_week_end IS NULL OR valid_week_end >= 1 AND valid_week_end <= 53),
+  notes text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT product_sale_prices_pkey PRIMARY KEY (id),
+  CONSTRAINT psp_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id),
+  CONSTRAINT psp_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id)
+);
 CREATE TABLE public.products (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   farm_id integer NOT NULL,
@@ -887,6 +916,7 @@ CREATE TABLE public.products (
   is_active boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  listing_status character varying NOT NULL DEFAULT 'listed'::character varying CHECK (listing_status::text = ANY (ARRAY['draft'::character varying, 'listed'::character varying, 'archived'::character varying]::text[])),
   CONSTRAINT products_pkey PRIMARY KEY (id),
   CONSTRAINT products_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
   CONSTRAINT products_culture_id_fkey FOREIGN KEY (culture_id) REFERENCES public.cultures(id)
@@ -913,6 +943,11 @@ END,
   latest_active_farm_id integer,
   weekly_work_hours integer DEFAULT 35,
   primary_role character varying NOT NULL DEFAULT 'farmer'::character varying CHECK (primary_role::text = ANY (ARRAY['farmer'::character varying, 'advisor'::character varying, 'admin'::character varying, 'other'::character varying]::text[])),
+  last_app_version text,
+  last_build_version text,
+  last_runtime_version text,
+  last_update_id text,
+  last_seen_at timestamp with time zone,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_latest_active_farm_id_fkey FOREIGN KEY (latest_active_farm_id) REFERENCES public.farms(id)
 );
@@ -1047,6 +1082,18 @@ CREATE TABLE public.surface_units (
   CONSTRAINT surface_units_pkey PRIMARY KEY (id),
   CONSTRAINT surface_units_plot_id_fkey FOREIGN KEY (plot_id) REFERENCES public.plots(id)
 );
+CREATE TABLE public.task_standard_actions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  code character varying NOT NULL UNIQUE,
+  label_fr character varying NOT NULL,
+  description text,
+  category character varying NOT NULL DEFAULT 'production'::character varying CHECK (category::text = ANY (ARRAY['production'::character varying, 'commercialisation'::character varying, 'administratif'::character varying, 'general'::character varying]::text[])),
+  sort_order integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT task_standard_actions_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.tasks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   farm_id integer NOT NULL,
@@ -1080,11 +1127,13 @@ CREATE TABLE public.tasks (
   audio_file_id uuid,
   phytosanitary_product_amm text,
   recurring_template_id uuid,
+  standard_action character varying,
   CONSTRAINT tasks_pkey PRIMARY KEY (id),
   CONSTRAINT tasks_farm_id_fkey FOREIGN KEY (farm_id) REFERENCES public.farms(id),
   CONSTRAINT tasks_audio_file_id_fkey FOREIGN KEY (audio_file_id) REFERENCES public.audio_files(id),
   CONSTRAINT tasks_recurring_template_id_fkey FOREIGN KEY (recurring_template_id) REFERENCES public.recurring_task_templates(id),
-  CONSTRAINT tasks_phytosanitary_product_amm_fkey FOREIGN KEY (phytosanitary_product_amm) REFERENCES public.phytosanitary_products(amm)
+  CONSTRAINT tasks_phytosanitary_product_amm_fkey FOREIGN KEY (phytosanitary_product_amm) REFERENCES public.phytosanitary_products(amm),
+  CONSTRAINT tasks_standard_action_fkey FOREIGN KEY (standard_action) REFERENCES public.task_standard_actions(code)
 );
 CREATE TABLE public.user_conversion_units (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

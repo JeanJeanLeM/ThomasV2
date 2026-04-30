@@ -30,7 +30,7 @@ export interface EnhancedInputProps extends Omit<TextInputProps, 'style'> {
 
 /**
  * 🎯 INPUT SIMPLE ET PROPRE - SANS DOUBLES BORDURES
- * 
+ *
  * ✅ SOLUTION DÉFINITIVE :
  * - Container View avec bordure unique
  * - TextInput SANS aucune bordure/background
@@ -69,18 +69,22 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
   // iOS: `numeric` / `number-pad` peuvent masquer les séparateurs décimaux.
   // On force `decimal-pad` pour les champs numériques de formulaires.
   const effectiveKeyboardType =
-    Platform.OS === 'ios' && keyboardType === 'numeric'
-      ? 'decimal-pad'
-      : keyboardType;
+    Platform.OS === 'ios' && keyboardType === 'numeric' ? 'decimal-pad' : keyboardType;
 
   const handleChangeText = (text: string) => {
     if (!onChangeText) return;
-    const normalizedText =
-      Platform.OS === 'ios' && effectiveKeyboardType === 'decimal-pad'
-        ? text.replace(',', '.')
-        : text;
+    const normalizedText = effectiveKeyboardType === 'decimal-pad' ? text.replace(/,/g, '.') : text;
     onChangeText(normalizedText);
   };
+
+  const webKeyboardProps =
+    Platform.OS === 'web'
+      ? effectiveKeyboardType === 'decimal-pad'
+        ? ({ inputMode: 'decimal', pattern: '[0-9]*[.,]?[0-9]*' } as const)
+        : effectiveKeyboardType === 'numeric' || effectiveKeyboardType === 'number-pad'
+          ? ({ inputMode: 'numeric', pattern: '[0-9]*' } as const)
+          : {}
+      : {};
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -93,7 +97,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
       )}
 
       {/* Input Container - collapsable={false} sur Android evite perte InputConnection (Session id mismatch) */}
-      <View 
+      <View
         style={[
           styles.inputContainer,
           { borderColor: getBorderColor() },
@@ -103,19 +107,11 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
         {...(Platform.OS === 'android' ? { collapsable: false } : {})}
       >
         {/* Left Icon */}
-        {leftIcon && (
-          <View style={styles.leftIcon}>
-            {leftIcon}
-          </View>
-        )}
+        {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
 
         {/* TextInput - AUCUNE BORDURE, AUCUN BACKGROUND */}
         <TextInput
-          style={[
-            styles.input,
-            props.multiline && styles.inputMultiline,
-            inputStyle,
-          ]}
+          style={[styles.input, props.multiline && styles.inputMultiline, inputStyle]}
           value={value}
           onChangeText={handleChangeText}
           onFocus={() => setIsFocused(true)}
@@ -124,6 +120,7 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
           secureTextEntry={isSecure}
           placeholderTextColor={colors.gray[400]}
           {...(Platform.OS === 'android' ? { importantForAutofill: 'no' as const } : {})}
+          {...(Platform.OS === 'web' ? (webKeyboardProps as any) : {})}
           {...props}
           keyboardType={effectiveKeyboardType}
         />
@@ -142,22 +139,16 @@ export const EnhancedInput: React.FC<EnhancedInputProps> = ({
         {/* Password Toggle */}
         {secureTextEntry && (
           <TouchableOpacity onPress={() => setIsSecure(!isSecure)} style={styles.rightIcon}>
-            <Text style={styles.toggleText}>
-              {isSecure ? 'Voir' : 'Cacher'}
-            </Text>
+            <Text style={styles.toggleText}>{isSecure ? 'Voir' : 'Cacher'}</Text>
           </TouchableOpacity>
         )}
       </View>
 
       {/* Error Message */}
-      {error && (
-        <Text style={styles.error}>{error}</Text>
-      )}
+      {error && <Text style={styles.error}>{error}</Text>}
 
       {/* Hint Message */}
-      {hint && !error && (
-        <Text style={styles.hint}>{hint}</Text>
-      )}
+      {hint && !error && <Text style={styles.hint}>{hint}</Text>}
     </View>
   );
 };
@@ -166,18 +157,18 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: spacing.md,
   },
-  
+
   label: {
     fontSize: 14,
     fontWeight: '500',
     color: colors.text.secondary,
     marginBottom: spacing.xs,
   },
-  
+
   labelError: {
     color: colors.semantic.error,
   },
-  
+
   required: {
     color: colors.semantic.error,
   },
@@ -195,7 +186,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderColor: colors.gray[400],
   },
-  
+
   inputContainerFocused: {
     borderWidth: 2,
     borderColor: colors.primary[600],
@@ -206,7 +197,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  
+
   inputContainerDisabled: {
     backgroundColor: colors.gray[100],
     borderColor: colors.gray[300],
@@ -223,7 +214,7 @@ const styles = StyleSheet.create({
     // ✅ FOND TRANSPARENT
     backgroundColor: 'transparent',
   },
-  
+
   inputMultiline: {
     minHeight: 80,
     textAlignVertical: 'top',
@@ -233,23 +224,23 @@ const styles = StyleSheet.create({
   leftIcon: {
     marginRight: spacing.sm,
   },
-  
+
   rightIcon: {
     marginLeft: spacing.sm,
   },
-  
+
   toggleText: {
     color: colors.primary[600],
     fontSize: 12,
     fontWeight: '500',
   },
-  
+
   error: {
     fontSize: 12,
     color: colors.semantic.error,
     marginTop: spacing.xs,
   },
-  
+
   hint: {
     fontSize: 12,
     color: colors.text.tertiary,

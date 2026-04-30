@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  UnifiedHeader,
   Text,
   Card,
   MemberCard,
@@ -174,13 +173,6 @@ export const FarmMembersScreen: React.FC<FarmMembersScreenProps> = ({
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background?.secondary ?? colors.gray[50] }}>
-      <UnifiedHeader
-        title="Membres de la ferme"
-        onBack={navigation?.goBack}
-        onFarmSelector={farmSelector.openFarmSelector}
-        showBackButton={!!navigation?.goBack}
-      />
-
       {!hasActiveFarm ? (
         <View
           style={{

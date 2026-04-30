@@ -16,6 +16,7 @@ import {
 import { Text } from '../design-system/components';
 import { useFarm } from '../contexts/FarmContext';
 import { ConversionService } from '../services/ConversionService';
+import InterfaceTourTarget from '../components/interface-tour/InterfaceTourTarget';
 
 interface SettingsScreenProps {
   onNavigate: (screen: 'PlotsSettings' | 'MaterialsSettings' | 'ConversionsSettings' | 'CulturesListSettings' | 'PhytosanitaryProductsSettings' | 'RecurringTasksSettings') => void;
@@ -180,50 +181,76 @@ const stats = useMemo(() => {
 
           {/* Options de paramètres */}
           <View style={styles.optionsContainer}>
-            {settingsOptions.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={[styles.optionCard, { borderLeftColor: option.borderColor }]}
-                onPress={option.onPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.optionHeader}>
-                  <View style={styles.optionIcon}>
-                    {option.icon}
+            {settingsOptions.map((option) => {
+              const card = (
+                <TouchableOpacity
+                  style={[styles.optionCard, { borderLeftColor: option.borderColor }]}
+                  onPress={option.onPress}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.optionHeader}>
+                    <View style={styles.optionIcon}>
+                      {option.icon}
+                    </View>
+                    
+                    <View style={styles.optionContent}>
+                      <Text variant="h4" style={styles.optionTitle}>
+                        {option.title}
+                      </Text>
+                      <Text variant="caption" style={styles.optionSubtitle}>
+                        {option.subtitle}
+                      </Text>
+                    </View>
+                    
+                    <UserIcon 
+                      color={colors.gray[400]} 
+                      size={20} 
+                    />
                   </View>
-                  
-                  <View style={styles.optionContent}>
-                    <Text variant="h4" style={styles.optionTitle}>
-                      {option.title}
-                    </Text>
-                    <Text variant="caption" style={styles.optionSubtitle}>
-                      {option.subtitle}
-                    </Text>
-                  </View>
-                  
-                  <UserIcon 
-                    color={colors.gray[400]} 
-                    size={20} 
-                  />
-                </View>
 
-                {/* Méthodes disponibles */}
-                <View style={styles.methodsRow}>
-                  {option.hasForm && (
-                    <View style={styles.methodBadge}>
-                      <ClipboardDocumentListIcon color={colors.primary[600]} size={16} />
-                      <Text style={styles.methodBadgeText}>Formulaire guidé</Text>
-                    </View>
-                  )}
-                  {option.hasVoiceAI && (
-                    <View style={styles.methodBadge}>
-                      <MicrophoneIcon color={colors.semantic.success} size={16} />
-                      <Text style={styles.methodBadgeText}>IA vocale</Text>
-                    </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
+                  {/* Méthodes disponibles */}
+                  <View style={styles.methodsRow}>
+                    {option.hasForm && (
+                      <View style={styles.methodBadge}>
+                        <ClipboardDocumentListIcon color={colors.primary[600]} size={16} />
+                        <Text style={styles.methodBadgeText}>Formulaire guidé</Text>
+                      </View>
+                    )}
+                    {option.hasVoiceAI && (
+                      <View style={styles.methodBadge}>
+                        <MicrophoneIcon color={colors.semantic.success} size={16} />
+                        <Text style={styles.methodBadgeText}>IA vocale</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+
+              const targetId =
+                option.id === 'materials'
+                  ? 'settings.option.materials'
+                  : option.id === 'plots'
+                    ? 'settings.option.plots'
+                    : option.id === 'conversions'
+                      ? 'settings.option.conversions'
+                      : option.id === 'cultures'
+                        ? 'settings.option.cultures'
+                        : option.id === 'phytosanitary'
+                          ? 'settings.option.phytosanitary'
+                          : option.id === 'tasks'
+                            ? 'settings.option.recurring-tasks'
+                            : undefined;
+
+              if (!targetId) {
+                return <View key={option.id}>{card}</View>;
+              }
+
+              return (
+                <InterfaceTourTarget key={option.id} targetId={targetId}>
+                  {card}
+                </InterfaceTourTarget>
+              );
+            })}
           </View>
 
           {/* Section Comment ça marche */}

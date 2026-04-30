@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView } from 'react-native';
 import {
   Text,
   TimeNavigator,
@@ -9,9 +9,9 @@ import {
   DropdownSelector,
   CultureDropdownSelector,
 } from '@/design-system/components';
+import InterfaceTourTarget from '@/components/interface-tour/InterfaceTourTarget';
 import { colors } from '@/design-system/colors';
 import { spacing } from '@/design-system/spacing';
-import { Ionicons } from '@expo/vector-icons';
 import { useFarm } from '@/contexts/FarmContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { TaskService } from '@/services/TaskService';
@@ -24,6 +24,10 @@ import type { PlotData } from '@/design-system/components/cards/PlotCardStandard
 import type { PieChartData } from '@/design-system/components/charts';
 import type { BarChartData } from '@/design-system/components/charts';
 import type { ChartType } from '@/config/chartConfig';
+import {
+  buildPlantNameSet,
+  cultureDropdownItemMatchesPlants,
+} from '@/utils/statisticsPeriodHints';
 
 const StatisticsScreen: React.FC = () => {
   const { activeFarm, loading: farmLoading, error: farmError, needsSetup } = useFarm();
@@ -62,14 +66,17 @@ const StatisticsScreen: React.FC = () => {
     activeFilters.plots || []
   );
 
-  // États temporaires pour les sélections dans les dropdowns
-  const [tempCultureSelection, setTempCultureSelection] = useState<CultureDropdownItem | null>(null);
-  const [tempPlotSelection, setTempPlotSelection] = useState<DropdownItem | null>(null);
-
   // États des données
   const [plots, setPlots] = useState<PlotData[]>([]);
   const [loadingPlots, setLoadingPlots] = useState(false);
   const [plotsError, setPlotsError] = useState<string>('');
+
+  /** Tâches sur la période : parcelles et cultures citées (pré-filtre des dropdowns) */
+  const [periodHints, setPeriodHints] = useState<{
+    taskCount: number;
+    plotIds: number[];
+    plantNames: string[];
+  } | null>(null);
 
   // Charger les parcelles au montage ou changement de ferme
   useEffect(() => {
@@ -77,6 +84,82 @@ const StatisticsScreen: React.FC = () => {
       loadPlots();
     }
   }, [activeFarm?.farm_id]);
+
+  const periodPlotIdSet = useMemo(() => {
+    if (!periodHints || periodHints.taskCount === 0 || periodHints.plotIds.length === 0) {
+      return null;
+    }
+    return new Set(periodHints.plotIds);
+  }, [periodHints]);
+
+  const periodPlantSet = useMemo(() => {
+    if (!periodHints || periodHints.taskCount === 0 || periodHints.plantNames.length === 0) {
+      return null;
+    }
+    return buildPlantNameSet(periodHints.plantNames);
+  }, [periodHints]);
+
+  const referencedPlantNamesForDropdown = useMemo(() => {
+    if (!periodHints || periodHints.taskCount === 0 || periodHints.plantNames.length === 0) {
+      return undefined;
+    }
+    return periodHints.plantNames;
+  }, [periodHints]);
+
+  useEffect(() => {
+    if (!activeFarm?.farm_id) {
+      setPeriodHints(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const h = await TaskService.getPeriodReferenceHints({
+          farmId: activeFarm.farm_id,
+          startDate: currentTimeRange.startDate,
+          endDate: currentTimeRange.endDate,
+        });
+        if (!cancelled) setPeriodHints(h);
+      } catch (e) {
+        console.error('[STATS-SCREEN] period hints', e);
+        if (!cancelled) setPeriodHints(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeFarm?.farm_id,
+    currentTimeRange.startDate.getTime(),
+    currentTimeRange.endDate.getTime(),
+  ]);
+
+  // Retirer culture / parcelle plus citées sur la période (chips via activeFilters → sync selected*)
+  useEffect(() => {
+    if (!periodPlantSet) return;
+    setActiveFilters((f) => {
+      const cur = f.cultures || [];
+      const next = cur.filter((c) => cultureDropdownItemMatchesPlants(c, periodPlantSet));
+      if (next.length === cur.length) return f;
+      const nf = { ...f };
+      if (next.length > 0) nf.cultures = next;
+      else delete nf.cultures;
+      return nf;
+    });
+  }, [periodPlantSet]);
+
+  useEffect(() => {
+    if (!periodPlotIdSet) return;
+    setActiveFilters((f) => {
+      const cur = f.plots || [];
+      const next = cur.filter((p) => periodPlotIdSet.has(Number(p.id)));
+      if (next.length === cur.length) return f;
+      const nf = { ...f };
+      if (next.length > 0) nf.plots = next;
+      else delete nf.plots;
+      return nf;
+    });
+  }, [periodPlotIdSet]);
 
   // Synchroniser les états locaux avec activeFilters quand ils changent
   useEffect(() => {
@@ -100,39 +183,41 @@ const StatisticsScreen: React.FC = () => {
     }
   };
 
-  // Convertir les parcelles en items dropdown
+  // Convertir les parcelles en items dropdown (restreint aux parcelles citées sur la période si possible)
   const plotDropdownItems = useMemo((): DropdownItem[] => {
-    return plots.map(plot => ({
-      id: plot.id,
+    let list = plots;
+    if (periodPlotIdSet && periodPlotIdSet.size > 0) {
+      list = plots.filter((plot) => periodPlotIdSet.has(Number(plot.id)));
+    }
+    return list.map((plot) => ({
+      id: String(plot.id),
       label: plot.name,
       description: plot.description || `${plot.type} - ${plot.area} ${plot.unit}`,
       type: plot.type,
       category: 'plot',
     }));
-  }, [plots]);
+  }, [plots, periodPlotIdSet]);
 
-  // Gérer les changements de sélection temporaire (dropdown)
+  // Sélection culture : ajout immédiat aux filtres actifs (sans bouton +)
   const handleCultureChange = (culture: CultureDropdownItem | null) => {
-    setTempCultureSelection(culture);
+    if (culture) {
+      setActiveFilters((prev) => {
+        const cur = prev.cultures || [];
+        if (cur.some((c) => c.id === culture.id)) return prev;
+        return { ...prev, cultures: [...cur, culture] };
+      });
+    }
   };
 
+  // Sélection parcelle : ajout immédiat aux filtres actifs
   const handlePlotChange = (selectedItems: DropdownItem[]) => {
     const plot = selectedItems.length > 0 ? selectedItems[0] : null;
-    setTempPlotSelection(plot);
-  };
-
-  // Ajouter une culture à la liste et appliquer immédiatement
-  const handleAddCulture = () => {
-    if (tempCultureSelection && !selectedCultures.find(c => c.id === tempCultureSelection.id)) {
-      const newCultures = [...selectedCultures, tempCultureSelection];
-      setSelectedCultures(newCultures);
-      setTempCultureSelection(null);
-      
-      // Appliquer immédiatement les filtres
-      setActiveFilters(prev => ({
-        ...prev,
-        cultures: newCultures,
-      }));
+    if (plot) {
+      setActiveFilters((prev) => {
+        const cur = prev.plots || [];
+        if (cur.some((p) => p.id === plot.id)) return prev;
+        return { ...prev, plots: [...cur, plot] };
+      });
     }
   };
 
@@ -151,21 +236,6 @@ const StatisticsScreen: React.FC = () => {
       }
       return newFilters;
     });
-  };
-
-  // Ajouter une parcelle à la liste et appliquer immédiatement
-  const handleAddPlot = () => {
-    if (tempPlotSelection && !selectedPlots.find(p => p.id === tempPlotSelection.id)) {
-      const newPlots = [...selectedPlots, tempPlotSelection];
-      setSelectedPlots(newPlots);
-      setTempPlotSelection(null);
-      
-      // Appliquer immédiatement les filtres
-      setActiveFilters(prev => ({
-        ...prev,
-        plots: newPlots,
-      }));
-    }
   };
 
   // Retirer une parcelle de la liste et mettre à jour immédiatement
@@ -257,11 +327,8 @@ const StatisticsScreen: React.FC = () => {
   // Gérer l'effacement de tous les filtres
   const handleClearAllFilters = () => {
     setActiveFilters({});
-    // Synchroniser les états locaux
     setSelectedCultures([]);
     setSelectedPlots([]);
-    setTempCultureSelection(null);
-    setTempPlotSelection(null);
     console.log('🧹 Tous les filtres effacés');
   };
 
@@ -479,145 +546,16 @@ const StatisticsScreen: React.FC = () => {
           style={styles.timeNavigator}
         />
 
-        {/* Section Filtres (toujours visible) */}
-        <View style={styles.filtersSection}>
-          <View style={styles.filtersContent}>
-              {/* Culture et Parcelle sur une même ligne */}
-              <View style={{ flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm }}>
-                {/* Sélecteur de culture avec multi-sélection */}
-                <View style={{ flex: 1 }}>
-                  <Text variant="label" style={{ marginBottom: spacing.sm }}>
-                    Culture
-                  </Text>
-                  
-                  {/* Dropdown + Bouton Ajouter */}
-                  <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, alignItems: 'flex-start' }}>
-                    <View style={{ flex: 1 }}>
-                      <CultureDropdownSelector
-                        placeholder="Sélectionner..."
-                        selectedItem={tempCultureSelection}
-                        onSelectionChange={handleCultureChange}
-                        farmId={activeFarm?.farm_id}
-                        allowVarieties={false}
-                        searchable={true}
-                        useUserPreferences={true}
-                      />
-                    </View>
-                    <TouchableOpacity
-                      onPress={handleAddCulture}
-                      disabled={!tempCultureSelection || selectedCultures.some(c => c.id === tempCultureSelection.id)}
-                      style={{
-                        backgroundColor: tempCultureSelection && !selectedCultures.some(c => c.id === tempCultureSelection.id)
-                          ? colors.primary[600]
-                          : colors.gray[300],
-                        borderRadius: 8,
-                        paddingHorizontal: spacing.sm,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        minWidth: 50,
-                        height: spacing.interactive?.inputHeight ?? 44,
-                        alignSelf: 'flex-start',
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="add-outline"
-                        size={20}
-                        color={tempCultureSelection && !selectedCultures.some(c => c.id === tempCultureSelection.id)
-                          ? colors.text.inverse
-                          : colors.gray[500]}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Sélecteur de parcelle avec multi-sélection */}
-                <View style={{ flex: 1 }}>
-                  <Text variant="label" style={{ marginBottom: spacing.sm }}>
-                    Parcelle
-                  </Text>
-                  
-                  {/* Dropdown + Bouton Ajouter */}
-                  <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, alignItems: 'flex-start' }}>
-                    <View style={{ flex: 1 }}>
-                      <DropdownSelector
-                        placeholder="Sélectionner..."
-                        items={plotDropdownItems}
-                        selectedItems={tempPlotSelection ? [tempPlotSelection] : []}
-                        onSelectionChange={handlePlotChange}
-                        multiSelect={false}
-                        searchable={false}
-                        filterable={false}
-                        disabled={loadingPlots}
-                      />
-                    </View>
-                    <TouchableOpacity
-                      onPress={handleAddPlot}
-                      disabled={!tempPlotSelection || selectedPlots.some(p => p.id === tempPlotSelection.id) || loadingPlots}
-                      style={{
-                        backgroundColor: tempPlotSelection && !selectedPlots.some(p => p.id === tempPlotSelection.id) && !loadingPlots
-                          ? colors.primary[600]
-                          : colors.gray[300],
-                        borderRadius: 8,
-                        paddingHorizontal: spacing.sm,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        minWidth: 50,
-                        height: spacing.interactive?.inputHeight ?? 44,
-                        alignSelf: 'flex-start',
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="add-outline"
-                        size={20}
-                        color={tempPlotSelection && !selectedPlots.some(p => p.id === tempPlotSelection.id) && !loadingPlots
-                          ? colors.text.inverse
-                          : colors.gray[500]}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              {/* Message d'erreur */}
-              {plotsError && (
-                <View style={{
-                  backgroundColor: colors.semantic.error + '10',
-                  padding: spacing.md,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: colors.semantic.error + '30',
-                  marginTop: spacing.md,
-                }}>
-                  <Text variant="body" color={colors.semantic.error}>
-                    {plotsError}
-                  </Text>
-                </View>
-              )}
-          </View>
-        </View>
-
-        {/* Chips des filtres actifs */}
-        <FilterChips
-          filters={activeFilters}
-          onRemoveFilter={handleRemoveFilter}
-          onClearAll={handleClearAllFilters}
-          timeRange={currentTimeRange}
-          onTimeRangeReset={handleTimeRangeReset}
-          style={{ paddingVertical: spacing.xs }}
-        />
-
-        {/* Zone de contenu des statistiques */}
+        {/* Graphique en premier */}
         <View style={styles.content}>
-          {/* Sélecteur de type de graphique */}
-          <ChartSelector
-            selectedChart={selectedChartType}
-            onChartChange={setSelectedChartType}
-            style={styles.chartSelector}
-          />
+          <InterfaceTourTarget targetId="stats.chart.selector">
+            <ChartSelector
+              selectedChart={selectedChartType}
+              onChartChange={setSelectedChartType}
+              style={styles.chartSelector}
+            />
+          </InterfaceTourTarget>
 
-          {/* Graphique unifié */}
           <StatisticsChartWrapper
             chartType={selectedChartType}
             data={chartData}
@@ -641,6 +579,66 @@ const StatisticsScreen: React.FC = () => {
             error={chartError}
           />
         </View>
+
+        {/* Filtres sous le graphique : chips puis culture / parcelle */}
+        <FilterChips
+          filters={activeFilters}
+          onRemoveFilter={handleRemoveFilter}
+          onClearAll={handleClearAllFilters}
+          timeRange={currentTimeRange}
+          onTimeRangeReset={handleTimeRangeReset}
+          style={styles.filterChipsBelowChart}
+        />
+
+        <View style={styles.filtersSection}>
+          <View style={styles.filtersContent}>
+              <View style={{ flexDirection: 'column', gap: 0, marginBottom: spacing.sm }}>
+                <Text variant="label" style={{ marginBottom: spacing.xs }}>
+                  Culture & Parcelle
+                </Text>
+                <InterfaceTourTarget targetId="stats.filter.culture">
+                  <CultureDropdownSelector
+                    placeholder="Sélectionner une culture"
+                    selectedItem={null}
+                    onSelectionChange={handleCultureChange}
+                    farmId={activeFarm?.farm_id}
+                    allowVarieties={false}
+                    searchable={true}
+                    useUserPreferences={true}
+                    referencedPlantNames={referencedPlantNamesForDropdown}
+                    clearFieldAfterSelect
+                    style={{ marginBottom: spacing.xs }}
+                  />
+                </InterfaceTourTarget>
+                <DropdownSelector
+                  placeholder="Sélectionner une parcelle"
+                  items={plotDropdownItems}
+                  selectedItems={[]}
+                  onSelectionChange={handlePlotChange}
+                  multiSelect={false}
+                  searchable={false}
+                  filterable={false}
+                  disabled={loadingPlots}
+                  style={{ marginBottom: 0 }}
+                />
+              </View>
+
+              {plotsError && (
+                <View style={{
+                  backgroundColor: colors.semantic.error + '10',
+                  padding: spacing.md,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.semantic.error + '30',
+                  marginTop: spacing.md,
+                }}>
+                  <Text variant="body" color={colors.semantic.error}>
+                    {plotsError}
+                  </Text>
+                </View>
+              )}
+          </View>
+        </View>
       </ScrollView>
 
     </View>
@@ -662,9 +660,15 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.md,
     paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   chartSelector: {
     marginBottom: spacing.md,
+  },
+  filterChipsBelowChart: {
+    paddingVertical: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.primary,
   },
   placeholder: {
     backgroundColor: colors.gray[50],
@@ -685,13 +689,14 @@ const styles = StyleSheet.create({
   },
   filtersSection: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
     backgroundColor: colors.background.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.primary,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.primary,
   },
   filtersContent: {
-    paddingTop: spacing.xs,
+    paddingTop: 0,
   },
   centerContent: {
     flex: 1,

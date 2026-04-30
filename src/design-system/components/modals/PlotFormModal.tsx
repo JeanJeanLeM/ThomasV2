@@ -8,6 +8,7 @@ import { colors } from '../../colors';
 import { spacing } from '../../spacing';
 import type { PlotData } from '../cards/PlotCardStandard';
 import { PlotService } from '../../../services/plotService';
+import { isValidDecimalInput, parseDecimalInput } from '../../../utils/numberInput';
 
 type SurfaceUnitType = 'planche' | 'rang' | 'ligne' | 'chapelle' | 'jardin' | 'autre';
 
@@ -36,6 +37,7 @@ export interface PlotFormModalProps {
   onSave: (plot: PlotData) => Promise<void>;
   plot?: PlotData | null;
   isCreating: boolean;
+  isDuplicating?: boolean;
   activeFarm?: {
     farm_id: number;
     farm_name: string;
@@ -61,6 +63,7 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
   onSave,
   plot,
   isCreating,
+  isDuplicating = false,
   activeFarm,
 }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -84,16 +87,27 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
 
   // Initialiser le formulaire avec les données de la parcelle
   useEffect(() => {
-    if (plot && !isCreating) {
-      setFormName(plot.name || '');
-      setFormCode(plot.code || '');
+    if (plot && (!isCreating || isDuplicating)) {
+      const duplicateMode = isCreating && isDuplicating;
+      const duplicatedName = duplicateMode ? `${plot.name || ''} - copie` : plot.name || '';
+      const sourceCode = (plot.code || slugify(plot.name || '').substring(0, 10)).trim();
+      const duplicatedCode = duplicateMode
+        ? `${slugify(sourceCode).substring(0, 12)}-copie`
+        : plot.code || '';
+
+      setFormName(duplicatedName);
+      setFormCode(duplicatedCode);
       setFormType(plot.type || 'plein_champ');
       setCustomPlotTypeLabel(plot.customTypeLabel || '');
       setFormLength(plot.length?.toString() || '');
       setFormWidth(plot.width?.toString() || '');
       setFormDescription(plot.description || '');
-      setFormIsActive(plot.isActive !== false);
-      setFormSlugText(plot.slug || '');
+      setFormIsActive(plot.is_active !== false);
+      setFormSlugText(
+        duplicateMode
+          ? slugify(buildSlugInfo(duplicatedName, duplicatedCode, plot.description || ''))
+          : plot.slug || ''
+      );
       // Charger les unités de surface depuis surfaceUnits (pluriel)
       const firstUnit = plot.surfaceUnits?.[0];
       setUnitType((firstUnit?.type as SurfaceUnitType) || 'planche');
@@ -121,7 +135,7 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
       setCodeTouched(false);
       setShowAdvancedOptions(false);
     }
-  }, [plot, isCreating, visible]);
+  }, [plot, isCreating, isDuplicating, visible]);
 
   // Auto-génération code + slug en DEBOUNCE (évite re-renders à chaque touche → Session id mismatch sur Android)
   const debounceMs = Platform.OS === 'android' ? 500 : 300;
@@ -144,7 +158,6 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
   }, [formName, formDescription, codeTouched, formCode]);
 
   const handleSave = async () => {
-    
     if (!formName.trim()) {
       console.warn('⚠️ [PlotFormModal] Form name is empty');
       Alert.alert('Erreur', 'Le nom de la parcelle est requis');
@@ -157,26 +170,56 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
       return;
     }
 
+    const invalidDecimalLabels: string[] = [];
+    if (formLength.trim() && !isValidDecimalInput(formLength))
+      invalidDecimalLabels.push('Longueur (m)');
+    if (formWidth.trim() && !isValidDecimalInput(formWidth))
+      invalidDecimalLabels.push('Largeur (m)');
+    if (unitLength.trim() && !isValidDecimalInput(unitLength))
+      invalidDecimalLabels.push('Longueur unité (m)');
+    if (unitWidth.trim() && !isValidDecimalInput(unitWidth))
+      invalidDecimalLabels.push('Largeur unité (m)');
+
+    if (invalidDecimalLabels.length > 0) {
+      Alert.alert(
+        'Valeur invalide',
+        `Format invalide pour: ${invalidDecimalLabels.join(', ')}. Utilisez un nombre comme 1,20 ou 1.20.`
+      );
+      return;
+    }
+
+    const parsedUnitCount = Number.parseInt(unitCount, 10);
+    if (!Number.isFinite(parsedUnitCount) || parsedUnitCount < 1) {
+      Alert.alert(
+        'Valeur invalide',
+        "Le nombre d'unités doit être un entier supérieur ou égal à 1."
+      );
+      return;
+    }
+
     console.log('✅ [PlotFormModal] Validation passed, starting save...');
     setIsLoading(true);
 
     try {
       // Générer les unités de surface individuelles basées sur le count
-      const count = parseInt(unitCount) || 1;
-      const unitLabel = unitType === 'autre' && customUnitTypeLabel 
-        ? customUnitTypeLabel 
-        : SURFACE_UNIT_TYPES.find(u => u.id === unitType)?.label || 'Unité';
-      
+      const count = parsedUnitCount;
+      const unitLabel =
+        unitType === 'autre' && customUnitTypeLabel
+          ? customUnitTypeLabel
+          : SURFACE_UNIT_TYPES.find(u => u.id === unitType)?.label || 'Unité';
+
       const surfaceUnits = Array.from({ length: count }, (_, i) => {
         const sequenceNum = i + 1;
+        const parsedUnitLength = parseDecimalInput(unitLength);
+        const parsedUnitWidth = parseDecimalInput(unitWidth);
         return {
           id: `temp-${Date.now()}-${i}`, // ID temporaire
           name: `${unitLabel} ${sequenceNum}`,
           code: `${slugify(unitLabel).substring(0, 3)}-${sequenceNum}`,
           type: unitType,
           sequenceNumber: sequenceNum,
-          length: unitLength ? parseFloat(unitLength) : undefined,
-          width: unitWidth ? parseFloat(unitWidth) : undefined,
+          ...(parsedUnitLength !== undefined ? { length: parsedUnitLength } : {}),
+          ...(parsedUnitWidth !== undefined ? { width: parsedUnitWidth } : {}),
         };
       });
 
@@ -188,8 +231,8 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
         code: formCode.trim() || slugify(formName).substring(0, 10),
         type: formType as PlotData['type'],
         customTypeLabel: formType === 'autre' ? customPlotTypeLabel : undefined,
-        length: formLength ? parseFloat(formLength) : 0,
-        width: formWidth ? parseFloat(formWidth) : 0,
+        length: parseDecimalInput(formLength) ?? 0,
+        width: parseDecimalInput(formWidth) ?? 0,
         area: 0, // Sera calculé par le service
         unit: 'ha',
         description: formDescription.trim() || '',
@@ -213,15 +256,21 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
   };
 
   const getInfoBanner = () => {
+    if (plot && isCreating && isDuplicating) {
+      return {
+        text: `Copie de la parcelle : ${plot.name}`,
+        type: 'info' as const,
+      };
+    }
     if (plot && !isCreating) {
       return {
         text: `Modification de la parcelle : ${plot.name}`,
-        type: 'info' as const
+        type: 'info' as const,
       };
     }
     return {
-      text: "Définissez précisément vos parcelles et unités de surface pour que Thomas puisse les reconnaître dans vos messages.",
-      type: 'success' as const
+      text: 'Définissez précisément vos parcelles et unités de surface pour que Thomas puisse les reconnaître dans vos messages.',
+      type: 'success' as const,
     };
   };
 
@@ -231,9 +280,20 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
     <StandardFormModal
       visible={visible}
       onClose={onClose}
-      title={plot && !isCreating ? 'Modifier la parcelle' : 'Nouvelle parcelle'}
+      title={
+        plot && isCreating && isDuplicating
+          ? 'Copier la parcelle'
+          : plot && !isCreating
+            ? 'Modifier la parcelle'
+            : 'Nouvelle parcelle'
+      }
       primaryAction={{
-        title: plot && !isCreating ? 'Sauvegarder' : 'Créer',
+        title:
+          plot && isCreating && isDuplicating
+            ? 'Créer la copie'
+            : plot && !isCreating
+              ? 'Sauvegarder'
+              : 'Créer',
         onPress: handleSave,
         loading: isLoading,
         disabled: isButtonDisabled,
@@ -244,45 +304,42 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
       }}
       infoBanner={getInfoBanner()}
     >
-      <FormSection 
-        title="Informations générales"
-        description="Nom et type de votre parcelle"
-      >
+      <FormSection title='Informations générales' description='Nom et type de votre parcelle'>
         <EnhancedInput
-          label="Nom de la parcelle"
-          placeholder="Ex: Serre Nord, Tunnel Tomates..."
+          label='Nom de la parcelle'
+          placeholder='Ex: Serre Nord, Tunnel Tomates...'
           value={formName}
-          onChangeText={(value) => {
+          onChangeText={value => {
             console.log('📝 [PlotFormModal] formName changed:', value);
             setFormName(value);
           }}
           required
-          hint="Nom descriptif pour identifier facilement la parcelle"
+          hint='Nom descriptif pour identifier facilement la parcelle'
         />
 
         <EnhancedInput
-          label="Code court"
-          placeholder="Ex: SN, TT..."
+          label='Code court'
+          placeholder='Ex: SN, TT...'
           value={formCode}
-          onChangeText={(value) => {
+          onChangeText={value => {
             setFormCode(value);
             setCodeTouched(true);
           }}
-          hint="Code court pour les références rapides (auto-généré si vide)"
+          hint='Code court pour les références rapides (auto-généré si vide)'
         />
 
         <DropdownSelector
-          label="Type de parcelle"
-          placeholder="Sélectionnez le type"
+          label='Type de parcelle'
+          placeholder='Sélectionnez le type'
           items={PLOT_TYPES}
           selectedItems={PLOT_TYPES.filter(type => type.value === formType)}
-          onSelectionChange={(items) => setFormType(items[0]?.value || 'plein_champ')}
+          onSelectionChange={items => setFormType(items[0]?.value || 'plein_champ')}
         />
 
         {formType === 'autre' && (
           <EnhancedInput
-            label="Type personnalisé"
-            placeholder="Décrivez le type de parcelle"
+            label='Type personnalisé'
+            placeholder='Décrivez le type de parcelle'
             value={customPlotTypeLabel}
             onChangeText={setCustomPlotTypeLabel}
             required
@@ -290,48 +347,45 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
         )}
       </FormSection>
 
-      <FormSection 
-        title="Dimensions"
-        description="Taille de la parcelle (optionnel)"
-      >
+      <FormSection title='Dimensions' description='Taille de la parcelle (optionnel)'>
         <RowFields>
           <View style={{ flex: 1 }}>
             <EnhancedInput
-              label="Longueur (m)"
-              placeholder="Ex: 50"
+              label='Longueur (m)'
+              placeholder='Ex: 1,20'
               value={formLength}
               onChangeText={setFormLength}
-              keyboardType="numeric"
+              keyboardType='decimal-pad'
             />
           </View>
           <View style={{ flex: 1 }}>
             <EnhancedInput
-              label="Largeur (m)"
-              placeholder="Ex: 20"
+              label='Largeur (m)'
+              placeholder='Ex: 0,90'
               value={formWidth}
               onChangeText={setFormWidth}
-              keyboardType="numeric"
+              keyboardType='decimal-pad'
             />
           </View>
         </RowFields>
       </FormSection>
 
-      <FormSection 
-        title="Unités de surface"
-        description="Configuration des unités internes (planches, rangs, etc.)"
+      <FormSection
+        title='Unités de surface'
+        description='Configuration des unités internes (planches, rangs, etc.)'
       >
         <DropdownSelector
           label="Type d'unité"
           placeholder="Sélectionnez le type d'unité"
           items={SURFACE_UNIT_TYPES}
           selectedItems={SURFACE_UNIT_TYPES.filter(unit => unit.id === unitType)}
-          onSelectionChange={(items) => setUnitType(items[0]?.id || 'planche')}
+          onSelectionChange={items => setUnitType(items[0]?.id || 'planche')}
         />
 
         {unitType === 'autre' && (
           <EnhancedInput
             label="Type d'unité personnalisé"
-            placeholder="Ex: Bac, Carré..."
+            placeholder='Ex: Bac, Carré...'
             value={customUnitTypeLabel}
             onChangeText={setCustomUnitTypeLabel}
             required
@@ -340,42 +394,39 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
 
         <EnhancedInput
           label="Nombre d'unités"
-          placeholder="Ex: 10"
+          placeholder='Ex: 10'
           value={unitCount}
           onChangeText={setUnitCount}
-          keyboardType="numeric"
+          keyboardType='number-pad'
           hint="Nombre total d'unités dans cette parcelle"
         />
 
         <RowFields>
           <View style={{ flex: 1 }}>
             <EnhancedInput
-              label="Longueur unité (m)"
-              placeholder="Ex: 10"
+              label='Longueur unité (m)'
+              placeholder='Ex: 10,5'
               value={unitLength}
               onChangeText={setUnitLength}
-              keyboardType="numeric"
+              keyboardType='decimal-pad'
             />
           </View>
           <View style={{ flex: 1 }}>
             <EnhancedInput
-              label="Largeur unité (m)"
-              placeholder="Ex: 1.2"
+              label='Largeur unité (m)'
+              placeholder='Ex: 1,20'
               value={unitWidth}
               onChangeText={setUnitWidth}
-              keyboardType="numeric"
+              keyboardType='decimal-pad'
             />
           </View>
         </RowFields>
       </FormSection>
 
-      <FormSection 
-        title="Informations complémentaires"
-        description="Description et statut"
-      >
+      <FormSection title='Informations complémentaires' description='Description et statut'>
         <EnhancedInput
-          label="Description"
-          placeholder="Informations supplémentaires sur cette parcelle..."
+          label='Description'
+          placeholder='Informations supplémentaires sur cette parcelle...'
           value={formDescription}
           onChangeText={setFormDescription}
           multiline
@@ -383,26 +434,31 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
         />
 
         <View>
-          <Text variant="body" style={{ 
-            marginBottom: spacing.sm,
-            fontWeight: '600',
-            color: colors.text.primary 
-          }}>
+          <Text
+            variant='body'
+            style={{
+              marginBottom: spacing.sm,
+              fontWeight: '600',
+              color: colors.text.primary,
+            }}
+          >
             Statut de la parcelle
           </Text>
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            padding: spacing.md,
-            backgroundColor: colors.background.secondary,
-            borderRadius: 8,
-          }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: spacing.md,
+              backgroundColor: colors.background.secondary,
+              borderRadius: 8,
+            }}
+          >
             <View>
-              <Text variant="body" color={colors.text.primary}>
+              <Text variant='body' color={colors.text.primary}>
                 Parcelle active
               </Text>
-              <Text variant="caption" color={colors.text.secondary}>
+              <Text variant='caption' color={colors.text.secondary}>
                 Les parcelles inactives sont masquées par défaut
               </Text>
             </View>
@@ -418,6 +474,3 @@ export const PlotFormModal: React.FC<PlotFormModalProps> = ({
     </StandardFormModal>
   );
 };
-
-
-

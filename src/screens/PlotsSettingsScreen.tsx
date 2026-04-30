@@ -40,6 +40,7 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
 
   const [editingPlot, setEditingPlot] = useState<PlotData | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
   const [isFormVisible, setIsFormVisible] = useState(false);
   // Filtres / recherche
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,23 +82,29 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
   useEffect(() => {
     if (onTitleChange) {
       if (isFormVisible) {
-        onTitleChange(editingPlot ? 'Modifier une parcelle' : 'Créer une parcelle');
+        if (isDuplicating) {
+          onTitleChange('Copier une parcelle');
+        } else {
+          onTitleChange(editingPlot && !isCreating ? 'Modifier une parcelle' : 'Créer une parcelle');
+        }
       } else {
         onTitleChange(null);
       }
     }
-  }, [isFormVisible, editingPlot, onTitleChange]);
+  }, [isFormVisible, editingPlot, isCreating, isDuplicating, onTitleChange]);
 
 
 
   const handleAddPlot = () => {
     setEditingPlot(null);
     setIsCreating(true);
+    setIsDuplicating(false);
     setIsFormVisible(true);
   };
 
   const openEditPlot = (plot: PlotData) => {
     setIsCreating(false);
+    setIsDuplicating(false);
     setEditingPlot(plot);
     setIsFormVisible(true);
   };
@@ -106,10 +113,18 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
     openEditPlot(plot);
   };
 
+  const handleDuplicatePlot = (plot: PlotData) => {
+    setEditingPlot(plot);
+    setIsCreating(true);
+    setIsDuplicating(true);
+    setIsFormVisible(true);
+  };
+
   const handlePlotFormClose = () => {
     setIsFormVisible(false);
     setEditingPlot(null);
     setIsCreating(false);
+    setIsDuplicating(false);
   };
 
   const handleCloseModal = handlePlotFormClose;
@@ -489,6 +504,7 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
                       key={plot.id}
                       plot={plot}
                       onPress={handleEditPlot}
+                      onDuplicate={handleDuplicatePlot}
                       onDelete={handleToggleActive}
                     />
                   ))}
@@ -523,6 +539,7 @@ export default function PlotsSettingsScreen({ onTitleChange, onBack }: PlotsSett
         onSave={handlePlotFormSave}
         plot={editingPlot}
         isCreating={isCreating}
+        isDuplicating={isDuplicating}
         activeFarm={activeFarm}
       />
 

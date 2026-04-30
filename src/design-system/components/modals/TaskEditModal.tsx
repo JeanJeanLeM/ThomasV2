@@ -18,6 +18,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { DirectSupabaseService } from '../../../services/DirectSupabaseService';
 import { cultureService } from '../../../services/CultureService';
 import { PhytosanitaryProductService } from '../../../services/PhytosanitaryProductService';
+import { farmMemberService } from '../../../services/FarmMemberService';
 
 // Actions standard — codes alignés avec task_standard_actions (DB)
 const COMMON_ACTIONS: DropdownItem[] = [
@@ -176,6 +177,9 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
   const [plots, setPlots] = useState<DropdownItem[]>([]);
   const [surfaceUnits, setSurfaceUnits] = useState<DropdownItem[]>([]);
   const [materials, setMaterials] = useState<DropdownItem[]>([]);
+  const [farmMembers, setFarmMembers] = useState<DropdownItem[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [isPeopleManuallyEdited, setIsPeopleManuallyEdited] = useState(false);
   
   // États pour la sélection multiple de cultures
   const [selectedCultures, setSelectedCultures] = useState<CultureDropdownItem[]>([]);
@@ -252,6 +256,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
   // Initialiser le formulaire avec les données de la tâche
   useEffect(() => {
     if (task) {
+      const initialMemberIds = (task.members || []).map((member) => member.user_id).filter(Boolean);
       setFormData({
         ...task,
         action: task.title || '', // Utiliser le titre comme action par défaut
@@ -274,6 +279,12 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         converted_unit: 'kg',
         duration_unit: 'minutes',
       });
+      setSelectedMemberIds(initialMemberIds);
+      setIsPeopleManuallyEdited(
+        typeof task.number_of_people === 'number' &&
+        task.number_of_people > 0 &&
+        task.number_of_people !== initialMemberIds.length
+      );
       
       // Charger le nom du produit phytosanitaire si AMM présent
       if (task.phytosanitary_product_amm) {
@@ -316,11 +327,19 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         converted_unit: 'kg',
         duration_unit: 'minutes',
       });
+      setSelectedMemberIds([]);
+      setIsPeopleManuallyEdited(false);
       setSelectedCultures([]);
       setAttachedPhotos([]);
     }
     setTempCultureSelection(null);
   }, [task, visible, activeFarm?.farm_id, contextFarm?.farm_id, user?.id]);
+
+  useEffect(() => {
+    if (isPeopleManuallyEdited) return;
+    if (selectedMemberIds.length === 0) return;
+    setFormData((prev) => ({ ...prev, people: selectedMemberIds.length }));
+  }, [selectedMemberIds, isPeopleManuallyEdited]);
 
   const loadFarmData = async () => {
     const farmId = activeFarm?.farm_id || contextFarm?.farm_id;
@@ -395,11 +414,21 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         console.error('❌ [TaskEditModal] Erreur chargement matériel:', materialsResult.error);
         setMaterials([]);
       }
+
+      const membersData = await farmMemberService.getFarmMembers(farmId);
+      const memberItems: DropdownItem[] = membersData.map((member) => ({
+        id: member.userId,
+        label: member.user?.firstName || member.user?.email || member.userId,
+        type: member.role,
+        description: member.role,
+      }));
+      setFarmMembers(memberItems);
     } catch (error) {
       console.error('❌ [TaskEditModal] Erreur chargement données ferme:', error);
       setPlots([]);
       setSurfaceUnits([]);
       setMaterials([]);
+      setFarmMembers([]);
     }
   };
 
@@ -442,6 +471,7 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         date: formData.date || new Date(),
         duration: formData.duration,
         people: formData.people,
+        number_of_people: formData.people,
         crops: selectedCultures.map(c => c.culture?.name || c.label),
         plots: formData.plots,
         plot_ids: (formData.plot_ids || []).map((id) => String(id)),
@@ -450,6 +480,16 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
         category: formData.category,
         notes: formData.notes,
         status: formData.status,
+        members: selectedMemberIds
+          .map((memberId) => {
+            const member = farmMembers.find((item) => item.id === memberId);
+            if (!member) return null;
+            return {
+              user_id: memberId,
+              first_name: member.label,
+            };
+          })
+          .filter(Boolean) as Array<{ user_id: string; first_name: string }>,
         photos: uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
       };
 
@@ -698,7 +738,10 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
           label="Nombre de personnes"
           placeholder="1"
           value={formData.people?.toString() || ''}
-          onChangeText={(value) => updateFormData('people', parseInt(value) || 1)}
+          onChangeText={(value) => {
+            setIsPeopleManuallyEdited(true);
+            updateFormData('people', parseInt(value) || 1);
+          }}
           keyboardType="numeric"
           hint="Incluez vous-même dans le compte"
         />
@@ -858,6 +901,20 @@ export const TaskEditModal: React.FC<TaskEditModalProps> = ({
             </View>
           )}
         </View>
+
+        <DropdownSelector
+          label="Membres de la ferme"
+          placeholder="Sélectionner les membres concernés"
+          items={farmMembers}
+          selectedItems={farmMembers.filter((member) => selectedMemberIds.includes(member.id))}
+          onSelectionChange={(items) => {
+            const ids = items.map((item) => item.id);
+            setSelectedMemberIds(ids);
+          }}
+          multiSelect
+          searchable
+          hint="Associe des profils à la tâche pour le suivi personnel"
+        />
 
         <DropdownSelector
           label="Parcelle(s)"

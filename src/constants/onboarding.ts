@@ -33,22 +33,22 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       {
         id: 'send-4',
         icon: '📋',
-        text: 'Formulaire — remplissez les champs un par un pour plus de précision',
+        text: 'Formulaire',
       },
       {
         id: 'send-1',
         icon: '✍️',
-        text: 'Message écrit — tapez votre demande librement dans la zone de saisie',
+        text: 'Message écrit',
       },
       {
         id: 'send-2',
         icon: '🎙️',
-        text: 'Message vocal — maintenez le micro pour enregistrer une note audio',
+        text: 'Message vocal',
       },
       {
         id: 'send-3',
         icon: '🗣️',
-        text: 'Dictée en temps réel — parlez et votre texte apparaît instantanément',
+        text: 'Dictée',
         badge: 'Recommandé',
       },
     ],
@@ -67,12 +67,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       {
         id: 'task-1',
         icon: '⭐',
-        text: 'Obligatoires : action (ex. traitement), culture (ex. tomate), durée',
+        text: 'Obligatoires : action, culture, durée',
       },
       {
         id: 'task-2',
         icon: '📍',
-        text: 'Optionnels : parcelle, sous-parcelle (planche, zone…), matériel utilisé',
+        text: 'Optionnels : parcelle, sous-parcelle, matériel, conversion',
       },
     ],
     imagePlaceholderIcon: '🧠',
@@ -151,7 +151,7 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       {
         id: 'vente-2',
         icon: '🌾',
-        text: 'Enregistrer une vente de récolte ou un achat d\'intrants',
+        text: 'Enregistrez une vente ou un achat',
       },
       {
         id: 'vente-3',
@@ -163,38 +163,10 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
     imageBackgroundColor: '#f0fdf4',
   },
 
-  // ─── Chapitre 1 · 6/7 ─ Intent Aide ─────────────────────────────────────
-  {
-    id: 'chat-aide',
-    chapter: 'Chat · 1.6',
-    title: 'Demander de l\'aide',
-    description:
-      'Posez à Thomas n\'importe quelle question sur l\'utilisation de l\'application.',
-    subPoints: [
-      {
-        id: 'aide-1',
-        icon: '🗺️',
-        text: '"Comment ajouter une nouvelle parcelle ?"',
-      },
-      {
-        id: 'aide-2',
-        icon: '📋',
-        text: '"Comment modifier une tâche déjà enregistrée ?"',
-      },
-      {
-        id: 'aide-3',
-        icon: '🔍',
-        text: '"Où trouver mes observations de la semaine dernière ?"',
-      },
-    ],
-    imagePlaceholderIcon: '❓',
-    imageBackgroundColor: '#eff6ff',
-  },
-
-  // ─── Chapitre 2 ─ Configurer votre exploitation ──────────────────────────
+  // ─── Chapitre 1 · 6/7 ─ Configurer votre exploitation ────────────────────
   {
     id: 'parametrage',
-    chapter: 'Chapitre 2',
+    chapter: 'Chat · 1.6',
     title: 'Configurer votre exploitation',
     description:
       'Renseignez parcelles, matériels et conversions quand vous le souhaitez — depuis les menus ou directement via le chat.',
@@ -221,6 +193,34 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
       },
     ],
     imagePlaceholderIcon: '⚙️',
+    imageBackgroundColor: '#eff6ff',
+  },
+
+  // ─── Chapitre 1 · 7/7 ─ Intent Aide ─────────────────────────────────────
+  {
+    id: 'chat-aide',
+    chapter: 'Chat · 1.7',
+    title: 'Demander de l\'aide',
+    description:
+      'Posez à Thomas n\'importe quelle question sur l\'utilisation de l\'application.',
+    subPoints: [
+      {
+        id: 'aide-1',
+        icon: '🗺️',
+        text: '"Comment ajouter une nouvelle parcelle ?"',
+      },
+      {
+        id: 'aide-2',
+        icon: '📋',
+        text: '"Comment modifier une tâche déjà enregistrée ?"',
+      },
+      {
+        id: 'aide-3',
+        icon: '🔍',
+        text: '"Où trouver mes observations de la semaine dernière ?"',
+      },
+    ],
+    imagePlaceholderIcon: '❓',
     imageBackgroundColor: '#eff6ff',
   },
 

@@ -20,34 +20,118 @@ interface CachedChat {
 
 const CACHE_PREFIX = '@thomas_chat_cache_';
 const CHAT_LIST_PREFIX = '@thomas_chat_list_';
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const MAX_CACHED_MESSAGES = 10;
 const CACHE_TTL_DAYS = 7;
 const CHAT_LIST_TTL_HOURS = 1; // Liste des chats rafraîchie après 1h
 
+const sanitizeAttachmentForCache = (attachment: any) => {
+  if (!attachment || typeof attachment !== 'object') return attachment;
+
+  if (attachment.type === 'image') {
+    const imageData = attachment.data || {};
+    return {
+      id: attachment.id,
+      type: attachment.type,
+      name: attachment.name,
+      size: attachment.size,
+      uploaded: attachment.uploaded,
+      uploadedUri: attachment.uploadedUri,
+      data: {
+        uploadPath: imageData.uploadPath || imageData.filePath,
+        fileName: imageData.fileName,
+        mimeType: imageData.mimeType,
+        width: imageData.width,
+        height: imageData.height,
+      },
+    };
+  }
+
+  if (attachment.type === 'location') {
+    return {
+      id: attachment.id,
+      type: attachment.type,
+      name: attachment.name,
+      data: attachment.data,
+    };
+  }
+
+  if (attachment.type === 'audio') {
+    return {
+      id: attachment.id,
+      type: attachment.type,
+      name: attachment.name,
+      uploadedUri: attachment.uploadedUri,
+      uploaded: attachment.uploaded,
+      transcription: attachment.transcription,
+    };
+  }
+
+  return {
+    id: attachment.id,
+    type: attachment.type,
+    name: attachment.name,
+    size: attachment.size,
+  };
+};
+
+const sanitizeMessageForCache = (message: ChatMessage): ChatMessage => {
+  const metadata = message.metadata || {};
+  const rawAttachments = metadata['attachments'];
+  const attachments = Array.isArray(rawAttachments)
+    ? rawAttachments.map(sanitizeAttachmentForCache)
+    : rawAttachments;
+
+  return {
+    ...message,
+    metadata: {
+      ...metadata,
+      ...(attachments ? { attachments } : {}),
+    },
+  };
+};
+
 export class ChatCacheService {
+  private static async clearMessageCaches(): Promise<void> {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const cacheKeys = allKeys.filter(key => key.startsWith(CACHE_PREFIX));
+    if (cacheKeys.length > 0) {
+      await AsyncStorage.multiRemove(cacheKeys);
+    }
+  }
   
   /**
    * Sauvegarder les messages d'un chat en cache
    */
   static async cacheMessages(chatId: string, messages: ChatMessage[]): Promise<void> {
+    const messagesToCache = messages
+      .slice(-MAX_CACHED_MESSAGES)
+      .map(sanitizeMessageForCache);
+
+    const cacheData: CachedChat = {
+      chatId,
+      messages: messagesToCache,
+      cachedAt: new Date().toISOString(),
+      version: CACHE_VERSION
+    };
+
+    const key = `${CACHE_PREFIX}${chatId}`;
+
     try {
-      // Ne garder que les 10 derniers messages
-      const messagesToCache = messages.slice(-MAX_CACHED_MESSAGES);
-      
-      const cacheData: CachedChat = {
-        chatId,
-        messages: messagesToCache,
-        cachedAt: new Date().toISOString(),
-        version: CACHE_VERSION
-      };
-      
-      const key = `${CACHE_PREFIX}${chatId}`;
       await AsyncStorage.setItem(key, JSON.stringify(cacheData));
       
       console.log(`💾 [CACHE] Saved ${messagesToCache.length} messages for chat ${chatId}`);
     } catch (error) {
       console.error('❌ [CACHE] Error saving:', error);
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        try {
+          await this.clearMessageCaches();
+          await AsyncStorage.setItem(key, JSON.stringify(cacheData));
+          console.log(`💾 [CACHE] Cleared old message caches and saved ${messagesToCache.length} messages for chat ${chatId}`);
+        } catch (retryError) {
+          console.error('❌ [CACHE] Retry after clearing failed:', retryError);
+        }
+      }
       // Ne pas bloquer si le cache échoue
     }
   }

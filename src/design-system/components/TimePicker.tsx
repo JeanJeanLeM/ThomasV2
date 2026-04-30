@@ -1,12 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, TouchableOpacity, StyleSheet, ScrollView, Modal as RNModal, Pressable } from 'react-native';
+import React, { useState } from 'react';
+import { View, TouchableOpacity, StyleSheet, Modal as RNModal, Pressable, ScrollView } from 'react-native';
 import { colors } from '../colors';
 import { spacing } from '../spacing';
 import { Text } from './Text';
-
-const ITEM_HEIGHT = 48;
-const VISIBLE_ITEMS = 5; // Nombre d'items visibles dans la colonne
-const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 
 interface TimePickerProps {
   value: string; // Format: "HH:MM:SS"
@@ -15,83 +11,7 @@ interface TimePickerProps {
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = Array.from({ length: 12 }, (_, i) => i * 5);
-
-function PickerColumn({
-  items,
-  selected,
-  onSelect,
-  label,
-  format,
-}: {
-  items: number[];
-  selected: number;
-  onSelect: (val: number) => void;
-  label: string;
-  format: (n: number) => string;
-}) {
-  const scrollRef = useRef<ScrollView>(null);
-  const selectedIndex = items.indexOf(selected);
-
-  // Auto-scroll to selected item when modal opens
-  useEffect(() => {
-    if (selectedIndex >= 0 && scrollRef.current) {
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({
-          y: Math.max(0, selectedIndex * ITEM_HEIGHT - ITEM_HEIGHT * 2),
-          animated: false,
-        });
-      }, 50);
-    }
-  }, []);
-
-  return (
-    <View style={styles.column}>
-      <Text style={styles.columnLabel}>{label}</Text>
-      <View style={styles.columnContainer}>
-        {/* Highlight de la ligne sélectionnée */}
-        <View pointerEvents="none" style={styles.selectionHighlight} />
-        <ScrollView
-          ref={scrollRef}
-          style={styles.columnScroll}
-          showsVerticalScrollIndicator={false}
-          nestedScrollEnabled
-          contentContainerStyle={styles.columnContent}
-          snapToInterval={ITEM_HEIGHT}
-          decelerationRate="fast"
-        >
-          {/* Padding top pour centrer le premier item */}
-          <View style={{ height: ITEM_HEIGHT * 2 }} />
-          {items.map((item) => {
-            const isSelected = item === selected;
-            return (
-              <TouchableOpacity
-                key={item}
-                style={[styles.item, isSelected && styles.itemSelected]}
-                onPress={() => {
-                  onSelect(item);
-                  // Scroll to center the selected item
-                  const idx = items.indexOf(item);
-                  scrollRef.current?.scrollTo({
-                    y: Math.max(0, idx * ITEM_HEIGHT - ITEM_HEIGHT * 2),
-                    animated: true,
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.itemText, isSelected && styles.itemTextSelected]}>
-                  {format(item)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-          {/* Padding bottom pour centrer le dernier item */}
-          <View style={{ height: ITEM_HEIGHT * 2 }} />
-        </ScrollView>
-      </View>
-    </View>
-  );
-}
+const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
 export function TimePicker({ value, onChange, style }: TimePickerProps) {
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -100,13 +20,17 @@ export function TimePicker({ value, onChange, style }: TimePickerProps) {
 
   const formatDisplay = (time: string): string => {
     const parts = time.split(':');
-    return `${parts[0]}:${parts[1]}`;
+    return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
   };
 
   const handleOpen = () => {
-    // Sync temp values with current value when opening
     setTempHour(parseInt(value.split(':')[0]) || 0);
-    setTempMinute(parseInt(value.split(':')[1]) || 0);
+    const rawMin = parseInt(value.split(':')[1]) || 0;
+    // Arrondi à la minute la plus proche disponible
+    const nearest = MINUTES.reduce((prev, curr) =>
+      Math.abs(curr - rawMin) < Math.abs(prev - rawMin) ? curr : prev
+    );
+    setTempMinute(nearest);
     setIsModalVisible(true);
   };
 
@@ -120,16 +44,8 @@ export function TimePicker({ value, onChange, style }: TimePickerProps) {
     setIsModalVisible(false);
   };
 
-  // Nearest available minute (rounded to 5)
-  const nearestMinute = MINUTES.includes(tempMinute)
-    ? tempMinute
-    : MINUTES.reduce((prev, curr) =>
-        Math.abs(curr - tempMinute) < Math.abs(prev - tempMinute) ? curr : prev
-      );
-
   return (
     <>
-      {/* Bouton d'affichage de l'heure */}
       <TouchableOpacity
         style={[styles.timeDisplay, style]}
         onPress={handleOpen}
@@ -138,7 +54,6 @@ export function TimePicker({ value, onChange, style }: TimePickerProps) {
         <Text style={styles.timeText}>{formatDisplay(value)}</Text>
       </TouchableOpacity>
 
-      {/* Modal natif React Native (pas le composant Modal custom) */}
       <RNModal
         visible={isModalVisible}
         transparent
@@ -147,31 +62,58 @@ export function TimePicker({ value, onChange, style }: TimePickerProps) {
       >
         <Pressable style={styles.overlay} onPress={handleCancel}>
           <Pressable style={styles.sheet} onPress={() => {}}>
-            {/* Titre */}
-            <Text style={styles.title}>Sélectionner l'heure</Text>
+            {/* Aperçu heure sélectionnée */}
+            <View style={styles.previewRow}>
+              <Text style={styles.previewHour}>
+                {tempHour.toString().padStart(2, '0')}
+              </Text>
+              <Text style={styles.previewSep}>:</Text>
+              <Text style={styles.previewMinute}>
+                {tempMinute.toString().padStart(2, '0')}
+              </Text>
+            </View>
 
-            {/* Colonnes heures / minutes */}
-            <View style={styles.pickerRow}>
-              <PickerColumn
-                items={HOURS}
-                selected={tempHour}
-                onSelect={setTempHour}
-                label="Heures"
-                format={(n) => n.toString().padStart(2, '0')}
-              />
-
-              <View style={styles.colonSeparator}>
-                <Text style={styles.colonText}>:</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.scroll}>
+              {/* ── Section Heures ── */}
+              <Text style={styles.sectionLabel}>Heures</Text>
+              <View style={styles.grid}>
+                {HOURS.map((h) => {
+                  const sel = h === tempHour;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      style={[styles.chip, sel && styles.chipSelected]}
+                      onPress={() => setTempHour(h)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.chipText, sel && styles.chipTextSelected]}>
+                        {h.toString().padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              <PickerColumn
-                items={MINUTES}
-                selected={nearestMinute}
-                onSelect={setTempMinute}
-                label="Minutes"
-                format={(n) => n.toString().padStart(2, '0')}
-              />
-            </View>
+              {/* ── Section Minutes ── */}
+              <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>Minutes</Text>
+              <View style={styles.grid}>
+                {MINUTES.map((m) => {
+                  const sel = m === tempMinute;
+                  return (
+                    <TouchableOpacity
+                      key={m}
+                      style={[styles.chip, sel && styles.chipSelected]}
+                      onPress={() => setTempMinute(m)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.chipText, sel && styles.chipTextSelected]}>
+                        {m.toString().padStart(2, '0')}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
 
             {/* Boutons */}
             <View style={styles.actions}>
@@ -192,36 +134,39 @@ export function TimePicker({ value, onChange, style }: TimePickerProps) {
 const styles = StyleSheet.create({
   // Bouton d'affichage
   timeDisplay: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.lg,
-    backgroundColor: colors.white,
+    backgroundColor: '#f8fafc',
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: colors.primary[300],
-    minWidth: 110,
+    alignSelf: 'flex-start',
     alignItems: 'center',
   },
   timeText: {
     color: colors.primary[700],
     fontWeight: '700',
-    fontSize: 22,
-    letterSpacing: 1,
+    fontSize: 20,
+    letterSpacing: 1.5,
   },
 
-  // Modal overlay
+  // Overlay modal
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: spacing.lg,
   },
   sheet: {
-    backgroundColor: colors.white,
+    backgroundColor: '#ffffff',
     borderRadius: 20,
     paddingTop: spacing.lg,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
-    width: 300,
+    width: '100%',
+    maxWidth: 340,
+    maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
@@ -229,113 +174,101 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
 
-  // Titre
-  title: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.neutral[900],
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-
-  // Colonnes
-  pickerRow: {
+  // Aperçu heure
+  previewRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.primary[600],
+    borderRadius: 12,
+    paddingVertical: spacing.md,
     marginBottom: spacing.lg,
   },
-  column: {
-    flex: 1,
-    alignItems: 'center',
+  previewHour: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 2,
+    minWidth: 56,
+    textAlign: 'center',
   },
-  columnLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.neutral[500],
+  previewSep: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    marginHorizontal: 4,
+    paddingBottom: 4,
+  },
+  previewMinute: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 2,
+    minWidth: 56,
+    textAlign: 'center',
+  },
+
+  scroll: {
+    flexGrow: 0,
+  },
+
+  // Section label
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.gray[500],
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     marginBottom: spacing.sm,
   },
-  columnContainer: {
-    height: PICKER_HEIGHT,
-    width: '100%',
-    overflow: 'hidden',
-    borderRadius: 10,
-    backgroundColor: colors.neutral[50],
-    position: 'relative',
+
+  // Grille de chips
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
   },
-  // Bande verte qui indique la ligne sélectionnée (au centre)
-  selectionHighlight: {
-    position: 'absolute',
-    top: ITEM_HEIGHT * 2,
-    left: 4,
-    right: 4,
-    height: ITEM_HEIGHT,
-    backgroundColor: colors.primary[600],
+  chip: {
+    width: '13%',
+    aspectRatio: 1.2,
     borderRadius: 8,
-    zIndex: 0,
-  },
-  columnScroll: {
-    flex: 1,
-  },
-  columnContent: {
-    alignItems: 'center',
-  },
-
-  // Items
-  item: {
-    height: ITEM_HEIGHT,
-    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
+    backgroundColor: colors.gray[100],
+    borderWidth: 1,
+    borderColor: colors.gray[200],
   },
-  itemSelected: {
-    // Fond géré par selectionHighlight
+  chipSelected: {
+    backgroundColor: colors.primary[600],
+    borderColor: colors.primary[600],
   },
-  itemText: {
-    fontSize: 20,
-    fontWeight: '500',
-    color: colors.neutral[500],
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.gray[700],
   },
-  itemTextSelected: {
-    color: colors.white,
-    fontWeight: '700',
-    fontSize: 22,
-  },
-
-  // Séparateur ":"
-  colonSeparator: {
-    paddingHorizontal: spacing.sm,
-    paddingBottom: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: PICKER_HEIGHT,
-    marginTop: 28, // Aligner avec le contenu (label + colonne)
-  },
-  colonText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.neutral[400],
+  chipTextSelected: {
+    color: '#ffffff',
+    fontWeight: '800',
   },
 
-  // Boutons
+  // Boutons Annuler / Confirmer
   actions: {
     flexDirection: 'row',
     gap: spacing.md,
+    marginTop: spacing.lg,
   },
   cancelBtn: {
     flex: 1,
     paddingVertical: spacing.md,
     borderRadius: 10,
     alignItems: 'center',
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.gray[100],
     borderWidth: 1,
-    borderColor: colors.neutral[200],
+    borderColor: colors.gray[200],
   },
   cancelBtnText: {
-    color: colors.neutral[700],
+    color: colors.gray[700],
     fontWeight: '600',
     fontSize: 15,
   },
@@ -347,7 +280,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[600],
   },
   confirmBtnText: {
-    color: colors.white,
+    color: '#ffffff',
     fontWeight: '700',
     fontSize: 15,
   },

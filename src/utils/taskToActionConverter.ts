@@ -98,6 +98,7 @@ export const convertTaskToAction = (task: TaskData): ActionData => {
       time: extractTime(task.date),
       duration: convertDuration(task.duration_minutes),
       number_of_people: task.number_of_people,
+      matched_member_ids: task.members?.map((member) => member.user_id) || [],
       
       // Matériel
       materials: task.material_ids || [],
@@ -179,6 +180,7 @@ export const convertActionToTask = (action: ActionData, originalTask?: TaskData)
 
   const taskData: TaskData = {
     id: action.id || originalTask?.id || '',
+    user_id: originalTask?.user_id,
     title: data.title || originalTask?.title || '',
     action: data.action || originalTask?.action,
     standard_action: data.standard_action ?? originalTask?.standard_action ?? null,
@@ -202,6 +204,7 @@ export const convertActionToTask = (action: ActionData, originalTask?: TaskData)
     phytosanitary_product_amm: originalTask?.phytosanitary_product_amm || null,
     priority: data.priority || originalTask?.priority,
     notes: data.notes || originalTask?.notes,
+    members: originalTask?.members,
   };
 
   return taskData;

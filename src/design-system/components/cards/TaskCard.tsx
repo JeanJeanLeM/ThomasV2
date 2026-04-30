@@ -16,15 +16,21 @@ import {
 
 export interface TaskData {
   id: string;
+  user_id?: string;
+  created_by_first_name?: string;
   title: string;
   action?: string; // Action principale (récolter, planter, traiter, etc.)
   standard_action?: string | null; // Code action standard normalisé (réf. task_standard_actions)
   type: 'completed' | 'planned';
   date: Date | string;
   duration_minutes?: number; // Durée en minutes
+  duration?: number; // Alias legacy pour les modales
   number_of_people?: number; // Nombre de personnes
+  people?: number; // Alias legacy pour les modales
   plants?: string[]; // Cultures/plantes
+  crops?: string[]; // Alias legacy pour les modales
   plot_ids?: string[]; // IDs des parcelles
+  plots?: string[]; // Alias legacy pour les modales
   surface_unit_ids?: string[]; // IDs des sous-unités (planches/rangs/lignes)
   material_ids?: string[]; // IDs des matériels/outils
   quantity?: { value: number; unit: string }; // Quantité avec unité
@@ -32,6 +38,12 @@ export interface TaskData {
   quantity_nature?: string; // Nature spécifique (laitues, compost, bouillie...)
   quantity_type?: string; // Type: engrais, produit_phyto, recolte, plantation, vente
   phytosanitary_product_amm?: string | null; // AMM du produit phytosanitaire (pour matching)
+  members?: Array<{
+    user_id: string;
+    first_name: string;
+    last_name?: string | null;
+    full_name?: string | null;
+  }>;
   priority?: 'basse' | 'moyenne' | 'haute' | 'urgente'; // Priorité
   category?: string; // Catégorie
   notes?: string;
@@ -162,7 +174,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
         {/* Actions rapides */}
         <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-          {task.duration && (
+          {task.duration_minutes && (
             <View style={{
               backgroundColor: colors.secondary.blue,
               paddingHorizontal: spacing.sm,
@@ -174,7 +186,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             }}>
               <ClockIcon size={12} color={colors.text.inverse} />
               <Text variant="caption" color={colors.text.inverse} weight="medium">
-                {formatDuration(task.duration)}
+                {formatDuration(task.duration_minutes)}
               </Text>
             </View>
           )}
@@ -189,7 +201,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         marginBottom: spacing.md 
       }}>
         {/* Cultures */}
-        {task.crops?.map((crop, index) => (
+        {task.plants?.map((crop, index) => (
           <View
             key={`crop-${index}`}
             style={{
@@ -210,7 +222,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         ))}
 
         {/* Nombre de personnes */}
-        {task.people && (
+        {task.number_of_people && (
           <View style={{
             backgroundColor: colors.gray[100],
             paddingHorizontal: spacing.sm,
@@ -222,7 +234,40 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           }}>
             <UserIcon size={14} color={colors.gray[600]} />
             <Text variant="caption" color={colors.gray[700]} weight="medium">
-              {task.people} personne{task.people > 1 ? 's' : ''}
+              {task.number_of_people} personne{task.number_of_people > 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+
+        {/* Membres identifiés */}
+        {task.members?.map((member) => (
+          <View
+            key={`member-${member.user_id}`}
+            style={{
+              backgroundColor: '#eef2ff',
+              paddingHorizontal: spacing.sm,
+              paddingVertical: spacing.xs,
+              borderRadius: 16,
+            }}
+          >
+            <Text variant="caption" color="#3730a3" weight="medium">
+              {member.first_name}
+            </Text>
+          </View>
+        ))}
+
+        {/* Auteur de la tâche */}
+        {task.created_by_first_name && (
+          <View
+            style={{
+              backgroundColor: '#ecfeff',
+              paddingHorizontal: spacing.sm,
+              paddingVertical: spacing.xs,
+              borderRadius: 16,
+            }}
+          >
+            <Text variant="caption" color="#0e7490" weight="medium">
+              {task.created_by_first_name}
             </Text>
           </View>
         )}
@@ -246,7 +291,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         )}
 
         {/* Parcelles */}
-        {task.plots?.map((plot, index) => (
+        {task.plot_ids?.map((plot, index) => (
           <View
             key={`plot-${index}`}
             style={{

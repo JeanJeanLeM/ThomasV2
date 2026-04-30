@@ -25,17 +25,26 @@ const { width: screenWidth } = Dimensions.get('window');
 
 // Helper function to create pie slice paths
 const createPieSlice = (centerX: number, centerY: number, radius: number, startAngle: number, endAngle: number) => {
+  const sweep = endAngle - startAngle;
+  const r = radius;
+
+  // Cercle complet (un seul segment = 100 %) : un arc SVG A...Z dégénère car point départ = point d'arrivée.
+  // Deux demi-cercles consécutifs forment un disque valide.
+  if (Math.abs(sweep) >= 359.99) {
+    return `M ${centerX} ${centerY - r} A ${r} ${r} 0 1 1 ${centerX} ${centerY + r} A ${r} ${r} 0 1 1 ${centerX} ${centerY - r} Z`;
+  }
+
   const startAngleRad = (startAngle * Math.PI) / 180;
   const endAngleRad = (endAngle * Math.PI) / 180;
 
-  const x1 = centerX + radius * Math.cos(startAngleRad);
-  const y1 = centerY + radius * Math.sin(startAngleRad);
-  const x2 = centerX + radius * Math.cos(endAngleRad);
-  const y2 = centerY + radius * Math.sin(endAngleRad);
+  const x1 = centerX + r * Math.cos(startAngleRad);
+  const y1 = centerY + r * Math.sin(startAngleRad);
+  const x2 = centerX + r * Math.cos(endAngleRad);
+  const y2 = centerY + r * Math.sin(endAngleRad);
 
-  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+  const largeArcFlag = sweep > 180 ? 1 : 0;
 
-  return `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
+  return `M ${centerX} ${centerY} L ${x1} ${y1} A ${r} ${r} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
 };
 
 export const PieChart: React.FC<PieChartProps> = ({
@@ -48,10 +57,11 @@ export const PieChart: React.FC<PieChartProps> = ({
   formatValue = (value) => `${value}h`
 }) => {
 
-  // Filter out data with zero values
+  // Filter out data with zero values, puis tri par pondération décroissante (légende + secteurs cohérents)
   const filteredData = data.filter(item => item.value > 0);
+  const sortedData = [...filteredData].sort((a, b) => b.value - a.value);
 
-  if (filteredData.length === 0) {
+  if (sortedData.length === 0) {
     return (
       <View style={[styles.container, { width, height }]}>
         {title && (
@@ -74,7 +84,7 @@ export const PieChart: React.FC<PieChartProps> = ({
   }
 
   // Calculate total for percentages
-  const total = filteredData.reduce((sum, item) => sum + item.value, 0);
+  const total = sortedData.reduce((sum, item) => sum + item.value, 0);
 
   // Calculate pie slices with responsive radius
   const centerX = width / 2;
@@ -84,9 +94,13 @@ export const PieChart: React.FC<PieChartProps> = ({
   const availableRadius = Math.min(centerX, centerY);
   const radius = availableRadius * 0.85;
 
+  const mid = Math.ceil(sortedData.length / 2);
+  const legendLeft = sortedData.slice(0, mid);
+  const legendRight = sortedData.slice(mid);
+
   let currentAngle = -90; // Start from top
 
-  const pieSlices = filteredData.map((item) => {
+  const pieSlices = sortedData.map((item) => {
     const sliceAngle = (item.value / total) * 360;
     const startAngle = currentAngle;
     const endAngle = currentAngle + sliceAngle;
@@ -131,17 +145,32 @@ export const PieChart: React.FC<PieChartProps> = ({
 
         {showValues && (
           <View style={styles.valuesContainer}>
-            {filteredData.map((item, index) => (
-              <View key={index} style={styles.valueItem}>
-                <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
-                <Text variant="caption" color={colors.text.secondary} style={styles.valueLabel}>
-                  {item.name}:
-                </Text>
-                <Text variant="caption" color={colors.text.primary} weight="semibold">
-                  {formatValue(item.value)}
-                </Text>
-              </View>
-            ))}
+            <View style={styles.legendColumn}>
+              {legendLeft.map((item, index) => (
+                <View key={`l-${index}`} style={styles.valueItem}>
+                  <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
+                  <Text variant="caption" color={colors.text.secondary} style={styles.valueLabel}>
+                    {item.name}:
+                  </Text>
+                  <Text variant="caption" color={colors.text.primary} weight="semibold">
+                    {formatValue(item.value)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.legendColumn}>
+              {legendRight.map((item, index) => (
+                <View key={`r-${index}`} style={styles.valueItem}>
+                  <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
+                  <Text variant="caption" color={colors.text.secondary} style={styles.valueLabel}>
+                    {item.name}:
+                  </Text>
+                  <Text variant="caption" color={colors.text.primary} weight="semibold">
+                    {formatValue(item.value)}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
       </View>
@@ -179,6 +208,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     width: '100%',
     paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  legendColumn: {
+    flex: 1,
+    minWidth: 0,
   },
   valueItem: {
     flexDirection: 'row',

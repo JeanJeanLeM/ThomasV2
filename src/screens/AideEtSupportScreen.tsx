@@ -19,12 +19,17 @@ import {
 } from '../design-system/icons';
 import { Text } from '../design-system/components';
 import { FAQ_CHAPTERS, type FaqChapter } from '../constants/onboarding';
+import InterfaceTourTarget from '../components/interface-tour/InterfaceTourTarget';
 
 interface AideEtSupportScreenProps {
   onStartTutorial?: () => void;
+  onStartInterfaceTour?: () => void;
 }
 
-export default function AideEtSupportScreen({ onStartTutorial }: AideEtSupportScreenProps) {
+export default function AideEtSupportScreen({
+  onStartTutorial,
+  onStartInterfaceTour,
+}: AideEtSupportScreenProps) {
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
 
@@ -71,6 +76,27 @@ export default function AideEtSupportScreen({ onStartTutorial }: AideEtSupportSc
 
           {/* Bouton tutoriel */}
           <View style={styles.section}>
+            <InterfaceTourTarget targetId="help.shortcut.interface">
+              <TouchableOpacity
+                style={styles.tutorialCard}
+                onPress={onStartInterfaceTour}
+                activeOpacity={0.8}
+              >
+                <View style={styles.tutorialIconContainer}>
+                  <Text style={styles.tutorialEmoji}>🧭</Text>
+                </View>
+                <View style={styles.tutorialContent}>
+                  <Text variant="h4" style={styles.tutorialTitle}>
+                    Presentation de l interface
+                  </Text>
+                  <Text variant="caption" style={styles.tutorialSubtitle}>
+                    Relancer la visite guidee des 4 onglets
+                  </Text>
+                </View>
+                <ChevronRightIcon color={colors.primary[600]} size={20} />
+              </TouchableOpacity>
+            </InterfaceTourTarget>
+
             <TouchableOpacity
               style={styles.tutorialCard}
               onPress={onStartTutorial}

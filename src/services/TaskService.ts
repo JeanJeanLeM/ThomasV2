@@ -20,7 +20,108 @@ export interface TaskStatisticsData {
   color: string;
 }
 
+export interface TaskMemberData {
+  user_id: string;
+  first_name: string;
+  last_name?: string | null;
+  full_name?: string | null;
+}
+
 export class TaskService {
+  static async getProfileFirstNamesByUserIds(userIds: string[]): Promise<Record<string, string>> {
+    if (!userIds || userIds.length === 0) return {};
+
+    try {
+      const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
+      const result = await DirectSupabaseService.directSelect(
+        'profiles',
+        'id,first_name,full_name,email',
+        [{ column: 'id', value: `(${uniqueUserIds.join(',')})`, operator: 'in' }]
+      );
+
+      if (result.error || !Array.isArray(result.data)) return {};
+
+      const namesByUserId: Record<string, string> = {};
+      for (const profile of result.data) {
+        if (!profile?.id) continue;
+        const fallback =
+          (typeof profile.full_name === 'string' && profile.full_name.trim().length > 0
+            ? profile.full_name.trim().split(' ')[0]
+            : null) ||
+          (typeof profile.email === 'string' && profile.email.includes('@')
+            ? profile.email.split('@')[0]
+            : null) ||
+          profile.id;
+        namesByUserId[profile.id] = profile.first_name || fallback;
+      }
+      return namesByUserId;
+    } catch (error) {
+      console.error('❌ [TASK-SERVICE] getProfileFirstNamesByUserIds failed:', error);
+      return {};
+    }
+  }
+
+  static async getTaskMembersByTaskIds(taskIds: string[]): Promise<Record<string, TaskMemberData[]>> {
+    if (!taskIds || taskIds.length === 0) return {};
+
+    try {
+      const uniqueTaskIds = Array.from(new Set(taskIds.filter(Boolean)));
+      const inClause = `(${uniqueTaskIds.join(',')})`;
+      const taskMembersByTaskId: Record<string, TaskMemberData[]> = {};
+
+      const taskMembersResult = await DirectSupabaseService.directSelect(
+        'task_members',
+        'task_id,user_id',
+        [{ column: 'task_id', value: inClause, operator: 'in' }]
+      );
+
+      if (taskMembersResult.error || !Array.isArray(taskMembersResult.data) || taskMembersResult.data.length === 0) {
+        return {};
+      }
+
+      const taskMembersRows = taskMembersResult.data as Array<{ task_id: string; user_id: string }>;
+      const uniqueUserIds = Array.from(new Set(taskMembersRows.map((row) => row.user_id).filter(Boolean)));
+      const profileById: Record<string, { first_name?: string | null; last_name?: string | null; full_name?: string | null }> = {};
+
+      if (uniqueUserIds.length > 0) {
+        const profilesResult = await DirectSupabaseService.directSelect(
+          'profiles',
+          'id,first_name,last_name,full_name',
+          [{ column: 'id', value: `(${uniqueUserIds.join(',')})`, operator: 'in' }]
+        );
+
+        if (!profilesResult.error && Array.isArray(profilesResult.data)) {
+          for (const profile of profilesResult.data) {
+            if (profile?.id) {
+              profileById[profile.id] = {
+                first_name: profile.first_name,
+                last_name: profile.last_name,
+                full_name: profile.full_name,
+              };
+            }
+          }
+        }
+      }
+
+      for (const row of taskMembersRows) {
+        if (!row.task_id || !row.user_id) continue;
+        const profile = profileById[row.user_id] || {};
+        const fallbackFirstName = (profile.full_name || row.user_id).split(' ')[0] || row.user_id;
+        if (!taskMembersByTaskId[row.task_id]) taskMembersByTaskId[row.task_id] = [];
+        taskMembersByTaskId[row.task_id].push({
+          user_id: row.user_id,
+          first_name: profile.first_name || fallbackFirstName,
+          last_name: profile.last_name || null,
+          full_name: profile.full_name || null,
+        });
+      }
+
+      return taskMembersByTaskId;
+    } catch (error) {
+      console.error('❌ [TASK-SERVICE] getTaskMembersByTaskIds failed:', error);
+      return {};
+    }
+  }
 
   /**
    * Get task statistics aggregated by category for pie chart
@@ -380,6 +481,50 @@ export class TaskService {
     });
 
     return Array.from(plotIds).sort((a, b) => a - b);
+  }
+
+  /**
+   * Chargement léger (plot_ids, plants) pour pré-filtrer les listes Culture / Parcelle
+   * selon les tâches présentes sur la période.
+   */
+  static async getPeriodReferenceHints(filters: TaskStatisticsFilters): Promise<{
+    taskCount: number;
+    plotIds: number[];
+    plantNames: string[];
+  }> {
+    try {
+      const conditions: WhereCondition[] = [
+        { column: 'farm_id', value: filters.farmId },
+        { column: 'is_active', value: true },
+        { column: 'date', value: filters.startDate.toISOString().split('T')[0], operator: 'gte' },
+        { column: 'date', value: filters.endDate.toISOString().split('T')[0], operator: 'lte' },
+      ];
+
+      if (filters.userId) {
+        conditions.push({ column: 'user_id', value: filters.userId });
+      }
+
+      const tasksResult = await DirectSupabaseService.directSelect(
+        'tasks',
+        'plot_ids,plants',
+        conditions
+      );
+
+      if (tasksResult.error || !tasksResult.data) {
+        return { taskCount: 0, plotIds: [], plantNames: [] };
+      }
+
+      const tasks = tasksResult.data as TaskRow[];
+
+      return {
+        taskCount: tasks.length,
+        plotIds: TaskService.extractPlotsFromTasks(tasks),
+        plantNames: TaskService.extractCulturesFromTasks(tasks),
+      };
+    } catch (error) {
+      console.error('❌ [TASK-SERVICE] getPeriodReferenceHints:', error);
+      return { taskCount: 0, plotIds: [], plantNames: [] };
+    }
   }
 }
 

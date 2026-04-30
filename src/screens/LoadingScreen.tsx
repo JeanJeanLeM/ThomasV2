@@ -107,7 +107,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
           color={colors.text.primary}
           style={{ marginBottom: spacing.md }}
         >
-          ThomasV1
+          Thomas
         </Text>
 
         <Text 

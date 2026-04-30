@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity } from 'react-native';
+import { View, TouchableOpacity, Linking } from 'react-native';
 import { Text } from '../Text';
 import { MessageImageGallery } from './MessageImageGallery';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,7 +30,9 @@ export const EnrichedMessage: React.FC<EnrichedMessageProps> = ({
   attachments = [],
 }) => {
   // Séparer les images, audios et autres pièces jointes
-  const imageAttachments = attachments.filter(att => att.type === 'image' && att.uri);
+  const imageAttachments = attachments.filter(att =>
+    att.type === 'image' && (att.uploadedUri || att.uri || att.data?.uploadPath || att.data?.filePath)
+  );
   const audioAttachments = attachments.filter(att => att.type === 'audio');
   const otherAttachments = attachments.filter(att => att.type !== 'image' && att.type !== 'audio');
 
@@ -55,10 +57,29 @@ export const EnrichedMessage: React.FC<EnrichedMessageProps> = ({
     switch (type) {
       case 'document': return colors.primary[500];
       case 'location': return colors.warning[500];
-      case 'task': return colors.info[500];
+      case 'task': return colors.semantic.info;
       case 'audio': return colors.secondary?.purple || colors.primary[500];
       default: return colors.gray[500];
     }
+  };
+
+  const openLocationAttachment = (attachment: MessageAttachment) => {
+    if (attachment.type !== 'location') return;
+    const latitude = attachment.data?.latitude;
+    const longitude = attachment.data?.longitude;
+    const mapsUrl = attachment.data?.maps_url || attachment.data?.mapsUrl;
+    const url = mapsUrl || (latitude && longitude ? `https://www.google.com/maps?q=${latitude},${longitude}` : undefined);
+    if (url) Linking.openURL(url);
+  };
+
+  const getLocationSubtitle = (attachment: MessageAttachment): string | null => {
+    if (attachment.type !== 'location') return null;
+    const latitude = attachment.data?.latitude;
+    const longitude = attachment.data?.longitude;
+    if (typeof latitude === 'number' && typeof longitude === 'number') {
+      return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+    }
+    return null;
   };
 
   return (
@@ -96,8 +117,9 @@ export const EnrichedMessage: React.FC<EnrichedMessageProps> = ({
         {imageAttachments.length > 0 && (
           <MessageImageGallery
             images={imageAttachments.map(att => ({
-              uri: att.uploadedUri || att.uri!, // Utiliser l'URI uploadée si disponible, sinon l'URI locale
+              uri: att.uploadedUri || att.uri || '',
               name: att.name,
+              storagePath: att.data?.uploadPath || att.data?.filePath,
             }))}
           />
         )}
@@ -186,6 +208,7 @@ export const EnrichedMessage: React.FC<EnrichedMessageProps> = ({
             {otherAttachments.map((attachment) => (
               <TouchableOpacity
                 key={attachment.id}
+                onPress={() => openLocationAttachment(attachment)}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -211,13 +234,26 @@ export const EnrichedMessage: React.FC<EnrichedMessageProps> = ({
                   />
                 </View>
                 
-                <Text style={{
-                  fontSize: 14,
-                  color: isUser ? '#ffffff' : colors.gray[700],
-                  flex: 1,
-                }}>
-                  {attachment.name}
-                </Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{
+                    fontSize: 14,
+                    color: isUser ? '#ffffff' : colors.gray[700],
+                    fontWeight: attachment.type === 'location' ? '600' : '400',
+                  }}>
+                    {attachment.type === 'location'
+                      ? (attachment.data?.address || attachment.name || 'Localisation')
+                      : attachment.name}
+                  </Text>
+                  {getLocationSubtitle(attachment) && (
+                    <Text style={{
+                      fontSize: 11,
+                      color: isUser ? 'rgba(255, 255, 255, 0.75)' : colors.gray[500],
+                      marginTop: 1,
+                    }}>
+                      {getLocationSubtitle(attachment)}
+                    </Text>
+                  )}
+                </View>
 
                 {attachment.type === 'location' && (
                   <Ionicons

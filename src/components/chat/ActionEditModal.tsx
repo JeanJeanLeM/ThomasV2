@@ -10,8 +10,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { PhytosanitaryProductService } from '../../services/PhytosanitaryProductService';
 import { DirectSupabaseService } from '../../services/DirectSupabaseService';
 import { cultureService } from '../../services/CultureService';
+import { farmMemberService } from '../../services/FarmMemberService';
 import { ActionData } from './AIResponseWithActions';
 import { parseISODate, formatToISODate } from '../../utils/dateUtils';
+import { ActionAttachmentsSection } from '../attachments/ActionAttachmentsSection';
 
 // Types d'actions disponibles
 const ACTION_TYPES: DropdownItem[] = [
@@ -196,6 +198,9 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
   const [plots, setPlots] = useState<DropdownItem[]>([]);
   const [surfaceUnits, setSurfaceUnits] = useState<DropdownItem[]>([]);
   const [materials, setMaterials] = useState<DropdownItem[]>([]);
+  const [farmMembers, setFarmMembers] = useState<DropdownItem[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [isPeopleManuallyEdited, setIsPeopleManuallyEdited] = useState(false);
   
   // Culture sélectionnée
   const [selectedCulture, setSelectedCulture] = useState<CultureDropdownItem | null>(null);
@@ -374,6 +379,9 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
     if (action && visible && activeFarm?.farm_id) {
       const data = action.extracted_data || {};
       const entities = action.matched_entities || {};
+      const initialMatchedMemberIds = Array.isArray((data as any).matched_member_ids)
+        ? ((data as any).matched_member_ids as string[]).filter(Boolean)
+        : [];
       
       const cropValue = data.crop || data.crops?.[0] || '';
       const normalizedCrop = normalizeCrop(cropValue);
@@ -441,6 +449,12 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
         category: data.category || '',
         notes: data.notes || '',
       });
+      setSelectedMemberIds(initialMatchedMemberIds);
+      setIsPeopleManuallyEdited(
+        typeof data.number_of_people === 'number' &&
+        data.number_of_people > 0 &&
+        data.number_of_people !== initialMatchedMemberIds.length
+      );
       
       // Charger le nom du produit de manière asynchrone
       loadProductName();
@@ -456,8 +470,16 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
     } else if (!action && visible) {
       // Réinitialiser si pas d'action
       setSelectedCulture(null);
+      setSelectedMemberIds([]);
+      setIsPeopleManuallyEdited(false);
     }
   }, [action, visible, activeFarm?.farm_id]);
+
+  useEffect(() => {
+    if (isPeopleManuallyEdited) return;
+    if (selectedMemberIds.length === 0) return;
+    setFormData((prev) => ({ ...prev, number_of_people: String(selectedMemberIds.length) }));
+  }, [selectedMemberIds, isPeopleManuallyEdited]);
 
   const loadFarmData = async () => {
     if (!activeFarm?.farm_id) {
@@ -529,11 +551,21 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
           description: m.brand ? `${m.brand} ${m.model || ''}`.trim() : undefined,
         })));
       }
+
+      const membersData = await farmMemberService.getFarmMembers(activeFarm.farm_id);
+      const memberItems: DropdownItem[] = membersData.map((member) => ({
+        id: member.userId,
+        label: member.user?.firstName || member.user?.email || member.userId,
+        type: member.role,
+        description: member.role,
+      }));
+      setFarmMembers(memberItems);
     } catch (error) {
       console.error('❌ [ActionEditModal] Erreur chargement données ferme:', error);
       setPlots([]);
       setSurfaceUnits([]);
       setMaterials([]);
+      setFarmMembers([]);
     } finally {
       setIsLoading(false);
     }
@@ -632,7 +664,10 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
           duration: formData.duration_value
             ? { value: parseFloat(formData.duration_value), unit: formData.duration_unit }
             : undefined,
-          number_of_people: parseInt(formData.number_of_people) || 1,
+          number_of_people: selectedMemberIds.length > 0 && !isPeopleManuallyEdited
+            ? selectedMemberIds.length
+            : (parseInt(formData.number_of_people) || 1),
+          matched_member_ids: selectedMemberIds,
           total_work_time: formData.duration_value
             ? { value: calculateTotalWorkTime(), unit: formData.duration_unit }
             : undefined,
@@ -660,6 +695,8 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
   };
 
   const isObservation = formData.action_type === 'observation';
+  const attachmentRecordType = isObservation ? 'observation' : 'task';
+  const attachmentRecordId = (action as any)?.record_id || action?.id || null;
 
   return (
     <Modal
@@ -784,9 +821,26 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
               label="Nombre de personnes"
               placeholder="Ex: 2"
               value={formData.number_of_people}
-              onChangeText={(value) => updateFormData('number_of_people', value)}
+              onChangeText={(value) => {
+                setIsPeopleManuallyEdited(true);
+                updateFormData('number_of_people', value);
+              }}
               keyboardType="numeric"
               hint="Incluez vous-même dans le compte"
+            />
+
+            <DropdownSelector
+              label="Membres de la ferme"
+              placeholder="Sélectionner les membres concernés"
+              items={farmMembers}
+              selectedItems={farmMembers.filter((member) => selectedMemberIds.includes(member.id))}
+              onSelectionChange={(items) => {
+                const ids = items.map((item) => item.id);
+                setSelectedMemberIds(ids);
+              }}
+              multiSelect
+              searchable
+              hint="Associe des profils à la tâche pour le suivi personnel"
             />
 
             {/* Affichage du temps total calculé */}
@@ -1097,6 +1151,15 @@ export const ActionEditModal: React.FC<ActionEditModalProps> = ({
               hint="Optionnel - Laissez vide si rien à signaler"
             />
           </View>
+
+          {action && attachmentRecordId && (
+            <ActionAttachmentsSection
+              recordType={attachmentRecordType}
+              recordId={attachmentRecordId}
+              farmId={activeFarm?.farm_id}
+              userId={user?.id}
+            />
+          )}
 
           {/* Zone de danger - Suppression */}
           <View style={{

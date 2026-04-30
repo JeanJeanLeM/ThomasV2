@@ -7,13 +7,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFarm, useFarmTasks } from '../contexts/FarmContext';
 import { TaskService } from '../services/TaskService';
 import { ObservationService } from '../services/ObservationService';
+import { DirectSupabaseService } from '../services/DirectSupabaseService';
 import { ensureTasksForHorizon } from '../services/RecurringTaskGenerationService';
+import { ActionAttachmentService } from '../services/ActionAttachmentService';
 import { UnifiedTaskCard } from '../design-system/components/cards/UnifiedTaskCard';
 import { UnifiedObservationCard } from '../design-system/components/cards/UnifiedObservationCard';
 import { CompactTaskCard } from '../design-system/components/cards/CompactTaskCard';
 import { CompactObservationCard } from '../design-system/components/cards/CompactObservationCard';
 import { TaskEditModal } from '../design-system/components/modals/TaskEditModal';
 import { ActionEditModal } from '../components/chat/ActionEditModal';
+import InterfaceTourTarget from '../components/interface-tour/InterfaceTourTarget';
 import { TaskData } from '../design-system/components/cards/TaskCard';
 import { ObservationData } from '../design-system/components/cards/ObservationCard';
 import { ActionData } from '../components/chat/AIResponseWithActions';
@@ -29,8 +32,7 @@ import {
   CalendarIcon,
   ViewListIcon,
   ViewGridIcon,
-  ArrowPathIcon,
-  TrashIcon
+  ArrowPathIcon
 } from '../design-system/icons';
 
 // Layout constants
@@ -69,7 +71,11 @@ interface DBObservation {
   created_at: string;
 }
 
-export default function TasksScreen() {
+interface TasksScreenProps {
+  readOnlyMode?: boolean;
+}
+
+export default function TasksScreen({ readOnlyMode = false }: TasksScreenProps = {}) {
   const { user } = useAuth();
   const { activeFarm, loading: farmLoading, farmData, invalidateFarmData, refreshFarmDataSilently } = useFarm();
   const { tasks: farmTasks, loading: tasksLoading } = useFarmTasks();
@@ -79,6 +85,7 @@ export default function TasksScreen() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [filter, setFilter] = useState<FilterType>('all');
+  const [myTasksOnly, setMyTasksOnly] = useState(false);
   const [isCompactView, setIsCompactView] = useState<boolean>(false);
   
   // État des modales
@@ -92,6 +99,8 @@ export default function TasksScreen() {
   const [observations, setObservations] = useState<ObservationData[]>([]);
   const [observationsLoading, setObservationsLoading] = useState(false); // Commencer à false pour afficher le cache immédiatement
   const [isRefreshing, setIsRefreshing] = useState(false); // État pour le rafraîchissement en arrière-plan
+  const [taskAttachmentCounts, setTaskAttachmentCounts] = useState<Record<string, { imageCount: number; hasLocation: boolean }>>({});
+  const [observationAttachmentCounts, setObservationAttachmentCounts] = useState<Record<string, { imageCount: number; hasLocation: boolean }>>({});
   
   // State for optimistic deletion
   const [deletingTasks, setDeletingTasks] = useState<Set<string>>(new Set());
@@ -101,6 +110,12 @@ export default function TasksScreen() {
   
   // État pour la modale de sélection d'année
   const [showYearModal, setShowYearModal] = useState(false);
+
+  const guardReadOnlyMode = () => {
+    if (!readOnlyMode) return false;
+    Alert.alert('Mode demonstration', 'Les modifications sont desactivees sur la ferme demo.');
+    return true;
+  };
 
   // ===== useEffect - APRÈS LES useState =====
   
@@ -141,6 +156,21 @@ export default function TasksScreen() {
       })();
     }
   }, [activeFarm?.farm_id, user?.id]);
+
+  useEffect(() => {
+    const loadAttachmentCounts = async () => {
+      const taskIds = farmTasks.map((task: any) => String(task.id)).filter(Boolean);
+      const observationIds = observations.map((observation) => String(observation.id)).filter(Boolean);
+      const [taskCounts, observationCounts] = await Promise.all([
+        ActionAttachmentService.getCountsForTasks(taskIds),
+        ActionAttachmentService.getCountsForObservations(observationIds),
+      ]);
+      setTaskAttachmentCounts(taskCounts);
+      setObservationAttachmentCounts(observationCounts);
+    };
+
+    loadAttachmentCounts();
+  }, [farmTasks, observations, showActionModal]);
 
   // Charger la préférence d'affichage compact au montage
   useEffect(() => {
@@ -186,37 +216,6 @@ export default function TasksScreen() {
     } finally {
       setIsRefreshing(false);
     }
-  };
-
-  // Supprimer toutes les tâches planifiées (en_attente, en_cours) de la ferme
-  const handleDeleteAllPlanned = () => {
-    if (!activeFarm?.farm_id) return;
-    Alert.alert(
-      'Supprimer les tâches planifiées',
-      'Seules les tâches en attente ou en cours seront supprimées. Les tâches déjà effectuées (terminées) ne sont jamais supprimées et restent affichées. Continuer ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            setIsRefreshing(true);
-            try {
-              const { deleted } = await TaskService.deleteAllPlannedTasksForFarm(activeFarm.farm_id);
-              await refreshFarmDataSilently(['tasks']);
-              if (deleted > 0) {
-                Alert.alert('Succès', `${deleted} tâche(s) planifiée(s) supprimée(s).`);
-              }
-            } catch (err) {
-              console.error('❌ [TasksScreen] Erreur suppression tâches planifiées:', err);
-              Alert.alert('Erreur', 'Impossible de supprimer les tâches planifiées.');
-            } finally {
-              setIsRefreshing(false);
-            }
-          },
-        },
-      ]
-    );
   };
 
   // Charger les observations depuis la base de données (les tâches viennent du FarmContext)
@@ -395,16 +394,30 @@ export default function TasksScreen() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
+  const isTaskAttributedToCurrentUser = (task: TaskData): boolean => {
+    if (!user?.id) return true;
+    const hasMemberAttribution = Array.isArray(task.members) && task.members.length > 0;
+    if (hasMemberAttribution) {
+      return task.members!.some((member) => member.user_id === user.id);
+    }
+    return task.user_id === user.id;
+  };
+
+  const filterTasksByOwnership = (tasks: TaskData[]): TaskData[] => {
+    if (!myTasksOnly) return tasks;
+    return tasks.filter(isTaskAttributedToCurrentUser);
+  };
+
   // Filtrage des données par date et type
   const filteredData = () => {
     const selectedDateStr = selectedDate.toDateString();
     const selectedLocalYMD = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
     // Filtrer par date calendaire (YMD) pour éviter décalage fuseau avec new Date("YYYY-MM-DD")
-    const tasksForDate = farmTasks.filter(task => {
+    const tasksForDate = filterTasksByOwnership(farmTasks.filter(task => {
       const taskYMD = toTaskDateYMD(task.date);
       return taskYMD === selectedLocalYMD && !hiddenTasks.has(task.id);
-    });
+    }));
 
     const observationsForDate = observations.filter(obs => {
       const obsDate = normalizeDate(obs.date);
@@ -446,7 +459,9 @@ export default function TasksScreen() {
     const selectedLocalYMD = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
     // Compter seulement les éléments de la date sélectionnée (YMD pour tâches = pas de décalage fuseau)
-    const tasksForDate = farmTasks.filter(task => toTaskDateYMD(task.date) === selectedLocalYMD);
+    const tasksForDate = filterTasksByOwnership(
+      farmTasks.filter(task => toTaskDateYMD(task.date) === selectedLocalYMD)
+    );
     const observationsForDate = observations.filter(obs => {
       const obsDate = normalizeDate(obs.date);
       return obsDate.toDateString() === selectedDateStr;
@@ -469,6 +484,7 @@ export default function TasksScreen() {
 
   // Handlers pour l'édition
   const handleTaskEdit = (task: TaskData) => {
+    if (guardReadOnlyMode()) return;
     // Convertir la tâche en action pour utiliser ActionEditModal
     const actionData = convertTaskToAction(task);
     setEditingAction(actionData);
@@ -477,6 +493,7 @@ export default function TasksScreen() {
   };
 
   const handleObservationEdit = (observation: ObservationData) => {
+    if (guardReadOnlyMode()) return;
     // Convertir l'observation en action pour utiliser ActionEditModal
     const actionData = convertObservationToAction(observation);
     setEditingAction(actionData);
@@ -484,7 +501,41 @@ export default function TasksScreen() {
     setShowActionModal(true);
   };
 
+  const syncTaskMembers = async (taskId: string, memberIds: string[]) => {
+    const uniqueMemberIds = Array.from(new Set((memberIds || []).filter(Boolean)));
+
+    const existingRes = await DirectSupabaseService.directSelect(
+      'task_members',
+      'id,user_id',
+      [{ column: 'task_id', value: taskId }]
+    );
+
+    if (existingRes.error) {
+      console.warn('⚠️ [TASK-MEMBERS] Unable to load existing task members:', existingRes.error);
+      return;
+    }
+
+    const existingRows: Array<{ id: string; user_id: string }> = Array.isArray(existingRes.data) ? existingRes.data : [];
+    const existingUserIds = new Set(existingRows.map((row) => row.user_id));
+
+    for (const existing of existingRows) {
+      if (!uniqueMemberIds.includes(existing.user_id)) {
+        await DirectSupabaseService.directDelete('task_members', [{ column: 'id', value: existing.id }]);
+      }
+    }
+
+    for (const memberId of uniqueMemberIds) {
+      if (existingUserIds.has(memberId)) continue;
+      await DirectSupabaseService.directInsert('task_members', {
+        task_id: taskId,
+        user_id: memberId,
+        role: 'participant',
+      });
+    }
+  };
+
   const handleTaskSave = async (updatedTask: TaskData) => {
+    if (guardReadOnlyMode()) return;
     console.log('💾 [TASK-SAVE] Sauvegarde tâche:', updatedTask);
     
     try {
@@ -519,6 +570,14 @@ export default function TasksScreen() {
       console.log('📅 [TASK-SAVE] Date traitée:', taskDate);
       
       // Préparer les données pour la base de données
+      const selectedMemberIds = (updatedTask.members || []).map((member) => member.user_id).filter(Boolean);
+      const explicitPeopleCount = typeof updatedTask.number_of_people === 'number'
+        ? updatedTask.number_of_people
+        : undefined;
+      const resolvedPeopleCount = explicitPeopleCount && explicitPeopleCount > 0
+        ? explicitPeopleCount
+        : (selectedMemberIds.length > 0 ? selectedMemberIds.length : 1);
+
       const taskUpdate: any = {
         title: updatedTask.title,
         date: taskDate,
@@ -526,7 +585,7 @@ export default function TasksScreen() {
         action: updatedTask.action,
         standard_action: (updatedTask as any).standard_action ?? null,
         duration_minutes: updatedTask.duration_minutes,
-        number_of_people: updatedTask.number_of_people,
+        number_of_people: resolvedPeopleCount,
         plants: updatedTask.plants,
         plot_ids: toNumericIds(updatedTask.plot_ids as Array<string | number> | undefined),
         surface_unit_ids: toNumericIds(updatedTask.surface_unit_ids as Array<string | number> | undefined),
@@ -552,7 +611,7 @@ export default function TasksScreen() {
         quantity_nature: updatedTask.quantity_nature,
         quantity_converted: updatedTask.quantity_converted,
         quantity_type: updatedTask.quantity_type,
-      });
+      } as any);
       // Conserver l'AMM si présent (ne pas le modifier depuis l'UI)
       if (updatedTask.phytosanitary_product_amm !== undefined) {
         taskUpdate.phytosanitary_product_amm = updatedTask.phytosanitary_product_amm;
@@ -560,6 +619,7 @@ export default function TasksScreen() {
 
       // Mettre à jour la tâche en base de données
       await TaskService.updateTask(updatedTask.id, taskUpdate);
+      await syncTaskMembers(updatedTask.id, selectedMemberIds);
       
       console.log('✅ [TASK-SAVE] Tâche mise à jour avec succès');
       
@@ -576,6 +636,7 @@ export default function TasksScreen() {
   };
 
   const handleActionSave = async (updatedAction: ActionData) => {
+    if (guardReadOnlyMode()) return;
     console.log('💾 [ACTION-SAVE] Sauvegarde action:', updatedAction);
     
     try {
@@ -589,7 +650,7 @@ export default function TasksScreen() {
         if (updatedAction.action_type === 'observation') {
           // Créer une observation
           const observationData: any = {
-            title: updatedAction.extracted_data?.issue || updatedAction.action || 'Observation sans titre',
+            title: updatedAction.extracted_data?.issue || (updatedAction as any).action || 'Observation sans titre',
             category: updatedAction.extracted_data?.category || 'autre',
             nature: updatedAction.extracted_data?.notes || '',
             crop: updatedAction.extracted_data?.crops?.[0] || updatedAction.extracted_data?.crop,
@@ -605,10 +666,20 @@ export default function TasksScreen() {
           
         } else {
           // Créer une tâche (task_done ou task_planned)
+          const extractedMemberIds = Array.isArray((updatedAction.extracted_data as any)?.matched_member_ids)
+            ? ((updatedAction.extracted_data as any).matched_member_ids as string[]).filter(Boolean)
+            : [];
+          const explicitPeopleCount = typeof updatedAction.extracted_data?.number_of_people === 'number'
+            ? updatedAction.extracted_data.number_of_people
+            : undefined;
+          const resolvedPeopleCount = explicitPeopleCount && explicitPeopleCount > 0
+            ? explicitPeopleCount
+            : (extractedMemberIds.length > 0 ? extractedMemberIds.length : undefined);
+
           const taskData: any = {
-            title: updatedAction.action || updatedAction.extracted_data?.action || 'Tâche sans titre',
+            title: (updatedAction as any).action || updatedAction.extracted_data?.action || 'Tâche sans titre',
             description: updatedAction.extracted_data?.notes,
-            action: updatedAction.extracted_data?.action || updatedAction.action,
+            action: updatedAction.extracted_data?.action || (updatedAction as any).action,
             date: updatedAction.extracted_data?.date || new Date().toISOString().split('T')[0],
             time: updatedAction.extracted_data?.time,
             status: updatedAction.action_type === 'task_done' ? 'terminee' : 'en_attente',
@@ -616,7 +687,7 @@ export default function TasksScreen() {
             user_id: user?.id,
             is_active: true,
             duration_minutes: updatedAction.extracted_data?.duration?.value,
-            number_of_people: updatedAction.extracted_data?.number_of_people,
+            number_of_people: resolvedPeopleCount,
             plants: updatedAction.extracted_data?.crops,
             plot_ids: updatedAction.matched_entities?.plot_ids,
             surface_unit_ids: updatedAction.matched_entities?.surface_unit_ids,
@@ -627,13 +698,14 @@ export default function TasksScreen() {
             quantity_converted_value: updatedAction.extracted_data?.quantity_converted?.value,
             quantity_converted_unit: updatedAction.extracted_data?.quantity_converted?.unit,
             quantity_nature: updatedAction.extracted_data?.quantity_nature,
-            quantity_type: sanitizeQuantityType(updatedAction.extracted_data),
+        quantity_type: sanitizeQuantityType(updatedAction.extracted_data as any),
             phytosanitary_product_amm: (updatedAction as any).phytosanitary_product_amm || null,
             notes: updatedAction.extracted_data?.notes
           };
           
           console.log('📝 [ACTION-SAVE] Création tâche:', taskData);
-          await TaskService.createTask(taskData);
+          const createdTask = await TaskService.createTask(taskData);
+          await syncTaskMembers(createdTask.id, extractedMemberIds);
         }
         
         console.log('✅ [ACTION-SAVE] Élément créé avec succès');
@@ -670,6 +742,7 @@ export default function TasksScreen() {
 
 
   const handleTaskDelete = async (taskId: string) => {
+    if (guardReadOnlyMode()) return;
     console.log('🗑️ [TASKS-SCREEN] Starting optimistic task deletion:', taskId);
     
     // 1. Start animation immediately
@@ -710,6 +783,7 @@ export default function TasksScreen() {
   };
 
   const handleObservationDelete = async (observationId: string) => {
+    if (guardReadOnlyMode()) return;
     console.log('🗑️ [TASKS-SCREEN] Starting optimistic observation deletion:', observationId);
     
     // 1. Start animation immediately
@@ -771,6 +845,7 @@ export default function TasksScreen() {
   };
 
   const handleObservationSave = async (updatedObservation: ObservationData) => {
+    if (guardReadOnlyMode()) return;
     console.log('💾 [OBSERVATION-SAVE] Sauvegarde observation:', updatedObservation);
     
     try {
@@ -829,13 +904,13 @@ export default function TasksScreen() {
 
 
   const handleNewTask = () => {
+    if (guardReadOnlyMode()) return;
     // Créer une action vide pré-remplie avec la date sélectionnée et la ferme active
     const newAction: ActionData = {
       id: `temp_${Date.now()}`, // ID temporaire pour identifier les nouvelles actions
       action_type: 'task_planned', // Type par défaut
       action: '',
       extracted_data: {
-        action_type: 'task_planned',
         action_verb: '',
         date: selectedDate.toISOString().split('T')[0], // Date sélectionnée dans le calendrier
         farm_id: activeFarm?.farm_id,
@@ -892,7 +967,7 @@ export default function TasksScreen() {
             Chargement des données...
           </Text>
           <Text variant="body" color={colors.gray[500]} style={{ textAlign: 'center' }}>
-            {activeFarm.name}
+            {activeFarm.farm_name}
           </Text>
         </View>
       );
@@ -924,7 +999,7 @@ export default function TasksScreen() {
     return filteredItems.map((item) => {
       // Si c'est une tâche
       if ('type' in item) {
-        const task = item as TaskData;
+        const task = item as unknown as TaskData;
         
         // Choisir le composant selon le mode d'affichage
         if (isCompactView) {
@@ -932,6 +1007,7 @@ export default function TasksScreen() {
             <CompactTaskCard
               key={task.id}
               task={task}
+              attachmentSummary={taskAttachmentCounts[task.id]}
               onPress={() => handleTaskEdit(task)}
               onDelete={() => handleTaskDelete(task.id)}
               onDeleteComplete={() => handleTaskDeleteComplete(task.id)}
@@ -943,6 +1019,7 @@ export default function TasksScreen() {
             <UnifiedTaskCard
               key={task.id}
               task={task}
+              attachmentSummary={taskAttachmentCounts[task.id]}
               onPress={() => handleTaskEdit(task)}
               onEdit={() => handleTaskEdit(task)}
               onDelete={() => handleTaskDelete(task.id)}
@@ -962,6 +1039,7 @@ export default function TasksScreen() {
           <CompactObservationCard
             key={observation.id}
             observation={observation}
+            attachmentSummary={observationAttachmentCounts[observation.id]}
             onPress={() => handleObservationEdit(observation)}
             onDelete={() => handleObservationDelete(observation.id)}
             onDeleteComplete={() => handleObservationDeleteComplete(observation.id)}
@@ -973,6 +1051,7 @@ export default function TasksScreen() {
           <UnifiedObservationCard
             key={observation.id}
             observation={observation}
+            attachmentSummary={observationAttachmentCounts[observation.id]}
             onPress={() => handleObservationEdit(observation)}
             onEdit={() => handleObservationEdit(observation)}
             onDelete={() => handleObservationDelete(observation.id)}
@@ -1009,86 +1088,97 @@ export default function TasksScreen() {
           </Text>
             </View>
           
-          <Button
-              title="Nouvelle"
-            variant="primary"
-              size="sm"
-            leftIcon={<PlusIcon color={colors.text.inverse} />}
-              onPress={handleNewTask}
-          />
+          <InterfaceTourTarget targetId="tasks.new">
+            <Button
+                title="Nouvelle"
+              variant="primary"
+                size="sm"
+              leftIcon={<PlusIcon color={colors.text.inverse} />}
+                onPress={handleNewTask}
+            />
+          </InterfaceTourTarget>
         </View>
 
           {/* Navigation semaine */}
-          <View style={styles.weekNavigation}>
-            <TouchableOpacity
-              onPress={() => navigateWeek('prev')}
-              style={styles.navButton}
-            >
-              <ChevronLeftIcon color={colors.primary[600]} size={20} />
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.weekInfo}
-              onPress={() => setShowYearModal(true)}
-            >
-              <Text variant="body" weight="semibold" color={colors.text.primary}>
-                Semaine {getCurrentWeekNumber(currentWeek)} - {currentWeek.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
-              </Text>
-              <Text variant="bodySmall" color={colors.gray[600]}>
-                {getWeekLabel(currentWeek)}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => navigateWeek('next')}
-              style={styles.navButton}
-            >
-              <ChevronRightIcon color={colors.primary[600]} size={20} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Jours de la semaine */}
-        <View style={styles.daysRow}>
-            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((day, index) => {
-              // Calculer la date pour ce jour de la semaine
-              const startOfWeek = new Date(currentWeek);
-              startOfWeek.setDate(currentWeek.getDate() - currentWeek.getDay() + 1); // Lundi
-              const dayDate = new Date(startOfWeek);
-              dayDate.setDate(startOfWeek.getDate() + index);
-              
-              const isToday = dayDate.toDateString() === today.toDateString();
-              const isSelected = dayDate.toDateString() === selectedDate.toDateString();
-              
-              return (
-                <TouchableOpacity 
-                  key={day} 
-                  style={styles.dayItem}
-                  onPress={() => setSelectedDate(new Date(dayDate))}
+          <InterfaceTourTarget targetId="tasks.calendar">
+            <View>
+              <View style={styles.weekNavigation}>
+                <TouchableOpacity
+                  onPress={() => navigateWeek('prev')}
+                  style={styles.navButton}
                 >
-                  <Text variant="caption" color={colors.gray[500]} style={styles.dayLabel}>
-                    {day}
-                  </Text>
-                  <View style={[
-                    styles.dayCell,
-                    isSelected && styles.dayCellSelected,
-                    isToday && styles.dayCellToday,
-                    !isSelected && { backgroundColor: 'transparent' }
-                  ]}>
-                    <Text 
-                      variant="bodySmall" 
-                      weight={isSelected ? 'semibold' : 'normal'}
-                      color={isSelected ? colors.text.inverse : colors.gray[700]}
-                    >
-                      {dayDate.getDate()}
-                    </Text>
-                  </View>
+                  <ChevronLeftIcon color={colors.primary[600]} size={20} />
                 </TouchableOpacity>
-              );
-            })}
-          </View>
+
+                <TouchableOpacity 
+                  style={styles.weekInfo}
+                  onPress={() => setShowYearModal(true)}
+                >
+                  <Text variant="body" weight="semibold" color={colors.text.primary}>
+                    Semaine {getCurrentWeekNumber(currentWeek)} - {currentWeek.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                  </Text>
+                  <Text variant="bodySmall" color={colors.gray[600]}>
+                    {getWeekLabel(currentWeek)}
+                  </Text>
+                </TouchableOpacity>
+
+                <InterfaceTourTarget targetId="tasks.week.next">
+                  <TouchableOpacity
+                    onPress={() => navigateWeek('next')}
+                    style={styles.navButton}
+                  >
+                    <ChevronRightIcon color={colors.primary[600]} size={20} />
+                  </TouchableOpacity>
+                </InterfaceTourTarget>
+              </View>
+
+              {/* Jours de la semaine */}
+              <InterfaceTourTarget targetId="tasks.day.selector">
+                <View style={styles.daysRow}>
+                  {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((day, index) => {
+                    // Calculer la date pour ce jour de la semaine
+                    const startOfWeek = new Date(currentWeek);
+                    startOfWeek.setDate(currentWeek.getDate() - currentWeek.getDay() + 1); // Lundi
+                    const dayDate = new Date(startOfWeek);
+                    dayDate.setDate(startOfWeek.getDate() + index);
+                    
+                    const isToday = dayDate.toDateString() === today.toDateString();
+                    const isSelected = dayDate.toDateString() === selectedDate.toDateString();
+                    
+                    return (
+                      <TouchableOpacity 
+                        key={day} 
+                        style={styles.dayItem}
+                        onPress={() => setSelectedDate(new Date(dayDate))}
+                      >
+                        <Text variant="caption" color={colors.gray[500]} style={styles.dayLabel}>
+                          {day}
+                        </Text>
+                        <View style={[
+                          styles.dayCell,
+                          isSelected && styles.dayCellSelected,
+                          isToday && styles.dayCellToday,
+                          !isSelected && { backgroundColor: 'transparent' }
+                        ]}>
+                          <Text 
+                            variant="bodySmall" 
+                            weight={isSelected ? 'semibold' : 'normal'}
+                            color={isSelected ? colors.text.inverse : colors.gray[700]}
+                          >
+                            {dayDate.getDate()}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </InterfaceTourTarget>
+            </View>
+          </InterfaceTourTarget>
         </View>
 
         {/* Filtres par type */}
+        <InterfaceTourTarget targetId="tasks.filters">
         <View style={styles.filterSection}>
           <View style={styles.filterHeader}>
             <Text variant="body" weight="semibold">
@@ -1123,15 +1213,6 @@ export default function TasksScreen() {
                 ) : (
                   <ViewListIcon color={colors.primary[600]} size={20} />
                 )}
-              </TouchableOpacity>
-              {/* Supprimer toutes les tâches planifiées */}
-              <TouchableOpacity
-                onPress={handleDeleteAllPlanned}
-                disabled={isRefreshing}
-                style={[styles.viewToggleButton, isRefreshing && { opacity: 0.6 }]}
-                accessibilityLabel="Supprimer toutes les tâches planifiées"
-              >
-                <TrashIcon color={colors.semantic?.error ?? '#b91c1c'} size={20} />
               </TouchableOpacity>
             </View>
           </View>
@@ -1177,12 +1258,33 @@ export default function TasksScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+          <View style={{ marginTop: spacing.sm }}>
+            <TouchableOpacity
+              onPress={() => setMyTasksOnly((prev) => !prev)}
+              style={[
+                styles.filterChip,
+                myTasksOnly && styles.filterChipActive,
+                { alignSelf: 'flex-start', marginRight: 0 }
+              ]}
+            >
+              <Text
+                variant="bodySmall"
+                color={myTasksOnly ? colors.text.inverse : colors.gray[700]}
+                weight="semibold"
+              >
+                Mes taches uniquement
+              </Text>
+            </TouchableOpacity>
+          </View>
               </View>
+        </InterfaceTourTarget>
 
         {/* Liste des cartes filtrées */}
-        <View style={styles.cardsContainer}>
-          {renderCardsContent()}
-              </View>
+        <InterfaceTourTarget targetId="tasks.card">
+          <View style={styles.cardsContainer}>
+            {renderCardsContent()}
+          </View>
+        </InterfaceTourTarget>
       </ScrollView>
 
       {/* Modales d'édition */}

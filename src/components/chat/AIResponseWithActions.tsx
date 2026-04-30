@@ -17,6 +17,7 @@ import { PlotService } from '../../services/plotService';
 import { ConversionService } from '../../services/ConversionService';
 import { hasQuantityData, sanitizeQuantityType } from '../../utils/quantityUtils';
 import { MaterialService } from '../../services/MaterialService';
+import InterfaceTourTarget from '../interface-tour/InterfaceTourTarget';
 
 // Interface alignée avec le schéma DB tasks + chat_analyzed_actions
 export interface ActionData {
@@ -47,6 +48,7 @@ export interface ActionData {
     quantity_converted?: { value: number; unit: string; original?: any };
     duration?: { value: number; unit: string };  // duration_minutes
     number_of_people?: number;  // Nombre de personnes
+    matched_member_ids?: string[]; // IDs des membres associés à la tâche
     total_work_time?: { value: number; unit: string };  // Temps total = duration × personnes
     
     // Temps
@@ -256,10 +258,11 @@ const ActionCard: React.FC<{
   action: ActionData;
   index: number;
   total: number;
+  currentUserFirstName?: string;
   onValidate?: (index: number, action: ActionData) => void;
   onEdit?: (index: number, action: ActionData) => void;
   onReject?: (index: number, action: ActionData) => void;
-}> = memo(({ action, index, total, onValidate, onEdit, onReject }) => {
+}> = memo(({ action, index, total, currentUserFirstName, onValidate, onEdit, onReject }) => {
   const config = getActionConfig(action.action_type);
   const [isExpanded, setIsExpanded] = useState(true); // Ouvert par défaut
 
@@ -465,6 +468,16 @@ const ActionCard: React.FC<{
             />
           )}
 
+          {/* Auteur de saisie */}
+          {!!currentUserFirstName && (
+            <Tag
+              icon="✍️"
+              text={currentUserFirstName}
+              bgColor="#ecfeff"
+              textColor="#0e7490"
+            />
+          )}
+
           {/* Temps total de travail (durée × personnes) */}
           {!!(data.duration && data.duration.value > 0 && data.number_of_people && data.number_of_people > 1) && (
             <Tag 
@@ -655,6 +668,21 @@ export const AIResponseWithActions: React.FC<AIResponseWithActionsProps> = ({
   const hasVisibleMessage = typeof message === 'string' && message.trim().length > 0;
   const { activeFarm } = useFarm();
   const { user } = useAuth();
+  const currentUserFirstName = (() => {
+    const metadata = (user?.user_metadata || {}) as Record<string, unknown>;
+    const firstName = metadata.first_name;
+    if (typeof firstName === 'string' && firstName.trim().length > 0) {
+      return firstName.trim();
+    }
+    const fullName = metadata.full_name;
+    if (typeof fullName === 'string' && fullName.trim().length > 0) {
+      return fullName.trim().split(' ')[0] || '';
+    }
+    if (typeof user?.email === 'string' && user.email.includes('@')) {
+      return user.email.split('@')[0] || '';
+    }
+    return '';
+  })();
   
   // État pour le modal d'édition
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -851,17 +879,28 @@ export const AIResponseWithActions: React.FC<AIResponseWithActionsProps> = ({
           </View>
 
           {/* Liste des cards */}
-          {actions.map((action, index) => (
-            <ActionCard
-              key={action.id ? `action-${String(action.id)}-${index}` : `action-${index}`}
-              action={action}
-              index={index}
-              total={actions.length}
-              onValidate={onValidateAction}
-              onEdit={handleEditAction}
-              onReject={onRejectAction}
-            />
-          ))}
+          {actions.map((action, index) => {
+            const cardKey = action.id ? `action-${String(action.id)}-${index}` : `action-${index}`;
+            const card = (
+              <ActionCard
+                action={action}
+                index={index}
+                total={actions.length}
+                currentUserFirstName={currentUserFirstName}
+                onValidate={onValidateAction}
+                onEdit={handleEditAction}
+                onReject={onRejectAction}
+              />
+            );
+            if (index === 0) {
+              return (
+                <InterfaceTourTarget key={cardKey} targetId="chat.response.card">
+                  {card}
+                </InterfaceTourTarget>
+              );
+            }
+            return <React.Fragment key={cardKey}>{card}</React.Fragment>;
+          })}
         </View>
       )}
 

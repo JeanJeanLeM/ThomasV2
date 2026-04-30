@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, TextInput, TouchableOpacity, Alert, LayoutAnimation, Platform } from 'react-native';
+import { View, ScrollView, TextInput, TouchableOpacity, Alert, LayoutAnimation, Platform, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, ChatTypeModal } from '../design-system/components';
 import { colors } from '../design-system/colors';
@@ -9,22 +9,49 @@ import { ChatServiceDirect as ChatService, ChatSession } from '../services/ChatS
 import { useFarm } from '../contexts/FarmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { ChatCacheService } from '../services/ChatCacheService';
+import InterfaceTourTarget from './interface-tour/InterfaceTourTarget';
+
+function normalizeChatTitle(rawTitle: string): string {
+  const title = (rawTitle || '').trim();
+  if (/^chat partagé\s*-\s*\d{1,2}\/\d{1,2}\/\d{2,4}$/i.test(title)) {
+    return 'Chat partagé';
+  }
+  return title || 'Nouveau chat';
+}
+
+function buildDisplayChatTitle(session: ChatSession): string {
+  const baseTitle = normalizeChatTitle(session.title);
+  const creatorFirstName = session.creator_first_name?.trim();
+
+  if (session.is_shared && creatorFirstName) {
+    const prefix = `${creatorFirstName} - `;
+    if (baseTitle.toLowerCase().startsWith(prefix.toLowerCase())) {
+      return baseTitle;
+    }
+    return `${prefix}${baseTitle}`;
+  }
+
+  return baseTitle;
+}
 
 // Adapter ChatSession vers ChatData pour compatibilité UI
 function adaptChatSessionToChatData(session: ChatSession): ChatData {
   return {
     id: session.id,
-    title: session.title,
+    title: buildDisplayChatTitle(session),
     lastMessage: session.last_message_content || 'Nouveau chat',
     timestamp: new Date(session.last_message_at || session.created_at),
     isArchived: !!session.archived_at,
-    messageCount: session.message_count
+    messageCount: session.message_count,
+    is_shared: session.is_shared,
+    creator_first_name: session.creator_first_name,
   };
 }
 
 export type Chat = ChatData;
 
 const ONBOARDING_HELP_SHORTCUT_SCREEN = 'ONBOARDING_TUTORIAL';
+const INTERFACE_TOUR_SHORTCUT_SCREEN = 'PRESENTATION_INTERFACE';
 const ONBOARDING_INTRO_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_INTRO_CONTINUE';
 const ONBOARDING_CHAT_TITLE = 'Onboarding & aide rapide';
 
@@ -33,22 +60,35 @@ function getUserFirstName(
   email: string | undefined
 ): string {
   if (userMetadata) {
-    const firstName = userMetadata.first_name;
+    const firstName = userMetadata['first_name'];
     if (typeof firstName === 'string' && firstName.trim().length > 0) {
       return firstName.trim();
     }
 
-    const fullName = userMetadata.full_name;
+    const fullName = userMetadata['full_name'];
     if (typeof fullName === 'string' && fullName.trim().length > 0) {
-      return fullName.trim().split(' ')[0];
+      const [candidate] = fullName.trim().split(' ');
+      return candidate ?? '';
     }
   }
 
   if (email && email.includes('@')) {
-    return email.split('@')[0];
+    const [candidate] = email.split('@');
+    return candidate ?? '';
   }
 
   return '';
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'Erreur inconnue';
+}
+
+function buildPrivateChatTitle(userMetadata: Record<string, unknown> | undefined, email: string | undefined): string {
+  const firstName = getUserFirstName(userMetadata, email);
+  return firstName ? `Chat privé de ${firstName}` : 'Chat privé';
 }
 
 interface ChatListProps {
@@ -56,13 +96,15 @@ interface ChatListProps {
   onSelectChat: (chatId: string) => void;
   onCreateChat: (title: string, isShared?: boolean) => void;
   onArchiveChat: (chatId: string) => void;
+  isReadOnlyMode?: boolean;
 }
 
 export default function ChatList({
   selectedChatId,
   onSelectChat,
   onCreateChat,
-  onArchiveChat
+  onArchiveChat,
+  isReadOnlyMode = false,
 }: ChatListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -70,6 +112,7 @@ export default function ChatList({
   const [loading, setLoading] = useState(true);
   const [showChatTypeModal, setShowChatTypeModal] = useState(false);
   const [isArchivingInProgress, setIsArchivingInProgress] = useState(false);
+  const [isRenameModeEnabled, setIsRenameModeEnabled] = useState(false);
   const { activeFarm } = useFarm();
   const { user } = useAuth();
   const creatingDefaultChatRef = useRef(false);
@@ -151,12 +194,53 @@ export default function ChatList({
       },
     });
 
+    const today = new Date().toISOString().split('T')[0];
+    await ChatService.sendMessage({
+      session_id: session.id,
+      role: 'user',
+      content: "J'ai recolte 50 bottes de radis pendant 1h30",
+    });
+
+    await ChatService.sendMessage({
+      session_id: session.id,
+      role: 'assistant',
+      content: "Parfait ! J'ai identifie 1 action dans votre message.",
+      ai_confidence: 0.95,
+      metadata: {
+        has_actions: true,
+        actions_count: 1,
+        actions: [
+          {
+            action_type: 'task_done',
+            status: 'validated',
+            extracted_data: {
+              action: 'recolte',
+              crop: 'radis',
+              duration_minutes: 90,
+              date: today,
+              quantity_value: 50,
+              quantity_unit: 'bottes',
+              quantity_type: 'harvest',
+            },
+          },
+        ],
+      },
+    });
+
     await sendOnboardingAssistantShortcutMessage({
       sessionId: session.id,
       text: 'Ensuite, appuyez sur Continuer pour voir des exemples de messages.',
       shortcutScreen: ONBOARDING_INTRO_CONTINUE_SHORTCUT_SCREEN,
       shortcutLabel: 'Continuer',
       stepType: 'onboarding_intro_continue_prompt',
+    });
+
+    await sendOnboardingAssistantShortcutMessage({
+      sessionId: session.id,
+      text: "Besoin d'un tour rapide de l'application ? Lancez la presentation de l interface.",
+      shortcutScreen: INTERFACE_TOUR_SHORTCUT_SCREEN,
+      shortcutLabel: "Presentation de l'interface",
+      stepType: 'interface_tour_prompt',
     });
 
     return session;
@@ -179,7 +263,7 @@ export default function ChatList({
     try {
       const session = await createOnboardingChatWithWelcome({
         title: 'Bienvenue sur Thomas',
-        isShared: true,
+        isShared: false,
       });
 
       console.log('✅ [DEFAULT-CHAT] Created default chat with onboarding shortcut:', session.id);
@@ -217,7 +301,10 @@ export default function ChatList({
       
       if (cachedSessions && cachedSessions.length > 0 && !showArchived) {
         console.log('⚡ [CACHE-HIT] Found', cachedSessions.length, 'cached ACTIVE chat sessions, displaying instantly');
-        const adaptedCachedChats = cachedSessions.map(adaptChatSessionToChatData);
+        const visibleCachedSessions = cachedSessions.filter((session) =>
+          session.is_shared || session.user_id === user?.id
+        );
+        const adaptedCachedChats = visibleCachedSessions.map(adaptChatSessionToChatData);
         setChats(adaptedCachedChats);
         setLoading(false); // Arrêter le loading immédiatement
       } else {
@@ -227,7 +314,10 @@ export default function ChatList({
       
       // Étape 2: Charger les chats frais depuis la DB (en arrière-plan si cache)
       console.log('🌐 [DB-LOAD] Loading fresh chat sessions from database... (showArchived:', showArchived, ')');
-      const freshSessions = await ChatService.getChatSessions(activeFarm.farm_id, showArchived);
+      const freshSessionsRaw = await ChatService.getChatSessions(activeFarm.farm_id, showArchived);
+      const freshSessions = freshSessionsRaw.filter((session) =>
+        session.is_shared || session.user_id === user?.id
+      );
 
       let sessionsToDisplay = freshSessions;
       let createdSessionId: string | undefined;
@@ -266,13 +356,16 @@ export default function ChatList({
         const cachedSessions = await ChatCacheService.getCachedChatList(activeFarm.farm_id);
         if (cachedSessions && cachedSessions.length > 0) {
           console.log('🔄 [FALLBACK] Using cached ACTIVE sessions due to error');
-          const adaptedCachedChats = cachedSessions.map(adaptChatSessionToChatData);
+          const visibleCachedSessions = cachedSessions.filter((session) =>
+            session.is_shared || session.user_id === user?.id
+          );
+          const adaptedCachedChats = visibleCachedSessions.map(adaptChatSessionToChatData);
           setChats(adaptedCachedChats);
         } else {
-          Alert.alert('Erreur', `Impossible de charger les conversations: ${error.message || error}`);
+          Alert.alert('Erreur', `Impossible de charger les conversations: ${formatError(error)}`);
         }
       } else {
-        Alert.alert('Erreur', `Impossible de charger les conversations archivées: ${error.message || error}`);
+        Alert.alert('Erreur', `Impossible de charger les conversations archivées: ${formatError(error)}`);
       }
     } finally {
       setLoading(false);
@@ -301,7 +394,8 @@ export default function ChatList({
         console.log('📨 [SUBSCRIPTION] Processing chat update:', adaptedChat.id, 'isArchived:', adaptedChat.isArchived, 'showArchived:', showArchived);
         
         // FILTRER selon le filtre actuel
-        const shouldBeInList = showArchived ? adaptedChat.isArchived : !adaptedChat.isArchived;
+        const canUserSeeChat = updatedSession.is_shared || updatedSession.user_id === user?.id;
+        const shouldBeInList = canUserSeeChat && (showArchived ? adaptedChat.isArchived : !adaptedChat.isArchived);
         
         setChats(prev => {
           const existing = prev.findIndex(c => c.id === adaptedChat.id);
@@ -334,11 +428,17 @@ export default function ChatList({
     return () => {
       subscription.unsubscribe();
     };
-  }, [activeFarm?.farm_id, isArchivingInProgress, showArchived]); // Resubscribe quand le filtre change
+  }, [activeFarm?.farm_id, isArchivingInProgress, showArchived, user?.id]); // Resubscribe quand le filtre change
 
 
   // Gérer l'archivage/désarchivage avec animation smooth optimiste
   const handleArchiveChat = async (chatId: string, onSuccess?: () => void, onError?: () => void) => {
+    if (isReadOnlyMode) {
+      Alert.alert('Mode demonstration', 'Archivage desactive pendant le tour interface.');
+      onError?.();
+      return;
+    }
+
     try {
       console.log('🔄 [CHAT-LIST] Starting archive operation for:', chatId);
       
@@ -426,6 +526,10 @@ export default function ChatList({
 
   // Afficher le modal de sélection de type de chat
   const handleShowChatTypeModal = () => {
+    if (isReadOnlyMode) {
+      Alert.alert('Mode demonstration', 'La ferme demo est en lecture seule pendant la presentation.');
+      return;
+    }
     setShowChatTypeModal(true);
   };
 
@@ -443,7 +547,10 @@ export default function ChatList({
 
     // 2. NAVIGATION INSTANTANÉE vers un chat temporaire
     const tempChatId = `temp-${Date.now()}`;
-    const tempTitle = `Chat privé - ${new Date().toLocaleDateString()}`;
+    const tempTitle = buildPrivateChatTitle(
+      user?.user_metadata as Record<string, unknown> | undefined,
+      user?.email
+    );
     
     console.log('⚡ [OPTIMISTIC] Opening temporary chat instantly:', tempChatId);
     
@@ -454,7 +561,9 @@ export default function ChatList({
       lastMessage: '',
       timestamp: new Date(),
       isArchived: false,
-      messageCount: 0
+      messageCount: 0,
+      is_shared: false,
+      creator_first_name: getUserFirstName(user?.user_metadata as Record<string, unknown> | undefined, user?.email),
     };
     
     // Ajouter immédiatement à la liste ET ouvrir
@@ -500,7 +609,7 @@ export default function ChatList({
       
       // En cas d'erreur, supprimer le chat temporaire
       setChats(prev => prev.filter(chat => chat.id !== tempChatId));
-      Alert.alert('Erreur', `Impossible de créer la conversation: ${error.message || error}`);
+      Alert.alert('Erreur', `Impossible de créer la conversation: ${formatError(error)}`);
     }
   };
 
@@ -518,7 +627,7 @@ export default function ChatList({
 
     // 2. NAVIGATION INSTANTANÉE vers un chat temporaire
     const tempChatId = `temp-shared-${Date.now()}`;
-    const tempTitle = `Chat partagé - ${new Date().toLocaleDateString()}`;
+    const tempTitle = 'Chat partagé';
     
     console.log('⚡ [OPTIMISTIC] Opening temporary shared chat instantly:', tempChatId);
     
@@ -529,7 +638,9 @@ export default function ChatList({
       lastMessage: '',
       timestamp: new Date(),
       isArchived: false,
-      messageCount: 0
+      messageCount: 0,
+      is_shared: true,
+      creator_first_name: getUserFirstName(user?.user_metadata as Record<string, unknown> | undefined, user?.email),
     };
     
     // Ajouter immédiatement à la liste ET ouvrir
@@ -573,7 +684,7 @@ export default function ChatList({
       
       // En cas d'erreur, supprimer le chat temporaire
       setChats(prev => prev.filter(chat => chat.id !== tempChatId));
-      Alert.alert('Erreur', `Impossible de créer la conversation partagée: ${error.message || error}`);
+      Alert.alert('Erreur', `Impossible de créer la conversation partagée: ${formatError(error)}`);
     }
   };
 
@@ -600,18 +711,20 @@ export default function ChatList({
       timestamp: new Date(),
       isArchived: false,
       messageCount: 0,
+      is_shared: false,
+      creator_first_name: getUserFirstName(user?.user_metadata as Record<string, unknown> | undefined, user?.email),
     };
 
     setChats(prev => [tempChat, ...prev]);
     onSelectChat(tempChatId);
-    onCreateChat(tempTitle, true);
+    onCreateChat(tempTitle, false);
 
     try {
       console.log('🔄 [BACKGROUND] Starting real onboarding chat creation...');
 
       const session = await createOnboardingChatWithWelcome({
         title: tempTitle,
-        isShared: true,
+        isShared: false,
       });
 
       console.log('✅ [BACKGROUND] Real onboarding chat created:', session.id);
@@ -628,12 +741,18 @@ export default function ChatList({
     } catch (error) {
       console.error('❌ [BACKGROUND] Error creating onboarding chat:', error);
       setChats(prev => prev.filter(chat => chat.id !== tempChatId));
-      Alert.alert('Erreur', `Impossible de créer le chat onboarding: ${error.message || error}`);
+      Alert.alert('Erreur', `Impossible de créer le chat onboarding: ${formatError(error)}`);
     }
   };
 
   // Gérer l'édition du titre avec optimisme
   const handleTitleEdit = async (chatId: string, newTitle: string, onSuccess?: () => void, onError?: () => void) => {
+    if (isReadOnlyMode) {
+      Alert.alert('Mode demonstration', 'Renommage desactive pendant le tour interface.');
+      onError?.();
+      return;
+    }
+
     try {
       console.log('✏️ [CHAT-LIST] Starting title edit for:', chatId, '→', newTitle);
       
@@ -703,26 +822,30 @@ export default function ChatList({
           }}>
             Chats
           </Text>
-          <TouchableOpacity
-            onPress={handleShowChatTypeModal}
-            style={{
-              backgroundColor: colors.background.secondary,
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              justifyContent: 'center',
-              alignItems: 'center',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.04,
-              shadowRadius: 1,
-              elevation: 1,
-              borderWidth: 1,
-              borderColor: colors.border.primary,
-            }}
-          >
-            <Ionicons name="add" size={16} color={colors.gray[500]} />
-          </TouchableOpacity>
+          <InterfaceTourTarget targetId="chat.list.plus" enabled={isReadOnlyMode}>
+            <TouchableOpacity
+              onPress={handleShowChatTypeModal}
+              disabled={isReadOnlyMode}
+              style={{
+                backgroundColor: colors.background.secondary,
+                width: 32,
+                height: 32,
+                borderRadius: 6,
+                justifyContent: 'center',
+                alignItems: 'center',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.04,
+                shadowRadius: 1,
+                elevation: 1,
+                borderWidth: 1,
+                borderColor: colors.border.primary,
+                opacity: isReadOnlyMode ? 0.45 : 1,
+              }}
+            >
+              <Ionicons name="add" size={16} color={colors.gray[500]} />
+            </TouchableOpacity>
+          </InterfaceTourTarget>
         </View>
 
         {/* Barre de recherche compacte */}
@@ -751,26 +874,59 @@ export default function ChatList({
           />
         </View>
 
-        {/* Toggle Archives compact */}
-        <TouchableOpacity
-          onPress={() => setShowArchived(!showArchived)}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginTop: spacing.sm,
-            paddingVertical: 4,
-          }}
-        >
-          <Ionicons name="archive-outline" size={14} color={colors.gray[500]} />
-          <Text style={{ 
-            marginLeft: 4, 
-            fontSize: 13, 
-            color: colors.gray[500],
-            fontWeight: '500' 
-          }}>
-            {showArchived ? 'Actives' : 'Archivées'}
-          </Text>
-        </TouchableOpacity>
+        {/* Toggle Archives + mode renommage */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginTop: spacing.sm,
+        }}>
+          <TouchableOpacity
+            onPress={() => setShowArchived(!showArchived)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 4,
+            }}
+          >
+            <Ionicons name="archive-outline" size={14} color={colors.gray[500]} />
+            <Text style={{ 
+              marginLeft: 4, 
+              fontSize: 13, 
+              color: colors.gray[500],
+              fontWeight: '500' 
+            }}>
+              {showArchived ? 'Actives' : 'Archivées'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons
+              name="pencil"
+              size={12}
+              color={isRenameModeEnabled ? colors.semantic.success : colors.gray[400]}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={{
+              fontSize: 12,
+              color: isRenameModeEnabled ? colors.semantic.success : colors.gray[500],
+              fontWeight: '600',
+              marginRight: 6,
+            }}>
+              Renommer
+            </Text>
+            <Switch
+              value={isRenameModeEnabled}
+              onValueChange={(value) => {
+                if (isReadOnlyMode) return;
+                setIsRenameModeEnabled(value);
+              }}
+              disabled={isReadOnlyMode}
+              trackColor={{ false: '#d1d5db', true: '#86efac' }}
+              thumbColor={isRenameModeEnabled ? '#16a34a' : '#f9fafb'}
+            />
+          </View>
+        </View>
       </View>
 
       {/* Liste des conversations */}
@@ -846,15 +1002,22 @@ export default function ChatList({
               transition: 'all 0.3s ease-in-out',
             })
           }}>
-            {filteredChats.map((chat) => (
-              <ChatCardMinimal
+            {filteredChats.map((chat, index) => (
+              <InterfaceTourTarget
                 key={chat.id}
-                chat={chat}
-                isSelected={selectedChatId === chat.id}
-                onPress={(chat) => onSelectChat(chat.id)}
-                onArchive={(chat, onSuccess, onError) => handleArchiveChat(chat.id, onSuccess, onError)}
-                onTitleEdit={(chatId, newTitle, onSuccess, onError) => handleTitleEdit(chatId, newTitle, onSuccess, onError)}
-              />
+                targetId="chat.list.first-card"
+                enabled={isReadOnlyMode && index === 0}
+              >
+                <ChatCardMinimal
+                  chat={chat}
+                  cardIndex={index}
+                  titleEditEnabled={isRenameModeEnabled}
+                  isSelected={selectedChatId === chat.id}
+                  onPress={(chat) => onSelectChat(chat.id)}
+                  onArchive={(chat, onSuccess, onError) => handleArchiveChat(chat.id, onSuccess, onError)}
+                  onTitleEdit={(chatId, newTitle, onSuccess, onError) => handleTitleEdit(chatId, newTitle, onSuccess, onError)}
+                />
+              </InterfaceTourTarget>
             ))}
           </View>
         )}

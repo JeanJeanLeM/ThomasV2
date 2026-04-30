@@ -11,6 +11,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import OnboardingModal from '../components/onboarding/OnboardingModal';
 import OnboardingService from '../services/OnboardingService';
+import InterfaceTourModal from '../components/interface-tour/InterfaceTourModal';
+import InterfaceTourTarget from '../components/interface-tour/InterfaceTourTarget';
+import InterfaceTourService from '../services/InterfaceTourService';
+import DemoFarmService from '../services/DemoFarmService';
+import { ChatServiceDirect } from '../services/ChatServiceDirect';
+import { INTERFACE_TOUR_STEPS, type InterfaceTourAction } from '../constants/interfaceTour';
+import { InterfaceTourTargetsProvider } from '../contexts/InterfaceTourTargetsContext';
 
 // Import des écrans
 import DashboardScreen from '@/screens/DashboardScreen';
@@ -67,29 +74,98 @@ const tabs: Tab[] = [
   { name: 'Profil', label: 'Profil', icon: 'person-outline', component: ProfileScreen },
 ];
 
+function getTabTargetId(tab: TabName): 'tab.statistics' | 'tab.taches' | 'tab.chat' | 'tab.profil' {
+  if (tab === 'Statistics') return 'tab.statistics';
+  if (tab === 'Taches') return 'tab.taches';
+  if (tab === 'Profil') return 'tab.profil';
+  return 'tab.chat';
+}
+
 const NewSimpleNavigator: React.FC = () => {
   const navigation = useNavigation();
   const farmSelector = useFarmSelector();
-  const { activeFarm } = useFarm();
+  const { activeFarm, farms, changeActiveFarm } = useFarm();
   const { user } = useAuth();
   const [farmEditId, setFarmEditId] = React.useState<number | null>(null);
   const [agentMethod, setAgentMethod] = React.useState<'simple' | 'pipeline' | null>(null);
   const [showOnboarding, setShowOnboarding] = React.useState(false);
+  const [showInterfaceTour, setShowInterfaceTour] = React.useState(false);
+  const [interfaceTourStepIndex, setInterfaceTourStepIndex] = React.useState(0);
+  const [isInterfaceTourMode, setIsInterfaceTourMode] = React.useState(false);
   const onboardingReturnRef = React.useRef<{ fromChat: boolean; returnChatId?: string } | null>(null);
+  const interfaceTourReturnRef = React.useRef<{ fromChat: boolean; returnChatId?: string } | null>(null);
 
-  // Après profil + parcours ferme, l'utilisateur arrive ici : premier passage pour CE compte → onboarding
+  const restoreFarmAfterInterfaceTour = React.useCallback(async () => {
+    const userId = user?.id;
+    if (!userId) return;
+
+    const state = await InterfaceTourService.getState(userId);
+    if (!state.restoreFarmId) return;
+
+    const farmToRestore = farms.find((farm) => farm.farm_id === state.restoreFarmId);
+    if (farmToRestore) {
+      await changeActiveFarm(farmToRestore);
+    }
+  }, [changeActiveFarm, farms, user?.id]);
+
+  const startInterfaceTour = React.useCallback(async (resumeStepIndex?: number) => {
+    const userId = user?.id;
+    if (!userId) return;
+
+    const state = await InterfaceTourService.getState(userId);
+    if (state.inProgress && showInterfaceTour) {
+      return;
+    }
+
+    const restoreFarmId = state.restoreFarmId ?? activeFarm?.farm_id ?? null;
+    await InterfaceTourService.startTour(userId, restoreFarmId);
+    const stepToOpen = Number.isFinite(resumeStepIndex)
+      ? Math.max(0, Math.min(INTERFACE_TOUR_STEPS.length - 1, resumeStepIndex as number))
+      : state.stepIndex || 0;
+
+    const demoFarm = await DemoFarmService.ensureDemoMembership(userId);
+    if (demoFarm) {
+      await changeActiveFarm(demoFarm);
+    }
+
+    navigation.setChatState('list');
+    navigation.navigateToTab('Chat');
+    setIsInterfaceTourMode(true);
+    setInterfaceTourStepIndex(stepToOpen);
+    setShowInterfaceTour(true);
+    navigation.setNavigationParams((prev) => ({ ...prev, interfaceTourMode: true }));
+  }, [activeFarm?.farm_id, changeActiveFarm, navigation, showInterfaceTour, user?.id]);
+
+  const maybeLaunchChatOnboarding = React.useCallback(async () => {
+    if (!user?.id) return;
+    const chatSeen = await OnboardingService.hasSeenOnboarding(user.id);
+    if (!chatSeen) setShowOnboarding(true);
+  }, [user?.id]);
+
+  // Priorite de lancement: tour interface -> onboarding chat.
   React.useEffect(() => {
     const userId = user?.id;
     if (!userId) return;
 
     let cancelled = false;
-    OnboardingService.hasSeenOnboarding(userId).then((seen) => {
-      if (!cancelled && !seen) setShowOnboarding(true);
-    });
+    (async () => {
+      const interfaceSeen = await InterfaceTourService.hasSeenTour(userId);
+      if (cancelled) return;
+      if (!interfaceSeen) {
+        const state = await InterfaceTourService.getState(userId);
+        if (cancelled) return;
+        await startInterfaceTour(state.inProgress ? state.stepIndex : 0);
+        return;
+      }
+
+      const chatSeen = await OnboardingService.hasSeenOnboarding(userId);
+      if (!cancelled && !chatSeen) setShowOnboarding(true);
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [startInterfaceTour, user?.id]);
 
   const handleCloseOnboarding = React.useCallback(() => {
     setShowOnboarding(false);
@@ -118,30 +194,163 @@ const NewSimpleNavigator: React.FC = () => {
     setShowOnboarding(true);
   }, []);
 
+  const handleStartInterfaceTour = React.useCallback(() => {
+    interfaceTourReturnRef.current = null;
+    startInterfaceTour(0);
+  }, [startInterfaceTour]);
+
+  const handleCloseInterfaceTour = React.useCallback(async () => {
+    const userId = user?.id;
+    setShowInterfaceTour(false);
+    setIsInterfaceTourMode(false);
+    navigation.setNavigationParams((prev) => ({ ...prev, interfaceTourMode: false }));
+    if (userId) {
+      await InterfaceTourService.abortTour(userId);
+    }
+    await restoreFarmAfterInterfaceTour();
+
+    const returnTarget = interfaceTourReturnRef.current;
+    interfaceTourReturnRef.current = null;
+
+    if (returnTarget?.fromChat) {
+      navigation.navigateToTab('Chat');
+      if (returnTarget.returnChatId) {
+        navigation.setNavigationParams({
+          openChatId: returnTarget.returnChatId,
+          fromOnboardingShortcut: true,
+        });
+      }
+    }
+
+    await maybeLaunchChatOnboarding();
+  }, [maybeLaunchChatOnboarding, navigation, restoreFarmAfterInterfaceTour, user?.id]);
+
+  const handleCompleteInterfaceTour = React.useCallback(async () => {
+    const userId = user?.id;
+    setShowInterfaceTour(false);
+    setIsInterfaceTourMode(false);
+    navigation.setNavigationParams((prev) => ({ ...prev, interfaceTourMode: false }));
+    if (userId) {
+      await InterfaceTourService.completeTour(userId);
+    }
+    await restoreFarmAfterInterfaceTour();
+    await maybeLaunchChatOnboarding();
+  }, [maybeLaunchChatOnboarding, navigation, restoreFarmAfterInterfaceTour, user?.id]);
+
+  const handleInterfaceStepChange = React.useCallback(
+    async (stepIndex: number, action: InterfaceTourAction) => {
+      setInterfaceTourStepIndex(stepIndex);
+      if (user?.id) {
+        await InterfaceTourService.updateStep(user.id, stepIndex);
+      }
+
+      if (!action || action.type === 'none') return;
+
+      if (action.type === 'tab') {
+        navigation.navigateToTab(action.tab);
+        return;
+      }
+
+      if (action.type === 'screen') {
+        if (action.tab) navigation.navigateToTab(action.tab);
+        navigation.navigateToScreen(action.screen as ScreenName, action.params);
+        return;
+      }
+
+      if (action.type === 'chat_demo') {
+        navigation.navigateToTab('Chat');
+        if (!activeFarm?.farm_id) return;
+        const sessions = await ChatServiceDirect.getChatSessions(activeFarm.farm_id, false);
+        const demoSession = sessions.find(
+          (session) =>
+            ['Onboarding & aide rapide', 'Bienvenue sur Thomas'].includes(session.title) ||
+            session.title.toLowerCase().includes('onboarding')
+        );
+        if (demoSession) {
+          navigation.setNavigationParams((prev) => ({
+            ...prev,
+            openChatId: demoSession.id,
+            fromOnboardingShortcut: true,
+          }));
+        }
+      }
+
+      if (action.type === 'open_chat') {
+        navigation.navigateToTab('Chat');
+        if (!activeFarm?.farm_id) return;
+        const sessions = await ChatServiceDirect.getChatSessions(activeFarm.farm_id, false);
+        const sorted = [...sessions].sort((a, b) => {
+          const ta = new Date(a.last_message_at || a.created_at).getTime();
+          const tb = new Date(b.last_message_at || b.created_at).getTime();
+          return tb - ta;
+        });
+        if (sorted.length > 0) {
+          navigation.setNavigationParams((prev) => ({
+            ...prev,
+            openChatId: sorted[0].id,
+          }));
+        }
+      }
+
+      if (action.type === 'chat_back') {
+        navigation.setChatState('list');
+      }
+
+    },
+    [activeFarm?.farm_id, navigation, user?.id]
+  );
+
   // Ouvre le tutoriel en un clic depuis un raccourci de chat.
   React.useEffect(() => {
-    if (navigation.navigationParams?.openTutorial !== true) return;
+    if (navigation.navigationParams?.['openTutorial'] !== true) return;
 
     const params = navigation.navigationParams as Record<string, unknown>;
-    onboardingReturnRef.current = {
-      fromChat: params.triggeredFromChat === true,
-      returnChatId: typeof params.returnChatId === 'string' ? params.returnChatId : undefined,
+    const returnPayload: { fromChat: boolean; returnChatId?: string } = {
+      fromChat: params['triggeredFromChat'] === true,
     };
+    if (typeof params['returnChatId'] === 'string') {
+      returnPayload.returnChatId = params['returnChatId'];
+    }
+    onboardingReturnRef.current = returnPayload;
 
     setShowOnboarding(true);
 
     navigation.setNavigationParams((prev) => {
-      if (!prev || prev.openTutorial !== true) return prev;
+      if (!prev || prev['openTutorial'] !== true) return prev;
       const next = { ...prev };
-      delete next.openTutorial;
-      delete next.triggeredFromChat;
-      delete next.returnChatId;
+      delete next['openTutorial'];
+      delete next['triggeredFromChat'];
+      delete next['returnChatId'];
       return next;
     });
   }, [
     navigation.navigationParams,
     navigation.setNavigationParams,
   ]);
+
+  React.useEffect(() => {
+    if (navigation.navigationParams?.['openInterfaceTour'] !== true) return;
+
+    const params = navigation.navigationParams as Record<string, unknown>;
+    const returnPayload: { fromChat: boolean; returnChatId?: string } = {
+      fromChat: params['triggeredFromChat'] === true,
+    };
+    if (typeof params['returnChatId'] === 'string') {
+      returnPayload.returnChatId = params['returnChatId'];
+    }
+    interfaceTourReturnRef.current = returnPayload;
+
+    startInterfaceTour(0);
+
+    navigation.setNavigationParams((prev) => {
+      if (!prev || prev['openInterfaceTour'] !== true) return prev;
+      const next = { ...prev };
+      delete next['openInterfaceTour'];
+      delete next['triggeredFromChat'];
+      delete next['returnChatId'];
+      return next;
+    });
+  }, [navigation.navigationParams, navigation.setNavigationParams, startInterfaceTour]);
 
   // Réinitialiser farmEditId quand on quitte FarmEdit
   React.useEffect(() => {
@@ -195,7 +404,7 @@ const NewSimpleNavigator: React.FC = () => {
   }, [navigation.activeTab, activeFarm?.farm_id]);
 
   // Configuration des écrans
-  const getScreenConfig = (screen: ScreenName) => {
+  const getScreenConfig = (screen: ScreenName): any => {
     const configs = {
       // Écrans principaux (avec tabs)
       Dashboard: { 
@@ -295,7 +504,7 @@ const NewSimpleNavigator: React.FC = () => {
       FarmMembers: { 
         title: 'Membres de la ferme', 
         showBack: true, 
-        showFarmSelector: false, 
+        showFarmSelector: true, 
         showTabs: false,
         component: FarmMembersScreen 
       },
@@ -452,7 +661,7 @@ const NewSimpleNavigator: React.FC = () => {
     return configs[screen] || configs.Chat;
   };
 
-  const currentConfig = getScreenConfig(navigation.currentScreen);
+  const currentConfig: any = getScreenConfig(navigation.currentScreen);
   const CurrentComponent = currentConfig.component;
 
   // Handlers
@@ -465,6 +674,9 @@ const NewSimpleNavigator: React.FC = () => {
   };
 
   const handleFarmSelectorPress = () => {
+    if (isInterfaceTourMode) {
+      return;
+    }
     farmSelector.openFarmSelector();
   };
 
@@ -556,7 +768,8 @@ const NewSimpleNavigator: React.FC = () => {
   ) : undefined;
 
   return (
-    <View style={containerStyle}>
+    <InterfaceTourTargetsProvider>
+      <View style={containerStyle}>
       {/* Header unique : pour Chat avec flèche retour en vue conversation */}
       {showHeader && (
         <UnifiedHeader
@@ -564,8 +777,9 @@ const NewSimpleNavigator: React.FC = () => {
           onBack={headerOnBack}
           onFarmSelector={currentConfig.showFarmSelector ? handleFarmSelectorPress : undefined}
           showBackButton={headerShowBack}
-          agentMethod={navigation.activeTab === 'Chat' ? agentMethod : null}
-          rightSlot={headerRightSlot}
+          // UX: ne pas afficher le mode d'analyse dans l'onglet discussion/chat.
+          agentMethod={navigation.activeTab === 'Chat' ? null : agentMethod}
+          {...(headerRightSlot ? { rightSlot: headerRightSlot } : {})}
           sideContentWidth={isChatConversation ? 84 : 48}
         />
       )}
@@ -614,10 +828,6 @@ const NewSimpleNavigator: React.FC = () => {
               console.log('🛒 [NAVIGATION] Commerce pressed');
               navigation.navigateToScreen('Commerce');
             }}
-            onCommunityPress={() => {
-              console.log('👥 [NAVIGATION] Community pressed');
-              navigation.navigateToScreen('CommunityList');
-            }}
             onNotificationsPress={() => {
               console.log('🔔 [NAVIGATION] Notifications pressed');
               navigation.navigateToScreen('Notifications');
@@ -632,6 +842,7 @@ const NewSimpleNavigator: React.FC = () => {
             onFarmEdit={() => navigation.navigateToScreen('FarmList')}
             onFarmMembers={() => navigation.navigateToScreen('FarmMembers')}
             onMyInvitations={() => navigation.navigateToScreen('MyInvitations')}
+            onCommunity={() => navigation.navigateToScreen('CommunityList')}
           />
         ) : navigation.currentScreen === 'Settings' ? (
           <CurrentComponent 
@@ -724,7 +935,10 @@ const NewSimpleNavigator: React.FC = () => {
             onNavigate={(screen, params) => navigation.navigateToScreen(screen as ScreenName, params)}
           />
         ) : navigation.currentScreen === 'AideEtSupport' ? (
-          <AideEtSupportScreen onStartTutorial={handleStartTutorial} />
+          <AideEtSupportScreen
+            onStartTutorial={handleStartTutorial}
+            onStartInterfaceTour={handleStartInterfaceTour}
+          />
         ) : navigation.currentScreen === 'Notifications' ? (
           <NotificationsScreen
             onNavigate={(screen, data) => {
@@ -738,11 +952,11 @@ const NewSimpleNavigator: React.FC = () => {
         ) : navigation.currentScreen === 'CreateNotification' ? (
           <CreateNotificationScreen
             onNavigate={() => navigation.goBack()}
-            editData={
+            {...(
               navigation.navigationParams?.editNotification
-                ? { notification: navigation.navigationParams.editNotification as any }
-                : undefined
-            }
+                ? { editData: { notification: navigation.navigationParams.editNotification as any } }
+                : {}
+            )}
           />
         ) : (
           <CurrentComponent
@@ -754,42 +968,44 @@ const NewSimpleNavigator: React.FC = () => {
               navigation.setCurrentChatTitle(title);
             }}
             onBack={currentConfig.showBack ? handleBack : undefined}
+            readOnlyMode={isInterfaceTourMode}
           />
         )}
       </View>
 
       {/* Barre d'onglets */}
       {currentConfig.showTabs && (
-        <View style={tabBarStyle}>
+        <InterfaceTourTarget targetId="tab.bar" style={tabBarStyle}>
           {tabs.map((tab) => {
             const isActive = navigation.activeTab === tab.name;
             return (
-              <TouchableOpacity
-                key={tab.name}
-                style={tabItemStyle(isActive)}
-                onPress={() => handleTabPress(tab.name)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={tab.icon as any}
-                  size={24}
-                  color={tabIconColor(isActive)}
-                />
-                <Text
-                  variant="caption"
-                  color={tabTextColor(isActive)}
-                  style={{
-                    marginTop: 4,
-                    fontSize: 12,
-                    fontWeight: isActive ? '600' : '400',
-                  }}
+              <InterfaceTourTarget key={tab.name} targetId={getTabTargetId(tab.name)} style={{ flex: 1 }}>
+                <TouchableOpacity
+                  style={tabItemStyle(isActive)}
+                  onPress={() => handleTabPress(tab.name)}
+                  activeOpacity={0.7}
                 >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
+                  <Ionicons
+                    name={tab.icon as any}
+                    size={24}
+                    color={tabIconColor(isActive)}
+                  />
+                  <Text
+                    variant="caption"
+                    color={tabTextColor(isActive)}
+                    style={{
+                      marginTop: 4,
+                      fontSize: 12,
+                      fontWeight: isActive ? '600' : '400',
+                    }}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              </InterfaceTourTarget>
             );
           })}
-        </View>
+        </InterfaceTourTarget>
       )}
 
       {/* Modal de sélection de ferme */}
@@ -802,11 +1018,21 @@ const NewSimpleNavigator: React.FC = () => {
       />
 
       {/* Modal d'onboarding (premier lancement + relance depuis FAQ) */}
+      <InterfaceTourModal
+        visible={showInterfaceTour}
+        initialStepIndex={interfaceTourStepIndex}
+        onStepChange={handleInterfaceStepChange}
+        onClose={handleCloseInterfaceTour}
+        onComplete={handleCompleteInterfaceTour}
+      />
+
+      {/* Modal d'onboarding chat (premier lancement + relance depuis FAQ) */}
       <OnboardingModal
         visible={showOnboarding}
         onClose={handleCloseOnboarding}
       />
-    </View>
+      </View>
+    </InterfaceTourTargetsProvider>
   );
 };
 

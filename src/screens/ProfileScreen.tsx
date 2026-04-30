@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet, Text, Alert, Platform } from 'react-native';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
 import { 
   UserIcon,
-  UsersIcon,
   ArrowRightOnRectangleIcon,
   ChevronRightIcon,
   CogIcon,
@@ -25,6 +24,8 @@ import { authService } from '../services/auth';
 import { userInvitationService } from '../services/UserInvitationService';
 import { showAlert } from '../utils/webAlert';
 import { getAppVersionInfo } from '../services/AppVersionService';
+import { ActivityStreakService, ActivityStreakState } from '../services/ActivityStreakService';
+import InterfaceTourTarget from '../components/interface-tour/InterfaceTourTarget';
 
 interface ProfileScreenProps {
   onProfileAndFarmPress?: () => void;
@@ -37,20 +38,30 @@ interface ProfileScreenProps {
   onAProposPress?: () => void;
   onDocumentsPress?: () => void;
   onCommercePress?: () => void;
-  onCommunityPress?: () => void;
   onNotificationsPress?: () => void;
   /** Ouverture du modal d’édition profil depuis la navigation (ex. écran Profil et ferme) */
   openEditProfileFromNav?: boolean;
   onClearOpenEditProfile?: () => void;
 }
 
-export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, onAgentSettingsPress, onFarmMembersPress, onMyInvitationsPress, onFarmEditPress, onAideEtSupportPress, onAProposPress, onDocumentsPress, onCommercePress, onCommunityPress, onNotificationsPress, openEditProfileFromNav, onClearOpenEditProfile }: ProfileScreenProps) {
+interface ProfileMenuItem {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  onPress: () => void;
+  isDestructive?: boolean;
+  badge?: number;
+}
+
+export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, onAgentSettingsPress, onFarmMembersPress, onMyInvitationsPress, onFarmEditPress, onAideEtSupportPress, onAProposPress, onDocumentsPress, onCommercePress, onNotificationsPress, openEditProfileFromNav, onClearOpenEditProfile }: ProfileScreenProps) {
   const { user: authUser, signOut } = useAuth();
   const { activeFarm, updateFarm, deleteFarm, createFarm, farmData } = useFarm();
   const appVersionInfo = getAppVersionInfo();
   const [isEditProfileVisible, setIsEditProfileVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [invitationCount, setInvitationCount] = useState(0);
+  const [streakState, setStreakState] = useState<ActivityStreakState | null>(null);
+  const [streakLoading, setStreakLoading] = useState(false);
 
   // Ouvrir le modal d’édition profil quand on arrive depuis Profil et ferme
   useEffect(() => {
@@ -83,7 +94,7 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
         : '');
 
     return {
-      id: authUser?.id,
+      ...(authUser?.id ? { id: authUser.id } : {}),
       firstName: derivedFirstName,
       lastName: derivedLastName,
       email: authUser?.email || '',
@@ -94,39 +105,24 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
     };
   };
 
-  // Calculer les statistiques basées sur les données réelles de la ferme
-  const stats = useMemo(() => {
-    if (!activeFarm || !farmData) {
-      return { tasks: 0, hours: 0, plots: 0 };
-    }
-
-    // Filtrer les tâches du mois courant
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const thisMonthTasks = farmData.tasks.filter(task => {
-      const taskDate = new Date(task.date);
-      return taskDate.getMonth() === currentMonth && 
-             taskDate.getFullYear() === currentYear;
-    });
-
-    // Calculer les heures travaillées ce mois
-    const totalMinutes = thisMonthTasks
-      .filter(task => task.duration_minutes && task.duration_minutes > 0)
-      .reduce((sum, task) => sum + (task.duration_minutes || 0), 0);
-
-    const totalHours = Math.round(totalMinutes / 60 * 10) / 10; // Arrondi à 1 décimale
-
-    // Compter les parcelles actives
-    const activePlots = farmData.plots.filter(plot => plot.status === 'active').length;
-
-    return {
-      tasks: thisMonthTasks.length,
-      hours: totalHours,
-      plots: activePlots
+  useEffect(() => {
+    const loadStreak = async () => {
+      if (!activeFarm) return;
+      try {
+        setStreakLoading(true);
+        const state = await ActivityStreakService.refreshAndGetState(activeFarm.farm_id);
+        setStreakState(state);
+      } catch (error) {
+        console.error('Erreur chargement streak profil:', error);
+      } finally {
+        setStreakLoading(false);
+      }
     };
-  }, [activeFarm, farmData?.tasks, farmData?.plots]);
+
+    loadStreak();
+  }, [activeFarm?.farm_id]);
+
+  const isVacationActive = ActivityStreakService.isVacationActive(streakState);
 
   // Charger le nombre d'invitations
   useEffect(() => {
@@ -248,11 +244,12 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
         await authService.clearCache();
         
         // 3. Pour le web, recharger la page pour s'assurer que tout est réinitialisé
-        if (typeof window !== 'undefined') {
+        const browserWindow = (globalThis as any).window;
+        if (browserWindow) {
           console.log('🚪 [LOGOUT] Détection environnement web - rechargement de la page...');
           // Petit délai pour s'assurer que la déconnexion est complète
           setTimeout(() => {
-            window.location.reload();
+            browserWindow.location.reload();
           }, 100);
         }
         
@@ -293,18 +290,12 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
     onDocumentsPress?.();
   };
 
-  const menuItems = [
+  const menuItems: ProfileMenuItem[] = [
     {
       icon: <UserIcon color={colors.primary[600]} size={24} />,
       title: 'Profil et ferme',
       subtitle: 'Modifier le profil, la ferme, les membres et invitations',
       onPress: onProfileAndFarmPress || (() => console.log('Profil et ferme'))
-    },
-    {
-      icon: <CogIcon color={colors.primary[600]} size={24} />,
-      title: '🤖 Assistant IA',
-      subtitle: 'Configurer la méthode d\'analyse',
-      onPress: onAgentSettingsPress || (() => console.log('Assistant IA'))
     },
     {
       icon: <CogIcon color={colors.gray[600]} size={24} />,
@@ -313,44 +304,20 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
       onPress: onSettingsPress || (() => console.log('Configurer'))
     },
     {
-      icon: <DocumentTextIcon color={colors.primary[600]} size={24} />,
-      title: 'Mes documents',
-      subtitle: 'Gérer vos documents et fichiers',
-      onPress: handleDocuments
-    },
-    {
       icon: <DocumentTextIcon color={colors.semantic.success} size={24} />,
-      title: 'Ventes & Achats',
+      title: 'Ventes et achats',
       subtitle: 'Factures, clients, fournisseurs et produits',
       onPress: onCommercePress || (() => console.log('Commerce'))
-    },
-    {
-      icon: <UsersIcon color={colors.primary[600]} size={24} />,
-      title: 'Communaute',
-      subtitle: 'Rejoindre ou gerer une communaute',
-      onPress: onCommunityPress || (() => console.log('Communaute'))
-    },
-    {
-      icon: <ArrowDownTrayIcon color={colors.secondary.orange} size={24} />,
-      title: 'Exporter les données',
-      subtitle: 'Télécharger vos données au format CSV/PDF',
-      onPress: () => console.log('Exporter données')
     },
     {
       icon: <BellIcon color={colors.semantic.warning} size={24} />,
       title: 'Notifications',
       subtitle: 'Rappels et alertes',
-      onPress: () => onNotificationsPress?.()
-    },
-    {
-      icon: <LanguageIcon color={colors.secondary.purple} size={24} />,
-      title: 'Langue',
-      subtitle: 'Français',
-      onPress: () => console.log('Langue')
+      onPress: onNotificationsPress || (() => console.log('Notifications'))
     },
     {
       icon: <QuestionMarkCircleIcon color={colors.primary[600]} size={24} />,
-      title: 'Aide et support',
+      title: 'Aides et support',
       subtitle: 'FAQ, contact, tutoriels',
       onPress: onAideEtSupportPress || (() => console.log('Aide et support'))
     },
@@ -359,6 +326,30 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
       title: 'À propos',
       subtitle: 'Version, conditions d\'utilisation',
       onPress: onAProposPress || (() => console.log('À propos'))
+    },
+    {
+      icon: <DocumentTextIcon color={colors.primary[600]} size={24} />,
+      title: 'Documents',
+      subtitle: 'Gérer vos documents et fichiers',
+      onPress: handleDocuments
+    },
+    {
+      icon: <ArrowDownTrayIcon color={colors.secondary.orange} size={24} />,
+      title: 'Télécharger les données',
+      subtitle: 'Télécharger vos données au format CSV/PDF',
+      onPress: () => console.log('Exporter données')
+    },
+    {
+      icon: <LanguageIcon color={colors.secondary.purple} size={24} />,
+      title: 'Langue',
+      subtitle: 'Français',
+      onPress: () => console.log('Langue')
+    },
+    {
+      icon: <CogIcon color={colors.primary[600]} size={24} />,
+      title: 'Assistant IA',
+      subtitle: 'Configurer la méthode d\'analyse',
+      onPress: onAgentSettingsPress || (() => console.log('Assistant IA'))
     }
   ];
 
@@ -398,85 +389,119 @@ export default function ProfileScreen({ onProfileAndFarmPress, onSettingsPress, 
           </View>
         </View>
 
-        {/* Contenu */}
-        {/* Activité récente */}
-        <View style={styles.activitySection}>
-          <View style={styles.activityHeader}>
-            <View style={styles.chartIcon} />
-            <Text style={styles.activityTitle}>Activité récente</Text>
+        {/* Streak d'activité */}
+        <View style={styles.streakSection}>
+          <View style={styles.streakHeader}>
+            <View style={styles.flameBadge}>
+              <Text style={styles.flameText}>🔥</Text>
+            </View>
+            <View style={styles.streakTitleBlock}>
+              <Text style={styles.activityTitle}>Streak d'activité</Text>
+              <Text style={styles.streakSubtitle}>
+                {isVacationActive
+                  ? `En pause jusqu'au ${ActivityStreakService.formatVacationRange(streakState?.vacation_start, streakState?.vacation_end).split(' au ')[1]}`
+                  : 'Ajoutez au moins une tâche chaque jour attendu'}
+              </Text>
+            </View>
           </View>
-          
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{stats.tasks}</Text>
-              <Text style={styles.statLabel}>Tâches ce mois</Text>
+
+          <View style={styles.streakMainRow}>
+            <View>
+              <Text style={styles.streakNumber}>
+                {streakLoading ? '...' : streakState?.current_streak ?? 0}
+              </Text>
+              <Text style={styles.streakLabel}>jours de flamme</Text>
             </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{stats.hours}h</Text>
-              <Text style={styles.statLabel}>Heures travaillées</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{stats.plots}</Text>
-              <Text style={styles.statLabel}>Parcelles actives</Text>
+            <View style={styles.streakSideStats}>
+              <View style={styles.streakPill}>
+                <Text style={styles.streakPillText}>Record {streakState?.best_streak ?? 0}j</Text>
+              </View>
+              <View style={styles.streakPill}>
+                <Text style={styles.streakPillText}>
+                  Safe pass {streakState?.safe_pass_balance ?? 0}/{streakState?.safe_pass_cap ?? 4}
+                </Text>
+              </View>
             </View>
           </View>
         </View>
 
         {/* Menu items */}
         <View style={styles.menuContainer}>
-        {menuItems.map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.menuItem,
-              item.isDestructive && styles.menuItemDestructive
-            ]}
-            onPress={item.onPress}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuIconContainer}>
-              {item.icon}
-            </View>
-            
-            <View style={styles.menuContent}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={[
-                  styles.menuTitle,
-                  item.isDestructive && styles.menuTitleDestructive
-                ]}>
-                  {item.title}
-                </Text>
-                {(item as any).badge && (
-                  <View style={{
-                    backgroundColor: colors.semantic.error,
-                    borderRadius: 10,
-                    minWidth: 20,
-                    height: 20,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginLeft: 8,
-                  }}>
-                    <Text style={{
-                      color: colors.text.inverse,
-                      fontSize: 12,
-                      fontWeight: '600',
-                    }}>
-                      {(item as any).badge}
-                    </Text>
-                  </View>
-                )}
+        {menuItems.map((item, index) => {
+          const targetId =
+            item.title === 'Profil et ferme'
+              ? 'profile.menu.profile-farm'
+              : item.title === 'Configurer'
+                ? 'profile.menu.settings'
+                : item.title === 'Notifications'
+                  ? 'profile.menu.notifications'
+                : item.title === 'Aides et support'
+                  ? 'profile.menu.help'
+                  : undefined;
+
+          const card = (
+            <TouchableOpacity
+              style={[
+                styles.menuItem,
+                item.isDestructive && styles.menuItemDestructive
+              ]}
+              onPress={item.onPress}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuIconContainer}>
+                {item.icon}
               </View>
-              <Text style={styles.menuSubtitle}>
-                {item.subtitle}
-              </Text>
-            </View>
-            
-            <ChevronRightIcon 
-              color={item.isDestructive ? colors.semantic.error : colors.gray[400]} 
-              size={20} 
-            />
-          </TouchableOpacity>
-        ))}
+              
+              <View style={styles.menuContent}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={[
+                    styles.menuTitle,
+                    item.isDestructive && styles.menuTitleDestructive
+                  ]}>
+                    {item.title}
+                  </Text>
+                  {(item as any).badge && (
+                    <View style={{
+                      backgroundColor: colors.semantic.error,
+                      borderRadius: 10,
+                      minWidth: 20,
+                      height: 20,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginLeft: 8,
+                    }}>
+                      <Text style={{
+                        color: colors.text.inverse,
+                        fontSize: 12,
+                        fontWeight: '600',
+                      }}>
+                        {(item as any).badge}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.menuSubtitle}>
+                  {item.subtitle}
+                </Text>
+              </View>
+              
+              <ChevronRightIcon 
+                color={item.isDestructive ? colors.semantic.error : colors.gray[400]} 
+                size={20} 
+              />
+            </TouchableOpacity>
+          );
+
+          if (!targetId) {
+            return <View key={index}>{card}</View>;
+          }
+
+          return (
+            <InterfaceTourTarget key={index} targetId={targetId}>
+              {card}
+            </InterfaceTourTarget>
+          );
+        })}
         
           {/* Footer avec informations app */}
           <View style={styles.footerSection}>
@@ -601,6 +626,84 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  streakSection: {
+    backgroundColor: colors.background.secondary,
+    margin: 16,
+    padding: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error[500],
+  },
+  streakHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  flameBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: colors.error[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.error[200],
+  },
+  flameText: {
+    fontSize: 26,
+  },
+  streakTitleBlock: {
+    flex: 1,
+  },
+  streakSubtitle: {
+    fontSize: 13,
+    color: colors.gray[500],
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  streakMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.gray[50],
+    borderRadius: 12,
+    padding: 16,
+    gap: 12,
+  },
+  streakNumber: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: colors.error[600],
+    lineHeight: 42,
+  },
+  streakLabel: {
+    fontSize: 12,
+    color: colors.gray[600],
+    fontWeight: '600',
+  },
+  streakSideStats: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  streakPill: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.gray[200],
+  },
+  streakPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gray[700],
   },
   activityHeader: {
     flexDirection: 'row',

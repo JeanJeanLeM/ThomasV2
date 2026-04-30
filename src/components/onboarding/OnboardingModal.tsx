@@ -25,8 +25,8 @@ const ONBOARDING_IMAGES: (ImageSourcePropType | null)[] = [
   require('../../../assets/Onboarding/ONBOARDING 1.3.png'),
   require('../../../assets/Onboarding/ONBOARDING 1.4.png'),
   require('../../../assets/Onboarding/ONBOARDING 1.5.png'),
-  require('../../../assets/Onboarding/ONBOARDING 1.6.png'),
   require('../../../assets/Onboarding/ONBOARDING 2.png'),
+  require('../../../assets/Onboarding/ONBOARDING 1.6.png'),
   require('../../../assets/Onboarding/ONBOARDING 3.png'),
 ];
 
@@ -115,7 +115,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ visible, onClose }) =
 
         {/* Content area */}
         <View style={styles.content}>
-          {/* Image zone – 50% (fond blanc avec image réelle pour matcher le PNG) */}
+          {/* Image zone affichée en haut */}
           <View style={[styles.imageZone, { backgroundColor: ONBOARDING_IMAGES[currentIndex] ? '#ffffff' : step.imageBackgroundColor }]}>
             {ONBOARDING_IMAGES[currentIndex] ? (
               <Image
@@ -133,13 +133,13 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ visible, onClose }) =
             )}
           </View>
 
-          {/* Text zone – 50% */}
+          {/* Text zone */}
           <ScrollView
             style={styles.textZone}
             contentContainerStyle={styles.textZoneContent}
             showsVerticalScrollIndicator={false}
           >
-            <Text variant="h2" style={styles.stepTitle}>{step.title}</Text>
+            <Text variant="h3" style={styles.stepTitle}>{step.title}</Text>
             <Text variant="body" style={styles.stepDescription}>{step.description}</Text>
 
             <View style={styles.subPointsContainer}>
@@ -251,15 +251,14 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   imageZone: {
-    flex: 1,
+    flex: 0.55,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 200,
+    minHeight: 120,
   },
   stepImage: {
-    width: '100%',
-    height: '100%',
-    minHeight: 200,
+    width: '88%',
+    height: '88%',
   },
   imagePlaceholderEmoji: {
     fontSize: 72,
@@ -269,24 +268,27 @@ const styles = StyleSheet.create({
     color: colors.gray[400],
   },
   textZone: {
-    flex: 1,
+    flex: 1.45,
   },
   textZoneContent: {
-    padding: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
   stepTitle: {
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     fontWeight: '700',
+    fontSize: 24,
   },
   stepDescription: {
     color: colors.text.secondary,
-    lineHeight: 22,
-    marginBottom: spacing.lg,
+    lineHeight: 20,
+    fontSize: 15,
+    marginBottom: spacing.md,
   },
   subPointsContainer: {
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   subPointRow: {
     flexDirection: 'row',
@@ -313,16 +315,17 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   subPointIcon: {
-    fontSize: 18,
-    lineHeight: 24,
+    fontSize: 16,
+    lineHeight: 20,
     flexShrink: 0,
-    width: 26,
+    width: 22,
     textAlign: 'center',
   },
   subPointText: {
     flex: 1,
     color: colors.text.primary,
-    lineHeight: 22,
+    lineHeight: 19,
+    fontSize: 14,
   },
   subPointTextHighlighted: {
     color: colors.primary[800],

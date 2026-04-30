@@ -8,6 +8,7 @@ import {
   TrashIcon,
   MapPinIcon,
   CheckCircleIcon,
+  ClipboardDocumentListIcon,
 } from '../../icons';
 
 export interface PlotData {
@@ -57,6 +58,7 @@ export interface PlotCardStandardProps {
   onPress?: (plot: PlotData) => void;
   onEdit?: (plot: PlotData) => void;
   onDelete?: (plot: PlotData) => void;
+  onDuplicate?: (plot: PlotData) => void;
   style?: ViewStyle;
   showActions?: boolean;
 }
@@ -66,6 +68,7 @@ export const PlotCardStandard: React.FC<PlotCardStandardProps> = ({
   onPress,
   onEdit,
   onDelete,
+  onDuplicate,
   style,
   showActions = true,
 }) => {
@@ -194,27 +197,48 @@ export const PlotCardStandard: React.FC<PlotCardStandardProps> = ({
           </View>
         </TouchableOpacity>
 
-        {/* Action soft delete / réactivation : sibling du TouchableOpacity, pas imbriqué */}
-        {showActions && onDelete && (
-          <TouchableOpacity
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              backgroundColor: colors.gray[100],
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginLeft: spacing.sm,
-            }}
-            onPress={() => onDelete(plot)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            {!isActive ? (
-              <CheckCircleIcon color={colors.semantic.success} size={18} />
-            ) : (
-              <TrashIcon color={colors.semantic.error} size={16} />
+        {/* Actions carte : siblings du Touchable principal (pas imbriqués) */}
+        {showActions && (onDuplicate || onDelete) && (
+          <View style={{ flexDirection: 'row', marginLeft: spacing.sm }}>
+            {onDuplicate && (
+              <TouchableOpacity
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: colors.gray[100],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: spacing.xs,
+                }}
+                onPress={() => onDuplicate(plot)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <ClipboardDocumentListIcon color={colors.primary[600]} size={16} />
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+
+            {onDelete && (
+              <TouchableOpacity
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: colors.gray[100],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onPress={() => onDelete(plot)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                {!isActive ? (
+                  <CheckCircleIcon color={colors.semantic.success} size={18} />
+                ) : (
+                  <TrashIcon color={colors.semantic.error} size={16} />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
 
