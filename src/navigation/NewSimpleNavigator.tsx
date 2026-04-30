@@ -240,12 +240,16 @@ const NewSimpleNavigator: React.FC = () => {
     async (stepIndex: number, action: InterfaceTourAction) => {
       setInterfaceTourStepIndex(stepIndex);
       const step = INTERFACE_TOUR_STEPS[stepIndex];
-      navigation.setNavigationParams((prev) => ({
-        ...prev,
-        interfaceTourMode: true,
-        interfaceTourStepId: step?.id,
-        interfaceTourTargetId: step?.targetId,
-      }));
+      const applyTourParams = () => {
+        navigation.setNavigationParams((prev) => ({
+          ...prev,
+          interfaceTourMode: true,
+          interfaceTourStepId: step?.id,
+          interfaceTourTargetId: step?.targetId,
+        }));
+      };
+
+      applyTourParams();
       if (user?.id) {
         await InterfaceTourService.updateStep(user.id, stepIndex);
       }
@@ -254,12 +258,14 @@ const NewSimpleNavigator: React.FC = () => {
 
       if (action.type === 'tab') {
         navigation.navigateToTab(action.tab);
+        applyTourParams();
         return;
       }
 
       if (action.type === 'screen') {
         if (action.tab) navigation.navigateToTab(action.tab);
         navigation.navigateToScreen(action.screen as ScreenName, action.params);
+        applyTourParams();
         return;
       }
 
@@ -279,6 +285,7 @@ const NewSimpleNavigator: React.FC = () => {
             fromOnboardingShortcut: true,
           }));
         }
+        applyTourParams();
       }
 
       if (action.type === 'open_chat') {
@@ -296,10 +303,12 @@ const NewSimpleNavigator: React.FC = () => {
             openChatId: sorted[0].id,
           }));
         }
+        applyTourParams();
       }
 
       if (action.type === 'chat_back') {
         navigation.setChatState('list');
+        applyTourParams();
       }
 
     },

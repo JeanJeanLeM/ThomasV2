@@ -10,7 +10,7 @@ import InterfaceTourTarget from './InterfaceTourTarget';
 interface InterfaceTourModalProps {
   visible: boolean;
   initialStepIndex?: number;
-  onStepChange?: (stepIndex: number, action: InterfaceTourAction) => void;
+  onStepChange?: (stepIndex: number, action: InterfaceTourAction) => void | Promise<void>;
   onClose: () => void;
   onComplete: () => void;
 }
@@ -63,15 +63,6 @@ const InterfaceTourModal: React.FC<InterfaceTourModalProps> = ({
     setIsPreviewPhase(false);
   }, [initialStepIndex, visible]);
 
-  useEffect(() => {
-    if (!visible) return;
-    if (currentIndex === lastFiredStepRef.current) return;
-    lastFiredStepRef.current = currentIndex;
-    const step = INTERFACE_TOUR_STEPS[currentIndex];
-    if (!step) return;
-    onStepChangeRef.current?.(currentIndex, step.autoAction);
-  }, [currentIndex, visible]);
-
   const resolveTargetLayout = useCallback(
     async (stepIndex: number) => {
       const step = INTERFACE_TOUR_STEPS[stepIndex];
@@ -118,7 +109,26 @@ const InterfaceTourModal: React.FC<InterfaceTourModalProps> = ({
 
   useEffect(() => {
     if (!visible) return;
-    resolveTargetLayout(currentIndex);
+    if (currentIndex === lastFiredStepRef.current) return;
+    lastFiredStepRef.current = currentIndex;
+
+    let cancelled = false;
+    (async () => {
+      const step = INTERFACE_TOUR_STEPS[currentIndex];
+      if (!step) return;
+      setTargetLayout(null);
+      setIsResolvingTarget(!!step.targetId);
+      await onStepChangeRef.current?.(currentIndex, step.autoAction);
+      const settleDelay = step.targetId?.startsWith('settings.option.') ? 420 : 180;
+      await new Promise((resolve) => setTimeout(resolve, settleDelay));
+      if (!cancelled) {
+        resolveTargetLayout(currentIndex);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentIndex, resolveTargetLayout, visible]);
 
   const isFirst = currentIndex === 0;
@@ -326,8 +336,12 @@ const InterfaceTourModal: React.FC<InterfaceTourModalProps> = ({
       <View style={styles.safe}>
         {shouldUseCutout ? (
           <>
-            <View style={[styles.dimSegment, { left: 0, top: 0, width: viewportWidth, height: cutoutBounds.top }]} />
             <View
+              pointerEvents="none"
+              style={[styles.dimSegment, { left: 0, top: 0, width: viewportWidth, height: cutoutBounds.top }]}
+            />
+            <View
+              pointerEvents="none"
               style={[
                 styles.dimSegment,
                 {
@@ -339,6 +353,7 @@ const InterfaceTourModal: React.FC<InterfaceTourModalProps> = ({
               ]}
             />
             <View
+              pointerEvents="none"
               style={[
                 styles.dimSegment,
                 {
@@ -350,6 +365,7 @@ const InterfaceTourModal: React.FC<InterfaceTourModalProps> = ({
               ]}
             />
             <View
+              pointerEvents="none"
               style={[
                 styles.dimSegment,
                 {
@@ -362,10 +378,12 @@ const InterfaceTourModal: React.FC<InterfaceTourModalProps> = ({
             />
           </>
         ) : !effectivePreviewPhase && !isFullScreenPreview ? (
-          <View style={styles.dimLayer} />
+          <View pointerEvents="none" style={styles.dimLayer} />
         ) : null}
 
-        {!effectivePreviewPhase && !isFullScreenPreview && highlightStyle ? <View style={[styles.highlightRing, highlightStyle]} /> : null}
+        {!effectivePreviewPhase && !isFullScreenPreview && highlightStyle ? (
+          <View pointerEvents="none" style={[styles.highlightRing, highlightStyle]} />
+        ) : null}
 
         {showFloatingNextButton ? (
           <Animated.View style={[styles.previewNextAnchor, { transform: [{ translateY: bounceAnim }] }]}>
@@ -470,10 +488,12 @@ const styles = StyleSheet.create({
   dimLayer: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    zIndex: 1,
   },
   dimSegment: {
     position: 'absolute',
     backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    zIndex: 1,
   },
   highlightRing: {
     position: 'absolute',
@@ -485,6 +505,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 0 },
     shadowRadius: 12,
     elevation: 12,
+    zIndex: 2,
   },
   previewNextButton: {
     width: PREVIEW_BUTTON_WIDTH,
@@ -577,7 +598,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 14,
-    elevation: 12,
+    elevation: 100,
+    zIndex: 100,
   },
   header: {
     flexDirection: 'row',

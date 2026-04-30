@@ -209,7 +209,7 @@ export const INTERFACE_TOUR_STEPS: InterfaceTourStep[] = [
     description: 'Appuyez sur une carte pour ouvrir le formulaire et ajuster les details.',
     subPoints: [],
     targetId: 'chat.response.card',
-    autoAction: { type: 'chat_back' },
+    autoAction: { type: 'none' },
   },
   {
     id: 'navigation-to-tasks',
@@ -218,7 +218,7 @@ export const INTERFACE_TOUR_STEPS: InterfaceTourStep[] = [
     description: "Nous allons maintenant ouvrir l'onglet Taches.",
     subPoints: [],
     targetId: 'tab.taches',
-    autoAction: { type: 'none' },
+    autoAction: { type: 'chat_back' },
   },
 
   // ── Chapitre 4: Ecran Taches ──

@@ -28,6 +28,7 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const navigation = useNavigation();
   const scrollViewRef = useRef<ScrollView>(null);
   const optionLayoutsRef = useRef<Record<string, number>>({});
+  const optionsContainerYRef = useRef(0);
   const [userConversions, setUserConversions] = useState<any[]>([]);
   const isInterfaceTourMode = navigation.navigationParams?.interfaceTourMode === true;
   const interfaceTourTargetId = navigation.navigationParams?.interfaceTourTargetId as string | undefined;
@@ -71,16 +72,30 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   useEffect(() => {
     if (!isInterfaceTourMode || !interfaceTourTargetId?.startsWith('settings.option.')) return;
 
-    const timeout = setTimeout(() => {
-      const targetY = optionLayoutsRef.current[interfaceTourTargetId];
-      if (typeof targetY !== 'number') return;
-      scrollViewRef.current?.scrollTo({
-        y: Math.max(0, targetY - 96),
-        animated: true,
-      });
-    }, 80);
+    let attempts = 0;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
 
-    return () => clearTimeout(timeout);
+    const scrollToTarget = () => {
+      const targetY = optionLayoutsRef.current[interfaceTourTargetId];
+      if (typeof targetY !== 'number') {
+        attempts += 1;
+        if (attempts < 10) {
+          timeout = setTimeout(scrollToTarget, 80);
+        }
+        return;
+      }
+
+      scrollViewRef.current?.scrollTo({
+        y: Math.max(0, optionsContainerYRef.current + targetY - 96),
+        animated: false,
+      });
+    };
+
+    timeout = setTimeout(scrollToTarget, 80);
+
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
   }, [interfaceTourTargetId, isInterfaceTourMode]);
 
   const settingsOptions = [
@@ -206,7 +221,12 @@ const stats = useMemo(() => {
           </View>
 
           {/* Options de paramètres */}
-          <View style={styles.optionsContainer}>
+          <View
+            style={styles.optionsContainer}
+            onLayout={(event) => {
+              optionsContainerYRef.current = event.nativeEvent.layout.y;
+            }}
+          >
             {settingsOptions.map((option) => {
               const targetId =
                 option.id === 'materials'
@@ -228,9 +248,6 @@ const stats = useMemo(() => {
                   style={[styles.optionCard, { borderLeftColor: option.borderColor }]}
                   onPress={option.onPress}
                   activeOpacity={0.7}
-                  onLayout={targetId ? (event) => {
-                    optionLayoutsRef.current[targetId] = event.nativeEvent.layout.y;
-                  } : undefined}
                 >
                   <View style={styles.optionHeader}>
                     <View style={styles.optionIcon}>
@@ -275,9 +292,16 @@ const stats = useMemo(() => {
               }
 
               return (
-                <InterfaceTourTarget key={option.id} targetId={targetId}>
-                  {card}
-                </InterfaceTourTarget>
+                <View
+                  key={option.id}
+                  onLayout={(event) => {
+                    optionLayoutsRef.current[targetId] = event.nativeEvent.layout.y;
+                  }}
+                >
+                  <InterfaceTourTarget targetId={targetId}>
+                    {card}
+                  </InterfaceTourTarget>
+                </View>
               );
             })}
           </View>
