@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
@@ -15,6 +15,7 @@ import {
 } from '../design-system/icons';
 import { Text } from '../design-system/components';
 import { useFarm } from '../contexts/FarmContext';
+import { useNavigation } from '../contexts/NavigationContext';
 import { ConversionService } from '../services/ConversionService';
 import InterfaceTourTarget from '../components/interface-tour/InterfaceTourTarget';
 
@@ -24,7 +25,12 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
   const { activeFarm, farmData } = useFarm();
+  const navigation = useNavigation();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const optionLayoutsRef = useRef<Record<string, number>>({});
   const [userConversions, setUserConversions] = useState<any[]>([]);
+  const isInterfaceTourMode = navigation.navigationParams?.interfaceTourMode === true;
+  const interfaceTourTargetId = navigation.navigationParams?.interfaceTourTargetId as string | undefined;
 
   // Charger les conversions de la ferme
   useEffect(() => {
@@ -61,6 +67,22 @@ export default function SettingsScreen({ onNavigate }: SettingsScreenProps) {
 
     loadUserConversions();
   }, [activeFarm?.farm_id]);
+
+  useEffect(() => {
+    if (!isInterfaceTourMode || !interfaceTourTargetId?.startsWith('settings.option.')) return;
+
+    const timeout = setTimeout(() => {
+      const targetY = optionLayoutsRef.current[interfaceTourTargetId];
+      if (typeof targetY !== 'number') return;
+      scrollViewRef.current?.scrollTo({
+        y: Math.max(0, targetY - 96),
+        animated: true,
+      });
+    }, 80);
+
+    return () => clearTimeout(timeout);
+  }, [interfaceTourTargetId, isInterfaceTourMode]);
+
   const settingsOptions = [
     {
       id: 'materials',
@@ -152,7 +174,11 @@ const stats = useMemo(() => {
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.content}>
           {/* Aperçu des données */}
           <View style={styles.dataOverviewSection}>
@@ -182,11 +208,29 @@ const stats = useMemo(() => {
           {/* Options de paramètres */}
           <View style={styles.optionsContainer}>
             {settingsOptions.map((option) => {
+              const targetId =
+                option.id === 'materials'
+                  ? 'settings.option.materials'
+                  : option.id === 'plots'
+                    ? 'settings.option.plots'
+                    : option.id === 'conversions'
+                      ? 'settings.option.conversions'
+                      : option.id === 'cultures'
+                        ? 'settings.option.cultures'
+                        : option.id === 'phytosanitary'
+                          ? 'settings.option.phytosanitary'
+                          : option.id === 'tasks'
+                            ? 'settings.option.recurring-tasks'
+                            : undefined;
+
               const card = (
                 <TouchableOpacity
                   style={[styles.optionCard, { borderLeftColor: option.borderColor }]}
                   onPress={option.onPress}
                   activeOpacity={0.7}
+                  onLayout={targetId ? (event) => {
+                    optionLayoutsRef.current[targetId] = event.nativeEvent.layout.y;
+                  } : undefined}
                 >
                   <View style={styles.optionHeader}>
                     <View style={styles.optionIcon}>
@@ -225,21 +269,6 @@ const stats = useMemo(() => {
                   </View>
                 </TouchableOpacity>
               );
-
-              const targetId =
-                option.id === 'materials'
-                  ? 'settings.option.materials'
-                  : option.id === 'plots'
-                    ? 'settings.option.plots'
-                    : option.id === 'conversions'
-                      ? 'settings.option.conversions'
-                      : option.id === 'cultures'
-                        ? 'settings.option.cultures'
-                        : option.id === 'phytosanitary'
-                          ? 'settings.option.phytosanitary'
-                          : option.id === 'tasks'
-                            ? 'settings.option.recurring-tasks'
-                            : undefined;
 
               if (!targetId) {
                 return <View key={option.id}>{card}</View>;
