@@ -30,6 +30,7 @@ npm-debug.*
 *.tsbuildinfo
 
 # IDE
+.cursor/
 .vscode/
 .idea/
 *.swp
@@ -70,5 +71,6 @@ ios/**/*.perspectivev3
 # Temporary files
 tmp/
 temp/
+supabase/.temp/
 
 docs/
