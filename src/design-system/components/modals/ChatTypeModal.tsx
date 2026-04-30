@@ -139,7 +139,7 @@ export const ChatTypeModal: React.FC<ChatTypeModalProps> = ({
                       Chat onboarding
                     </Text>
                     <Text variant="caption" color={colors.text.secondary}>
-                      Crée un chat partagé avec un message de démarrage en 1 clic
+                      Crée un chat privé avec un message de démarrage en 1 clic
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#9ca3af" />

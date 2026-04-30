@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Linking, Image, ActivityIndicator, Switch, PanResponder } from 'react-native';
+import { View, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, Linking, Image, ActivityIndicator, Switch, PanResponder, useWindowDimensions } from 'react-native';
 import { Text, Card, FarmSelectorModal, SoundWave } from '../design-system/components';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
@@ -23,6 +23,7 @@ import { DocumentPickerModal } from '../design-system/components/modals/Document
 import { TaskEditModal, TaskData } from '../design-system/components/modals/TaskEditModal';
 import { ActionEditModal } from './chat/ActionEditModal';
 import { ActionData } from './chat/AIResponseWithActions';
+import InterfaceTourTarget from './interface-tour/InterfaceTourTarget';
 import { sanitizeQuantityType } from '../utils/quantityUtils';
 import { TaskService } from '../services/TaskService';
 import { ObservationService } from '../services/ObservationService';
@@ -38,6 +39,7 @@ import { NetworkService } from '../services/NetworkService';
 import { OfflineQueueService, PendingMessage } from '../services/OfflineQueueService';
 import { AudioStorageService } from '../services/AudioStorageService';
 import { SyncService } from '../services/SyncService';
+import { ActionAttachmentService } from '../services/ActionAttachmentService';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useOfflineQueue } from '../hooks/useOfflineQueue';
 import { useUnifiedSpeechRecognition } from '../hooks/useUnifiedSpeechRecognition';
@@ -81,6 +83,7 @@ interface Message {
 
 type InputMode = 'vocal_direct' | 'dictation';
 const ONBOARDING_HELP_SHORTCUT_SCREEN = 'ONBOARDING_TUTORIAL';
+const INTERFACE_TOUR_SHORTCUT_SCREEN = 'PRESENTATION_INTERFACE';
 const ONBOARDING_INTRO_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_INTRO_CONTINUE';
 const ONBOARDING_TASK_EXAMPLE_SHORTCUT_SCREEN = 'ONBOARDING_TASK_EXAMPLE';
 const ONBOARDING_TASK_EXAMPLE_CONTINUE_SHORTCUT_SCREEN = 'ONBOARDING_TASK_EXAMPLE_CONTINUE';
@@ -447,6 +450,7 @@ export default function ChatConversation({
   onGoBack, 
   onFarmSelector = () => console.warn('⚠️ [CHAT-CONVERSATION] onFarmSelector not provided - using default noop function')
 }: ChatConversationProps) {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { activeFarm } = useFarm();
   const { user } = useAuth();
   const navigation = useNavigation();
@@ -465,6 +469,7 @@ export default function ChatConversation({
   const { messages: pendingMessages, refreshQueue } = useOfflineQueue();
   const scrollViewRef = useRef<ScrollView>(null);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const initialAutoScrollChatIdRef = useRef<string | null>(null);
 
   const [pendingTranscribedAudio, setPendingTranscribedAudio] = useState<PendingTranscribedAudio | null>(null);
   const [isTranscriptionAutocorrectEnabled, setIsTranscriptionAutocorrectEnabled] = useState(true);
@@ -475,6 +480,8 @@ export default function ChatConversation({
     isTemporaryOnboardingChat ||
     (typeof chat?.title === 'string' &&
       ONBOARDING_CHAT_TITLES.includes(chat.title.trim().toLowerCase()));
+  const isInterfaceTourMode = navigation.navigationParams?.['interfaceTourMode'] === true;
+  const demoMessageRef = useRef<View>(null);
 
   // ===== Mode d'enregistrement : Vocal direct (Whisper) ou Dictée (Web Speech en temps réel) =====
   const [inputMode, setInputMode] = useState<InputMode>('vocal_direct');
@@ -488,6 +495,15 @@ export default function ChatConversation({
   const webSpeechExactRulesRef = useRef<ExactCorrectionRule[]>([]);
   // Corrections contextuelles accumulées sur la session de dictée en cours
   const webSpeechCorrectionsRef = useRef<WebSpeechContextualCorrection[]>([]);
+
+  const sortMessagesChronologically = (items: Message[]): Message[] => {
+    return [...items].sort((a, b) => {
+      const ta = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
+      const tb = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+      if (ta !== tb) return ta - tb;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  };
 
   const webSpeech = useUnifiedSpeechRecognition({
     language: 'fr-FR',
@@ -540,8 +556,8 @@ export default function ChatConversation({
 
   // Fonction unifiée pour scroller vers le bas
   const scrollToBottom = (animated: boolean = true, delay: number = 100) => {
-    // UX: auto-scroll uniquement pour le parcours onboarding.
-    if (!isOnboardingChat) return;
+    // UX: auto-scroll pour les chats standards, jamais pour le chat onboarding ou le tour.
+    if (isOnboardingChat || isInterfaceTourMode) return;
 
     // Annuler le scroll précédent pour éviter les conflits
     if (scrollTimeoutRef.current) {
@@ -2190,13 +2206,16 @@ export default function ChatConversation({
     return "Je suis là pour vous aider avec vos activités agricoles. Dites-moi ce que vous avez fait ou ce que vous souhaitez planifier ! 🌱";
   };
 
-  // Effet pour scroller au bas quand les messages changent (ouverture de conversation)
+  // Effet de scroll initial: une seule fois après le chargement d'un chat.
+  // IMPORTANT: ne pas re-scroller à chaque changement de longueur, sinon l'utilisateur
+  // ne peut plus naviguer librement dans l'historique (ex: pagination "Charger plus").
   useEffect(() => {
-    if (messages.length > 0 && !isInitialLoad) {
-      // Scroll automatique après chargement initial des messages
-      scrollToBottom(false, 200);
-    }
-  }, [messages.length, isInitialLoad]);
+    if (!chat?.id || isInitialLoad || messages.length === 0) return;
+    if (initialAutoScrollChatIdRef.current === chat.id) return;
+
+    initialAutoScrollChatIdRef.current = chat.id;
+    scrollToBottom(false, 200);
+  }, [chat?.id, messages.length, isInitialLoad]);
 
   // Charger les messages au changement de chat (avec préchargement + cache intelligent)
   const loadMessages = async () => {
@@ -2253,7 +2272,7 @@ export default function ChatConversation({
       console.log('⚡⚡⚡ [INSTANT-DISPLAY] Found', chat.preloadedMessages.length, 'preloaded messages, displaying NOW!');
       // Les actions sont déjà dans metadata, extraites par adaptChatMessageToMessage
       const adaptedPreloadedMessages = chat.preloadedMessages.map(adaptChatMessageToMessage);
-      setMessages(adaptedPreloadedMessages);
+      setMessages(sortMessagesChronologically(adaptedPreloadedMessages));
       setLoading(false);
       setIsLoadingMessages(false);
       scrollToBottom(false, 50);
@@ -2272,7 +2291,7 @@ export default function ChatConversation({
         console.log('⚡ [CACHE-HIT] Found', cachedMessages.length, 'cached messages, displaying');
         // Les actions sont déjà dans metadata, extraites par adaptChatMessageToMessage
         const adaptedCachedMessages = cachedMessages.map(adaptChatMessageToMessage);
-        setMessages(adaptedCachedMessages);
+        setMessages(sortMessagesChronologically(adaptedCachedMessages));
         setLoading(false);
         setIsLoadingMessages(false);
         hasCache = true;
@@ -2337,7 +2356,7 @@ export default function ChatConversation({
         
         if (adaptedFreshMessages.length > 0) {
           // Mettre à jour avec les messages frais
-          setMessages(adaptedFreshMessages);
+          setMessages(sortMessagesChronologically(adaptedFreshMessages));
           
           // Sauvegarder en cache pour la prochaine fois
           await ChatCacheService.cacheMessages(chat.id, freshMessages);
@@ -2364,7 +2383,7 @@ export default function ChatConversation({
             console.log('🔄 [FALLBACK] Using cached messages due to error');
             // Les actions sont déjà dans metadata, extraites par adaptChatMessageToMessage
             const adaptedCachedMessages = cachedMessages.map(adaptChatMessageToMessage);
-            setMessages(adaptedCachedMessages);
+            setMessages(sortMessagesChronologically(adaptedCachedMessages));
             hasCache = true;
           } else {
             // Dernier recours: message de bienvenue
@@ -2705,7 +2724,7 @@ export default function ChatConversation({
             next.push(queued);
           }
         }
-        return next;
+        return sortMessagesChronologically(next);
       });
     };
 
@@ -2745,7 +2764,7 @@ export default function ChatConversation({
             return prev;
           }
           
-          return [...prev, adaptedMessage];
+          return sortMessagesChronologically([...prev, adaptedMessage]);
         });
         
         // Défiler vers le bas automatiquement
@@ -2790,7 +2809,11 @@ export default function ChatConversation({
               return {
                 ...attachment,
                 uploadedUri: uploadResult.fileUrl,
-                uploaded: true
+                uploaded: true,
+                data: {
+                  ...attachment.data,
+                  uploadPath: uploadResult.filePath,
+                },
               };
             }
           }
@@ -3057,19 +3080,18 @@ export default function ChatConversation({
       // Réinitialiser le transcript Web Speech après envoi
       webSpeechFinalizedRef.current = '';
 
-      // Déterminer si le message nécessite une analyse IA
-      // Ne pas analyser les messages avec des images pour éviter d'envoyer les images à l'API
-      const hasImages = processedAttachments.some(att => att.type === 'image');
+      // Déterminer si le texte nécessite une analyse IA. Les PJ restent en metadata
+      // et ne sont jamais envoyées au pipeline/OpenAI.
       const shouldAnalyze = needsAIAnalysis(originalText);
       
       console.log('🤔 [ANALYSIS-DECISION]', {
         shouldAnalyze,
-        hasImages,
+        hasAttachments: processedAttachments.length > 0,
         textLength: originalText.length,
-        willAnalyze: shouldAnalyze && !hasImages
+        willAnalyze: shouldAnalyze
       });
       
-      if (shouldAnalyze && !hasImages) {
+      if (shouldAnalyze) {
         // Vérifier que la session de chat est valide
         if (!chat?.id) {
           console.error('❌ [CHAT-ANALYSIS] Session de chat invalide, analyse IA ignorée');
@@ -3180,6 +3202,16 @@ export default function ChatConversation({
           // Pas de création client-side pour éviter les doublons.
           if (displayableActions.length > 0) {
             console.log(`ℹ️ [AUTO-VALIDATE] ${displayableActions.length} action(s) déjà créées par le pipeline (record_ids: ${displayableActions.map((a: any) => a.record_id || 'none').join(', ')})`);
+            if (processedAttachments.length > 0 && activeFarm?.farm_id && currentUserId) {
+              await ActionAttachmentService.linkChatAttachmentsToRecords({
+                farmId: activeFarm.farm_id,
+                userId: currentUserId,
+                chatMessageId: dbMessage.id,
+                attachments: processedAttachments,
+                actions: displayableActions,
+              });
+              console.log('🔗 [ACTION-ATTACHMENTS] PJ liées aux actions créées');
+            }
           } else if (result.is_help_request) {
             console.log('ℹ️ [AUTO-VALIDATE] Help request détecté, pas d\'actions');
           }
@@ -5191,6 +5223,12 @@ export default function ChatConversation({
 
   const currentVoiceHelpExample = VOICE_HELP_EXAMPLES[voiceHelpExampleIndex] || VOICE_HELP_EXAMPLES[0];
   const currentVoiceHelpCategoryStyle = VOICE_HELP_CATEGORY_STYLES[currentVoiceHelpExample.category];
+  const isCompactVoiceHelpLayout = windowWidth < 390 || windowHeight < 760;
+  const isLargeVoiceHelpLayout = windowWidth >= 860;
+  const voiceHelpShortcutColumns = isLargeVoiceHelpLayout ? 4 : windowWidth >= 560 ? 3 : 2;
+  const voiceHelpShortcutWidth = voiceHelpShortcutColumns === 4 ? '23.5%' : voiceHelpShortcutColumns === 3 ? '31.5%' : '48.5%';
+  const voiceHelpOverlayBottomInset = Platform.select({ web: spacing.md, ios: 104, default: 96 }) ?? spacing.md;
+  const voiceHelpPanelMaxWidth = isLargeVoiceHelpLayout ? 920 : 720;
   const goToNextVoiceHelpExample = () => {
     setVoiceHelpExampleIndex((prev) => (prev + 1) % VOICE_HELP_EXAMPLES.length);
   };
@@ -5258,7 +5296,8 @@ export default function ChatConversation({
 
       {/* ===== ZONE DES MESSAGES ===== */}
       <View style={{ flex: 1, position: 'relative' }}>
-      <ScrollView 
+      <ScrollView
+        key={chat.id}
         ref={scrollViewRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ 
@@ -5315,7 +5354,7 @@ export default function ChatConversation({
           </TouchableOpacity>
         )}
 
-        {messages.map((message) => {
+        {messages.map((message, messageIndex) => {
           // Skip les messages d'analyse temporaires (le TypingIndicator global s'en charge)
           if (message.isAnalyzing) {
             return null;
@@ -5336,9 +5375,23 @@ export default function ChatConversation({
 
           // Messages IA avec actions (ou raccourci help "Aller à...")
           if (message.isAI && (message.hasActions || (message.actions && message.actions.length > 0) || message.helpShortcut)) {
+            const hasDemoActions = message.actions && message.actions.length > 0 && !message.helpShortcut;
+            const sourceMessageWithAttachments = [...messages]
+              .slice(0, messageIndex)
+              .reverse()
+              .find(previous => previous.isUser && previous.realMessageId && previous.attachments?.length);
             return (
-              <AIResponseWithActions
+              <View
                 key={message.id}
+                ref={hasDemoActions ? demoMessageRef : undefined}
+                onLayout={hasDemoActions && isInterfaceTourMode ? (e) => {
+                  const y = e.nativeEvent.layout.y;
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 60), animated: false });
+                  }, 150);
+                } : undefined}
+              >
+              <AIResponseWithActions
                 message={message.text}
                 actions={message.actions || []}
                 helpShortcut={message.helpShortcut}
@@ -5396,6 +5449,14 @@ export default function ChatConversation({
                     });
                     return;
                   }
+                  if (screen === INTERFACE_TOUR_SHORTCUT_SCREEN) {
+                    navigation.setNavigationParams({
+                      openInterfaceTour: true,
+                      triggeredFromChat: true,
+                      returnChatId: chat.id,
+                    });
+                    return;
+                  }
                   navigation.navigateToTab('Profil');
                   navigation.navigateToScreen(screen as ScreenName);
                 }}
@@ -5423,18 +5484,36 @@ export default function ChatConversation({
 
                   try {
                     if (action.action_type === 'observation') {
-                      await AIChatService.createObservationFromAction(
+                      const recordId = await AIChatService.createObservationFromAction(
                         action as AnalyzedAction,
                         activeFarm.farm_id,
                         currentUserId
                       );
+                      if (sourceMessageWithAttachments?.realMessageId && sourceMessageWithAttachments.attachments?.length) {
+                        await ActionAttachmentService.linkChatAttachmentsToRecords({
+                          farmId: activeFarm.farm_id,
+                          userId: currentUserId,
+                          chatMessageId: sourceMessageWithAttachments.realMessageId,
+                          attachments: sourceMessageWithAttachments.attachments,
+                          actions: [{ ...action, record_id: recordId }],
+                        });
+                      }
                       Alert.alert('✅ Succès', 'Observation créée avec succès !');
                     } else if (['task_done', 'task_planned', 'harvest'].includes(action.action_type || '')) {
-                      await AIChatService.createTaskFromAction(
+                      const recordId = await AIChatService.createTaskFromAction(
                         action as AnalyzedAction,
                         activeFarm.farm_id,
                         currentUserId
                       );
+                      if (sourceMessageWithAttachments?.realMessageId && sourceMessageWithAttachments.attachments?.length) {
+                        await ActionAttachmentService.linkChatAttachmentsToRecords({
+                          farmId: activeFarm.farm_id,
+                          userId: currentUserId,
+                          chatMessageId: sourceMessageWithAttachments.realMessageId,
+                          attachments: sourceMessageWithAttachments.attachments,
+                          actions: [{ ...action, record_id: recordId }],
+                        });
+                      }
                       Alert.alert('✅ Succès', 'Tâche créée avec succès !');
                     }
                   } catch (error: any) {
@@ -5509,24 +5588,115 @@ export default function ChatConversation({
                 onRejectAction={async (index, action) => {
                   console.log('❌ [REJECT] Action rejetée:', index, action);
 
-                  const isTempId = action.id?.startsWith?.('temp_');
+                  const actionId = action.id ? String(action.id) : '';
+                  const isTempId = actionId.startsWith('temp_');
+                  const actionType = String(action.action_type || '');
+                  let deletionFeedbackMessage: string | null = null;
 
                   try {
-                    if (action.id && !isTempId) {
-                      await DirectSupabaseService.directUpdate(
-                        'chat_analyzed_actions',
-                        { user_status: 'rejected' },
-                        [{ column: 'id', value: action.id }]
-                      );
-                      console.log('✅ [REJECT] Action marquée comme rejetée:', action.id);
+                    // 1) Identifier le record métier lié (tâche/observation)
+                    const directRecordId =
+                      (action as any).record_id ??
+                      (action as any).extracted_data?.record_id ??
+                      null;
+                    let linkedRecordId = directRecordId != null ? String(directRecordId) : null;
+
+                    if (!linkedRecordId && actionId && !isTempId) {
+                      linkedRecordId = await AIChatService.getExistingRecordId(actionId);
                     }
-                    Alert.alert('Action rejetée', 'L\'action a été ignorée.');
+
+                    // 2) Aligner avec les corbeilles de l'écran listes: soft delete record métier
+                    if (linkedRecordId) {
+                      if (['task_done', 'task_planned', 'harvest'].includes(actionType)) {
+                        await TaskService.deleteTask(linkedRecordId);
+                        console.log('✅ [REJECT] Tâche liée soft-deleted:', linkedRecordId);
+                        deletionFeedbackMessage = '✅ La tâche a été supprimée.';
+                      } else if (actionType === 'observation') {
+                        await ObservationService.deleteObservation(linkedRecordId);
+                        console.log('✅ [REJECT] Observation liée soft-deleted:', linkedRecordId);
+                        deletionFeedbackMessage = "✅ L'observation a été supprimée.";
+                      }
+                    }
+
+                    // 3) Marquer l'action IA comme rejetée (quand id DB disponible)
+                    if (actionId && !isTempId) {
+                      await AIChatService.rejectAction(actionId);
+                      console.log('✅ [REJECT] Action marquée comme rejetée:', actionId);
+                    }
+
+                    // 4) Retirer la card rejetée de l'UI et persister les metadata du message
+                    setMessages(prev => prev.map(msg => {
+                      if (!msg.actions || msg.actions.length === 0) return msg;
+
+                      const isSameAction = (candidate: any) => {
+                        const sameId =
+                          actionId &&
+                          candidate?.id &&
+                          String(candidate.id) === actionId;
+                        const candidateRecordId =
+                          candidate?.record_id ??
+                          candidate?.extracted_data?.record_id ??
+                          null;
+                        const sameRecord =
+                          linkedRecordId &&
+                          candidateRecordId != null &&
+                          String(candidateRecordId) === linkedRecordId;
+                        return !!sameId || !!sameRecord;
+                      };
+
+                      const updatedActions = msg.actions.filter((candidate) => !isSameAction(candidate));
+                      if (updatedActions.length === msg.actions.length) return msg;
+
+                      updateMessageMetadata(msg.realMessageId || msg.id, updatedActions);
+                      return {
+                        ...msg,
+                        actions: updatedActions,
+                        hasActions: updatedActions.length > 0,
+                      };
+                    }));
+
+                    // 5) Afficher un message système dans le chat pour confirmer la suppression métier
+                    if (deletionFeedbackMessage && chat?.id && !chat.id.startsWith('temp-')) {
+                      const dbFeedbackMessage = await ChatServiceDirect.sendMessage({
+                        session_id: chat.id,
+                        role: 'assistant',
+                        content: deletionFeedbackMessage,
+                        ai_confidence: 1,
+                        metadata: {
+                          type: 'action_rejected_deletion_feedback',
+                          has_actions: false,
+                        },
+                      });
+
+                      const adaptedFeedbackMessage = adaptChatMessageToMessage(dbFeedbackMessage);
+                      setMessages(prev =>
+                        prev.some(msg => msg.id === adaptedFeedbackMessage.id)
+                          ? prev
+                          : [...prev, adaptedFeedbackMessage]
+                      );
+
+                      onUpdateChat(chat.id, {
+                        lastMessage: deletionFeedbackMessage,
+                        timestamp: new Date(),
+                        messageCount: messages.length + 1,
+                      });
+                    }
+
+                    Alert.alert(
+                      'Action rejetée',
+                      linkedRecordId
+                        ? "L'action a été rejetée et l'élément lié a été retiré."
+                        : "L'action a été ignorée."
+                    );
+
+                    scrollToBottom(true);
                   } catch (error: any) {
                     console.error('❌ [REJECT] Erreur:', error);
                     Alert.alert('Erreur', 'Impossible de rejeter l\'action');
                   }
                 }}
               />
+              </View>
             );
           }
 
@@ -5763,191 +5933,253 @@ export default function ChatConversation({
             top: 0,
             left: 0,
             right: 0,
-            bottom: 0,
+            bottom: voiceHelpOverlayBottomInset,
             zIndex: 20,
             backgroundColor: 'rgba(255,255,255,0.97)',
             borderTopWidth: 1,
             borderTopColor: colors.border.primary,
-            paddingHorizontal: Platform.select({ web: spacing.md, default: spacing.md }),
+            paddingHorizontal: Platform.select({ web: spacing.lg, default: spacing.md }),
             paddingTop: spacing.md,
-            paddingBottom: spacing.sm,
+            paddingBottom: spacing.md,
+            alignItems: 'center',
           }}
         >
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: spacing.sm,
-            }}
-          >
-            <View style={{ flex: 1, paddingRight: spacing.sm }}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text.primary }}>
-                Aide saisie vocale
-              </Text>
-              <Text style={{ fontSize: 13, color: colors.text.secondary }}>
-                Minimum à dire : action + culture + durée
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setShowVoiceHelpOverlay(false)}
+          <View style={{ width: '100%', maxWidth: voiceHelpPanelMaxWidth, flex: 1 }}>
+            <View
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 15,
-                backgroundColor: colors.gray[100],
-                borderWidth: 1,
-                borderColor: colors.border.primary,
-                justifyContent: 'center',
+                flexDirection: 'row',
                 alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: spacing.sm,
               }}
             >
-              <Ionicons name="close" size={16} color={colors.text.secondary} />
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <TouchableOpacity
-              activeOpacity={0.95}
-              onPress={goToNextVoiceHelpExample}
-            >
-              <View
-                {...voiceHelpSwipeResponder.panHandlers}
+              <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                <Text style={{ fontSize: isCompactVoiceHelpLayout ? 17 : 16, fontWeight: '700', color: colors.text.primary }}>
+                  Aide saisie vocale
+                </Text>
+                <Text style={{ fontSize: isCompactVoiceHelpLayout ? 14 : 13, color: colors.text.secondary }}>
+                  Minimum à dire : action + culture + durée
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowVoiceHelpOverlay(false)}
                 style={{
-                  backgroundColor: colors.background.secondary,
-                  borderRadius: 14,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  backgroundColor: colors.gray[100],
                   borderWidth: 1,
                   borderColor: colors.border.primary,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  marginBottom: spacing.sm,
+                  justifyContent: 'center',
+                  alignItems: 'center',
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontSize: 12, color: colors.text.secondary, fontWeight: '600' }}>
-                      Exemple {voiceHelpExampleIndex + 1}/{VOICE_HELP_EXAMPLES.length}
-                    </Text>
-                    <View
-                      style={{
-                        backgroundColor: currentVoiceHelpCategoryStyle.inactiveBg,
-                        borderColor: currentVoiceHelpCategoryStyle.inactiveBorder,
-                        borderWidth: 1,
-                        borderRadius: 999,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          fontWeight: '700',
-                          color: currentVoiceHelpCategoryStyle.inactiveText,
-                        }}
-                      >
-                        {currentVoiceHelpCategoryStyle.label}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 11, color: colors.text.tertiary }}>
-                    Touchez ou glissez ← →
-                  </Text>
-                </View>
-
-                {renderHighlightedVoiceHelpSentence(currentVoiceHelpExample)}
-
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 4 }}>
-                  Essentiels
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
-                  {currentVoiceHelpExample.essentials.map((tag, tagIndex) =>
-                    renderVoiceHelpTag(tag, `ess-${voiceHelpExampleIndex}-${tagIndex}`)
-                  )}
-                </View>
-
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 4 }}>
-                  Optionnels
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {currentVoiceHelpExample.optional.length > 0 ? (
-                    currentVoiceHelpExample.optional.map((tag, tagIndex) =>
-                      renderVoiceHelpTag(tag, `opt-${voiceHelpExampleIndex}-${tagIndex}`)
-                    )
-                  ) : (
-                    <Text style={{ fontSize: 12, color: colors.text.tertiary }}>
-                      Aucun pour cet exemple
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-              {VOICE_HELP_EXAMPLES.map((_, idx) => (
-                <View
-                  key={`dot-${idx}`}
-                  style={{
-                    width: idx === voiceHelpExampleIndex ? 16 : 6,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor:
-                      idx === voiceHelpExampleIndex ? colors.primary[500] : colors.gray[300],
-                  }}
-                />
-              ))}
+                <Ionicons name="close" size={16} color={colors.text.secondary} />
+              </TouchableOpacity>
             </View>
 
-            <View style={{ marginTop: spacing.sm }}>
-              <Text style={{ fontSize: 11, color: colors.text.tertiary, marginBottom: 6 }}>
-                Raccourcis exemples
-              </Text>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: spacing.sm }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onPress={goToNextVoiceHelpExample}
+              >
+                <View
+                  {...voiceHelpSwipeResponder.panHandlers}
+                  style={{
+                    backgroundColor: colors.background.secondary,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: colors.border.primary,
+                    paddingHorizontal: isCompactVoiceHelpLayout ? 10 : 12,
+                    paddingVertical: isCompactVoiceHelpLayout ? 8 : 10,
+                    marginBottom: spacing.sm,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: isCompactVoiceHelpLayout ? 11 : 12, color: colors.text.secondary, fontWeight: '600' }}>
+                        Exemple {voiceHelpExampleIndex + 1}/{VOICE_HELP_EXAMPLES.length}
+                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: currentVoiceHelpCategoryStyle.inactiveBg,
+                          borderColor: currentVoiceHelpCategoryStyle.inactiveBorder,
+                          borderWidth: 1,
+                          borderRadius: 999,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: '700',
+                            color: currentVoiceHelpCategoryStyle.inactiveText,
+                          }}
+                        >
+                          {currentVoiceHelpCategoryStyle.label}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: colors.text.tertiary }}>
+                      Glissez pour changer
+                    </Text>
+                  </View>
+
+                  {renderHighlightedVoiceHelpSentence(currentVoiceHelpExample)}
+
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 4 }}>
+                    Essentiels
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
+                    {currentVoiceHelpExample.essentials.map((tag, tagIndex) =>
+                      renderVoiceHelpTag(tag, `ess-${voiceHelpExampleIndex}-${tagIndex}`)
+                    )}
+                  </View>
+
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text.secondary, marginBottom: 4 }}>
+                    Optionnels
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                    {currentVoiceHelpExample.optional.length > 0 ? (
+                      currentVoiceHelpExample.optional.map((tag, tagIndex) =>
+                        renderVoiceHelpTag(tag, `opt-${voiceHelpExampleIndex}-${tagIndex}`)
+                      )
+                    ) : (
+                      <Text style={{ fontSize: 12, color: colors.text.tertiary }}>
+                        Aucun pour cet exemple
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+
               <View
                 style={{
                   flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: spacing.sm,
                 }}
               >
-                {VOICE_HELP_EXAMPLES.map((example, idx) => (
-                  <TouchableOpacity
-                    key={`shortcut-${idx}`}
-                    onPress={() => setVoiceHelpExampleIndex(idx)}
+                <TouchableOpacity
+                  onPress={goToPreviousVoiceHelpExample}
+                  style={{
+                    width: 38,
+                    height: 30,
+                    borderRadius: 6,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginRight: 10,
+                    backgroundColor: colors.gray[100],
+                  }}
+                >
+                  <Ionicons name="caret-back" size={18} color={colors.gray[500]} />
+                </TouchableOpacity>
+                <View
+                  style={{
+                    minWidth: isCompactVoiceHelpLayout ? 130 : 180,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: colors.gray[100],
+                    borderWidth: 1,
+                    borderColor: colors.border.primary,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text.secondary }}>
+                    {currentVoiceHelpExample.shortcutLabel}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={goToNextVoiceHelpExample}
+                  style={{
+                    width: 38,
+                    height: 30,
+                    borderRadius: 6,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    marginLeft: 10,
+                    backgroundColor: colors.gray[100],
+                  }}
+                >
+                  <Ionicons name="caret-forward" size={18} color={colors.gray[500]} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+                {VOICE_HELP_EXAMPLES.map((_, idx) => (
+                  <View
+                    key={`dot-${idx}`}
                     style={{
-                      width: '31.5%',
-                      marginBottom: 6,
-                      backgroundColor: idx === voiceHelpExampleIndex
-                        ? VOICE_HELP_CATEGORY_STYLES[example.category].activeBg
-                        : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveBg,
-                      borderColor: idx === voiceHelpExampleIndex
-                        ? VOICE_HELP_CATEGORY_STYLES[example.category].activeBorder
-                        : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveBorder,
-                      borderWidth: idx === voiceHelpExampleIndex ? 1.5 : 1,
-                      borderRadius: 10,
-                      paddingHorizontal: 8,
-                      paddingVertical: 6,
-                      minHeight: 34,
-                      justifyContent: 'center',
-                      alignItems: 'center',
+                      width: idx === voiceHelpExampleIndex ? 16 : 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor:
+                        idx === voiceHelpExampleIndex ? colors.primary[500] : colors.gray[300],
                     }}
-                  >
-                    <Text
-                      numberOfLines={2}
-                      style={{
-                        fontSize: 11,
-                        lineHeight: 13,
-                        textAlign: 'center',
-                        fontWeight: '600',
-                        color: idx === voiceHelpExampleIndex
-                          ? VOICE_HELP_CATEGORY_STYLES[example.category].activeText
-                          : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveText,
-                      }}
-                    >
-                      {example.shortcutLabel}
-                    </Text>
-                  </TouchableOpacity>
+                  />
                 ))}
               </View>
-            </View>
+
+              <View style={{ marginTop: spacing.sm }}>
+                <Text style={{ fontSize: 12, color: colors.text.tertiary, marginBottom: 8, fontWeight: '600' }}>
+                  Liste des exemples
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  {VOICE_HELP_EXAMPLES.map((example, idx) => (
+                    <TouchableOpacity
+                      key={`shortcut-${idx}`}
+                      onPress={() => setVoiceHelpExampleIndex(idx)}
+                      style={{
+                        width: voiceHelpShortcutWidth,
+                        marginBottom: 8,
+                        backgroundColor: idx === voiceHelpExampleIndex
+                          ? VOICE_HELP_CATEGORY_STYLES[example.category].activeBg
+                          : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveBg,
+                        borderColor: idx === voiceHelpExampleIndex
+                          ? VOICE_HELP_CATEGORY_STYLES[example.category].activeBorder
+                          : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveBorder,
+                        borderWidth: idx === voiceHelpExampleIndex ? 1.5 : 1,
+                        borderRadius: 10,
+                        paddingHorizontal: 8,
+                        paddingVertical: 6,
+                        minHeight: 34,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        numberOfLines={2}
+                        style={{
+                          fontSize: 11,
+                          lineHeight: 13,
+                          textAlign: 'center',
+                          fontWeight: '600',
+                          color: idx === voiceHelpExampleIndex
+                            ? VOICE_HELP_CATEGORY_STYLES[example.category].activeText
+                            : VOICE_HELP_CATEGORY_STYLES[example.category].inactiveText,
+                        }}
+                      >
+                        {example.shortcutLabel}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
           </View>
         </View>
       )}
@@ -6033,7 +6265,7 @@ export default function ChatConversation({
                   }}
                 >
                   <Ionicons
-                    name="text"
+                    name="pulse-outline"
                     size={14}
                     color={inputMode === 'dictation' ? colors.text.inverse : colors.text.secondary}
                   />
@@ -6249,53 +6481,53 @@ export default function ChatConversation({
               </TouchableOpacity>
 
               {/* Input field séparé au centre - multiline avec croissance */}
-              <View style={{
-                flex: 1,
-                backgroundColor: colors.background.secondary,
-                borderRadius: 20,
-                borderWidth: 1.5,
-                borderColor: colors.border.primary,
-                paddingHorizontal: 16,
-                paddingVertical: 8,
-                height: inputHeight,
-                maxHeight: MAX_INPUT_HEIGHT,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.05,
-                shadowRadius: 8,
-                elevation: 2,
-              }}>
-                <TextInput
-                  style={{
-                    flex: 1,
-                    fontSize: 16,
-                    color: colors.text.primary,
-                    lineHeight: LINE_HEIGHT,
-                    textAlignVertical: 'top',
-                    padding: 0, // Pas de padding supplémentaire
-                  }}
-                  multiline={true}
-                  placeholder="Message Thomas..."
-                  placeholderTextColor={colors.gray[400]}
-                  value={inputText}
-                  onChangeText={(text) => {
-                    setInputText(text);
-                  }}
-                  onContentSizeChange={(event) => {
-                    const { height } = event.nativeEvent.contentSize;
-                    // Calculer la hauteur totale : hauteur du contenu + padding vertical (16px)
-                    const totalHeight = height + 16; // paddingVertical: 8px * 2
-                    // Limiter entre min et max
-                    const newHeight = Math.max(MIN_INPUT_HEIGHT, Math.min(totalHeight, MAX_INPUT_HEIGHT));
-                    setInputHeight(newHeight);
-                  }}
-                  onSubmitEditing={sendMessage}
-                  blurOnSubmit={false}
-                  returnKeyType="send"
-                />
-              </View>
+              <InterfaceTourTarget targetId="chat.input.text" style={{ flex: 1 }}>
+                <View style={{
+                  backgroundColor: colors.background.secondary,
+                  borderRadius: 20,
+                  borderWidth: 1.5,
+                  borderColor: colors.border.primary,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  height: inputHeight,
+                  maxHeight: MAX_INPUT_HEIGHT,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 8,
+                  elevation: 2,
+                }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      fontSize: 16,
+                      color: colors.text.primary,
+                      lineHeight: LINE_HEIGHT,
+                      textAlignVertical: 'top',
+                      padding: 0,
+                    }}
+                    multiline={true}
+                    placeholder="Message Thomas..."
+                    placeholderTextColor={colors.gray[400]}
+                    value={inputText}
+                    onChangeText={(text) => {
+                      setInputText(text);
+                    }}
+                    onContentSizeChange={(event) => {
+                      const { height } = event.nativeEvent.contentSize;
+                      const totalHeight = height + 16;
+                      const newHeight = Math.max(MIN_INPUT_HEIGHT, Math.min(totalHeight, MAX_INPUT_HEIGHT));
+                      setInputHeight(newHeight);
+                    }}
+                    onSubmitEditing={sendMessage}
+                    blurOnSubmit={false}
+                    returnKeyType="send"
+                  />
+                </View>
+              </InterfaceTourTarget>
 
               {/* Bouton vocal/envoi À L'EXTÉRIEUR à droite */}
+              <InterfaceTourTarget targetId="chat.input.action">
               <TouchableOpacity
                 onPress={() => {
                   const hasText = inputText.trim() || draftAttachments.length > 0;
@@ -6323,11 +6555,12 @@ export default function ChatConversation({
                 }}
               >
                 <Ionicons 
-                  name={(inputText.trim() || draftAttachments.length > 0) ? "arrow-up" : (inputMode === 'dictation' ? "text" : "mic")} 
+                  name={(inputText.trim() || draftAttachments.length > 0) ? "arrow-up" : (inputMode === 'dictation' ? "pulse" : "mic")} 
                   size={20} 
                   color={colors.text.inverse}
                 />
               </TouchableOpacity>
+              </InterfaceTourTarget>
             </View>
           )}
         </View>

@@ -12,6 +12,7 @@ import { TaskData } from './TaskCard';
 
 export interface CompactTaskCardProps {
   task: TaskData;
+  attachmentSummary?: { imageCount: number; hasLocation: boolean } | undefined;
   onPress?: (task: TaskData) => void;
   onDelete?: (task: TaskData) => void;
   onDeleteComplete?: () => void; // Called when animation completes
@@ -21,6 +22,7 @@ export interface CompactTaskCardProps {
 
 export const CompactTaskCard: React.FC<CompactTaskCardProps> = ({
   task,
+  attachmentSummary,
   onPress,
   onDelete,
   onDeleteComplete,
@@ -122,7 +124,32 @@ export const CompactTaskCard: React.FC<CompactTaskCardProps> = ({
           >
             {task.title}
           </Text>
+          {task.created_by_first_name ? (
+            <Text
+              variant="caption"
+              style={{
+                marginTop: 2,
+                fontSize: 11,
+                color: colors.gray[500],
+              }}
+              numberOfLines={1}
+            >
+              {task.created_by_first_name}
+            </Text>
+          ) : null}
         </View>
+
+        {/* Chevron */}
+        {(attachmentSummary?.imageCount || attachmentSummary?.hasLocation) ? (
+          <View style={{ flexDirection: 'row', gap: 4, marginLeft: spacing.xs }}>
+            {attachmentSummary.imageCount ? (
+              <Text style={{ fontSize: 14 }}>📷</Text>
+            ) : null}
+            {attachmentSummary.hasLocation ? (
+              <Text style={{ fontSize: 14 }}>📍</Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Chevron */}
         <View style={{ marginLeft: spacing.xs }}>

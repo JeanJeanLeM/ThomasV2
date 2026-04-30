@@ -21,6 +21,7 @@ import {
 } from '../icons';
 import { cultureService } from '../../services/CultureService';
 import { useAuth } from '../../contexts/AuthContext';
+import { buildPlantNameSet } from '../../utils/statisticsPeriodHints';
 import type { Culture, CultureVariety, CultureType } from '../../types';
 
 export interface CultureDropdownItem {
@@ -49,6 +50,10 @@ export interface CultureDropdownSelectorProps {
   required?: boolean;
   style?: ViewStyle;
   useUserPreferences?: boolean; // Si true, filtre selon les préférences utilisateur (défaut: true)
+  /** Si défini et non vide : ne lister que les cultures / variétés citées dans les tâches (champ plants) */
+  referencedPlantNames?: string[];
+  /** Après choix dans la liste : vider le champ (ex. ajout immédiat aux filtres) */
+  clearFieldAfterSelect?: boolean;
 }
 
 export const CultureDropdownSelector: React.FC<CultureDropdownSelectorProps> = ({
@@ -68,6 +73,8 @@ export const CultureDropdownSelector: React.FC<CultureDropdownSelectorProps> = (
   required = false,
   style,
   useUserPreferences = true, // Par défaut, utiliser les préférences utilisateur
+  referencedPlantNames,
+  clearFieldAfterSelect = false,
 }) => {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -159,12 +166,40 @@ export const CultureDropdownSelector: React.FC<CultureDropdownSelectorProps> = (
     }
   };
 
+  const plantSetForPeriod = useMemo(() => {
+    if (!referencedPlantNames || referencedPlantNames.length === 0) return null;
+    return buildPlantNameSet(referencedPlantNames);
+  }, [referencedPlantNames]);
+
+  const culturesForPeriod = useMemo(() => {
+    if (!plantSetForPeriod || plantSetForPeriod.size === 0) return cultures;
+    return cultures.filter((c) => {
+      const cn = c.name.trim().toLowerCase();
+      if (plantSetForPeriod.has(cn)) return true;
+      for (const p of plantSetForPeriod) {
+        if (p.startsWith(`${cn} - `)) return true;
+      }
+      return false;
+    });
+  }, [cultures, plantSetForPeriod]);
+
+  const varietiesForPeriod = useMemo(() => {
+    if (!plantSetForPeriod || plantSetForPeriod.size === 0) return varieties;
+    return varieties.filter((v) => {
+      const cultureName = v.culture?.name?.trim().toLowerCase() ?? '';
+      const varietyName = v.name?.trim().toLowerCase() ?? '';
+      if (!cultureName || !varietyName) return false;
+      const full = `${cultureName} - ${varietyName}`;
+      return plantSetForPeriod.has(full);
+    });
+  }, [varieties, plantSetForPeriod]);
+
   // Créer les items pour le dropdown
   const dropdownItems = useMemo(() => {
     const items: CultureDropdownItem[] = [];
 
     // Filtrer les cultures
-    let filteredCultures = cultures;
+    let filteredCultures = culturesForPeriod;
     if (selectedCultureType !== 'all') {
       filteredCultures = cultures.filter(c => c.type === selectedCultureType);
     }
@@ -182,9 +217,9 @@ export const CultureDropdownSelector: React.FC<CultureDropdownSelectorProps> = (
 
     // Ajouter les variétés si activé
     if (allowVarieties) {
-      let filteredVarieties = varieties;
+      let filteredVarieties = varietiesForPeriod;
       if (selectedCultureType !== 'all') {
-        filteredVarieties = varieties.filter(v => v.culture?.type === selectedCultureType);
+        filteredVarieties = varietiesForPeriod.filter(v => v.culture?.type === selectedCultureType);
       }
 
       filteredVarieties.forEach(variety => {
@@ -246,11 +281,23 @@ export const CultureDropdownSelector: React.FC<CultureDropdownSelectorProps> = (
     }
 
     return items.sort((a, b) => a.label.localeCompare(b.label));
-  }, [cultures, varieties, selectedCultureType, allowVarieties, searchable, searchText, dropdownSearchText]);
+  }, [
+    culturesForPeriod,
+    varietiesForPeriod,
+    selectedCultureType,
+    allowVarieties,
+    searchable,
+    searchText,
+    dropdownSearchText,
+  ]);
 
   const handleItemSelect = (item: CultureDropdownItem) => {
     onSelectionChange(item);
-    setSearchText(item.label);
+    if (clearFieldAfterSelect) {
+      setSearchText('');
+    } else {
+      setSearchText(item.label);
+    }
     setDropdownSearchText('');
     setIsOpen(false);
   };

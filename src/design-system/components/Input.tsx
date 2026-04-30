@@ -68,25 +68,27 @@ export const Input: React.FC<InputProps> = ({
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: spacing.md,
-    minHeight: props.multiline && props.numberOfLines 
-      ? (props.numberOfLines * 20) + (spacing.md * 2) // Hauteur approximative par ligne + padding
-      : spacing.interactive.inputHeight,
+    minHeight:
+      props.multiline && props.numberOfLines
+        ? props.numberOfLines * 20 + spacing.md * 2 // Hauteur approximative par ligne + padding
+        : spacing.interactive.inputHeight,
     backgroundColor: disabled ? colors.gray[50] : colors.background.secondary,
     borderColor: hasError
       ? colors.border.error
       : isFocused
-      ? colors.border.focus
-      : colors.border.primary,
+        ? colors.border.focus
+        : colors.border.primary,
     // Éviter les effets de superposition
     overflow: 'hidden',
     // Ombre subtile au focus pour améliorer la visibilité
-    ...(isFocused && !hasError && {
-      shadowColor: colors.border.focus,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 0.2,
-      shadowRadius: 4,
-      elevation: 2,
-    }),
+    ...(isFocused &&
+      !hasError && {
+        shadowColor: colors.border.focus,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 2,
+      }),
     // Styles spécifiques pour le web
     ...Platform.select({
       web: {
@@ -155,19 +157,22 @@ export const Input: React.FC<InputProps> = ({
   // iOS: `numeric` / `number-pad` n'affichent pas toujours de séparateur décimal.
   // On force un clavier décimal pour permettre la saisie de valeurs non entières.
   const effectiveKeyboardType =
-    Platform.OS === 'ios' && keyboardType === 'numeric'
-      ? 'decimal-pad'
-      : keyboardType;
+    Platform.OS === 'ios' && keyboardType === 'numeric' ? 'decimal-pad' : keyboardType;
 
   const handleChangeText = (text: string) => {
     if (!onChangeText) return;
-    // Permet `,` ou `.` sur iOS tout en gardant un format exploitable par parseFloat.
-    const normalizedText =
-      Platform.OS === 'ios' && effectiveKeyboardType === 'decimal-pad'
-        ? text.replace(',', '.')
-        : text;
+    const normalizedText = effectiveKeyboardType === 'decimal-pad' ? text.replace(/,/g, '.') : text;
     onChangeText(normalizedText);
   };
+
+  const webKeyboardProps =
+    Platform.OS === 'web'
+      ? effectiveKeyboardType === 'decimal-pad'
+        ? ({ inputMode: 'decimal', pattern: '[0-9]*[.,]?[0-9]*' } as const)
+        : effectiveKeyboardType === 'numeric' || effectiveKeyboardType === 'number-pad'
+          ? ({ inputMode: 'numeric', pattern: '[0-9]*' } as const)
+          : {}
+      : {};
 
   const toggleSecureEntry = () => {
     setIsSecure(!isSecure);
@@ -184,19 +189,22 @@ export const Input: React.FC<InputProps> = ({
       )}
 
       {/* Input Container */}
-      <View 
+      <View
         style={getInputContainerStyle()}
-        {...(Platform.OS === 'web' && props.multiline && { 
-          className: 'thomas-input-container-multiline' 
-        })}
+        {...(Platform.OS === 'web' &&
+          props.multiline && {
+            className: 'thomas-input-container-multiline',
+          })}
       >
         {/* Left Icon */}
         {leftIcon && (
-          <View style={{ 
-            marginRight: spacing.sm,
-            alignSelf: props.multiline ? 'flex-start' : 'center',
-            marginTop: props.multiline ? spacing.sm : 0,
-          }}>
+          <View
+            style={{
+              marginRight: spacing.sm,
+              alignSelf: props.multiline ? 'flex-start' : 'center',
+              marginTop: props.multiline ? spacing.sm : 0,
+            }}
+          >
             {leftIcon}
           </View>
         )}
@@ -204,14 +212,15 @@ export const Input: React.FC<InputProps> = ({
         {/* Text Input */}
         <TextInput
           style={[
-            getInputStyle(), 
+            getInputStyle(),
             inputStyle,
             // Assurer que le TextInput prend toute la largeur disponible
-            Platform.OS === 'web' && {
-              flex: 1,
-              minWidth: 0,
-              width: '100%',
-            } as any,
+            Platform.OS === 'web' &&
+              ({
+                flex: 1,
+                minWidth: 0,
+                width: '100%',
+              } as any),
           ]}
           // Classe CSS spécifique pour supprimer tous les styles natifs
           {...(typeof window !== 'undefined' && { className: 'thomas-input' })}
@@ -222,6 +231,7 @@ export const Input: React.FC<InputProps> = ({
           editable={!disabled}
           secureTextEntry={isSecure}
           placeholderTextColor={colors.text.tertiary}
+          {...(Platform.OS === 'web' ? (webKeyboardProps as any) : {})}
           {...props}
           keyboardType={effectiveKeyboardType}
         />
@@ -230,7 +240,7 @@ export const Input: React.FC<InputProps> = ({
         {rightIcon && (
           <TouchableOpacity
             onPress={onRightIconPress}
-            style={{ 
+            style={{
               marginLeft: spacing.sm,
               alignSelf: props.multiline ? 'flex-start' : 'center',
               marginTop: props.multiline ? spacing.sm : 0,
@@ -243,10 +253,7 @@ export const Input: React.FC<InputProps> = ({
 
         {/* Password Toggle */}
         {secureTextEntry && (
-          <TouchableOpacity
-            onPress={toggleSecureEntry}
-            style={{ marginLeft: spacing.sm }}
-          >
+          <TouchableOpacity onPress={toggleSecureEntry} style={{ marginLeft: spacing.sm }}>
             <Text style={{ color: colors.primary[600], fontSize: 12 }}>
               {isSecure ? 'Voir' : 'Cacher'}
             </Text>
@@ -255,17 +262,11 @@ export const Input: React.FC<InputProps> = ({
       </View>
 
       {/* Error Message */}
-      {error && (
-        <Text style={[textStyles.error, { marginTop: spacing.xs }]}>
-          {error}
-        </Text>
-      )}
+      {error && <Text style={[textStyles.error, { marginTop: spacing.xs }]}>{error}</Text>}
 
       {/* Hint Message */}
       {hint && !error && (
-        <Text style={[textStyles.caption, { marginTop: spacing.xs }]}>
-          {hint}
-        </Text>
+        <Text style={[textStyles.caption, { marginTop: spacing.xs }]}>{hint}</Text>
       )}
     </View>
   );

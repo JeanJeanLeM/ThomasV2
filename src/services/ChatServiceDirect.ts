@@ -27,6 +27,7 @@ export interface ChatSession {
   last_message_content?: string;
   participant_count?: number;
   participants?: ChatParticipant[];
+  creator_first_name?: string;
 }
 
 export interface ChatParticipant {
@@ -67,6 +68,39 @@ export interface CreateMessageData {
 }
 
 export class ChatServiceDirect {
+  private static async enrichSessionsWithCreatorInfo(sessions: ChatSession[]): Promise<ChatSession[]> {
+    if (!Array.isArray(sessions) || sessions.length === 0) return sessions;
+
+    const uniqueUserIds = Array.from(new Set(sessions.map((session) => session.user_id).filter(Boolean)));
+    if (uniqueUserIds.length === 0) return sessions;
+
+    try {
+      const profilesResult = await DirectSupabaseService.directSelect(
+        'profiles',
+        'id,first_name',
+        [{ column: 'id', value: `(${uniqueUserIds.join(',')})`, operator: 'in' }]
+      );
+
+      if (profilesResult.error || !Array.isArray(profilesResult.data)) {
+        return sessions;
+      }
+
+      const profileById: Record<string, string> = {};
+      for (const profile of profilesResult.data) {
+        if (profile?.id) {
+          profileById[profile.id] = profile.first_name || '';
+        }
+      }
+
+      return sessions.map((session) => ({
+        ...session,
+        creator_first_name: profileById[session.user_id] || undefined,
+      }));
+    } catch (error) {
+      console.warn('⚠️ [CHAT-DIRECT] enrichSessionsWithCreatorInfo failed:', error);
+      return sessions;
+    }
+  }
   
   /**
    * Test de connectivité avec fetch direct
@@ -126,6 +160,7 @@ export class ChatServiceDirect {
       }
 
       const sessions = Array.isArray(result.data) ? result.data : (result.data ? [result.data] : []);
+      const sessionsWithCreator = await this.enrichSessionsWithCreatorInfo(sessions);
       
       // Log détaillé selon le type de sessions chargées
       if (includeArchived === true) {
@@ -140,7 +175,7 @@ export class ChatServiceDirect {
         }
       }
       
-      return sessions.map(session => ({
+      return sessionsWithCreator.map(session => ({
         ...session,
         participants: session.participants || []
       }));
@@ -176,8 +211,9 @@ export class ChatServiceDirect {
       }
 
       console.log('✅ [CHAT-DIRECT] Chat session found:', sessionId);
+      const [enrichedSession] = await this.enrichSessionsWithCreatorInfo([result.data]);
       return {
-        ...result.data,
+        ...(enrichedSession || result.data),
         participants: result.data.participants || []
       };
       
@@ -657,8 +693,10 @@ export class ChatServiceDirect {
           participants: session.participants || []
         }));
 
-      console.log(`✅ [CHAT-DIRECT] Found ${archivedSessions.length} archived chats`);
-      return archivedSessions;
+      const archivedSessionsWithCreator = await this.enrichSessionsWithCreatorInfo(archivedSessions);
+
+      console.log(`✅ [CHAT-DIRECT] Found ${archivedSessionsWithCreator.length} archived chats`);
+      return archivedSessionsWithCreator;
       
     } catch (error) {
       console.error('❌ [CHAT-DIRECT] Exception fetching archived chats:', error);

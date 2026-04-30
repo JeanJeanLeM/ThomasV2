@@ -11,7 +11,7 @@ interface NavigationState {
   navigationHistory: ScreenName[];
 }
 
-export type NavigationParams = Record<string, unknown>;
+export type NavigationParams = any;
 
 interface NavigationContextType {
   // État de navigation

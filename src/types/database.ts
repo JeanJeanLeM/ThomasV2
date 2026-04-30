@@ -365,6 +365,29 @@ export interface Database {
           updated_at?: string;
         };
       };
+      task_members: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          role: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          role?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          task_id?: string;
+          user_id?: string;
+          role?: string;
+          created_at?: string;
+        };
+      };
       notifications: {
         Row: {
           id: string;

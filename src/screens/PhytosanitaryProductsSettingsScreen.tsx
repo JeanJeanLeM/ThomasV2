@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { colors } from '../design-system/colors';
 import { spacing } from '../design-system/spacing';
 import { useFarm } from '../contexts/FarmContext';
@@ -66,6 +66,8 @@ export default function PhytosanitaryProductsSettingsScreen({
   const [productUsages, setProductUsages] = useState<PhytosanitaryUsage[]>([]);
   const [isLoadingUsages, setIsLoadingUsages] = useState(false);
   const [showAllDetails, setShowAllDetails] = useState(false);
+  const [detailSelectedCultures, setDetailSelectedCultures] = useState<string[]>([]);
+  const [detailSelectedPests, setDetailSelectedPests] = useState<string[]>([]);
 
   // Charger les préférences et produits
   useEffect(() => {
@@ -596,6 +598,8 @@ export default function PhytosanitaryProductsSettingsScreen({
     setSelectedProduct(product);
     setShowDetailModal(true);
     setShowAllDetails(false);
+    setDetailSelectedCultures([]);
+    setDetailSelectedPests([]);
     
     // Charger les usages si ce n'est pas un produit personnalisé
     if (!product.is_custom) {
@@ -613,6 +617,35 @@ export default function PhytosanitaryProductsSettingsScreen({
       setProductUsages([]);
     }
   };
+
+  const detailAvailableCultures = useMemo(() => {
+    const cultures = productUsages
+      .map((usage) => usage.target_culture?.trim())
+      .filter((value): value is string => Boolean(value));
+
+    return Array.from(new Set(cultures)).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [productUsages]);
+
+  const detailAvailablePests = useMemo(() => {
+    const pests = productUsages
+      .map((usage) => usage.target_pest?.trim())
+      .filter((value): value is string => Boolean(value));
+
+    return Array.from(new Set(pests)).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [productUsages]);
+
+  const filteredProductUsages = useMemo(() => {
+    return productUsages.filter((usage) => {
+      const cultureMatches = detailSelectedCultures.length === 0
+        || detailSelectedCultures.includes(usage.target_culture);
+      const pestMatches = detailSelectedPests.length === 0
+        || detailSelectedPests.includes(usage.target_pest);
+
+      return cultureMatches && pestMatches;
+    });
+  }, [detailSelectedCultures, detailSelectedPests, productUsages]);
+
+  const hasDetailUsageFilters = detailSelectedCultures.length > 0 || detailSelectedPests.length > 0;
 
   if (isLoading && !preferences) {
     return (
@@ -1006,9 +1039,11 @@ export default function PhytosanitaryProductsSettingsScreen({
             setSelectedProduct(null);
             setProductUsages([]);
             setShowAllDetails(false);
+            setDetailSelectedCultures([]);
+            setDetailSelectedPests([]);
           }}
           title="Détails du produit"
-          size="lg"
+          size={Platform.OS === 'web' ? 'lg' : 'fullscreen'}
         >
           <ScrollView 
             style={styles.detailsContent}
@@ -1061,14 +1096,62 @@ export default function PhytosanitaryProductsSettingsScreen({
             {!selectedProduct.is_custom && (
               <View style={styles.detailsSection}>
                 <Text variant="h4" style={styles.sectionSubtitle}>
-                  Usages autorisés {productUsages.length > 0 && `(${productUsages.length})`}
+                  Usages autorisés {productUsages.length > 0 && `(${filteredProductUsages.length}${hasDetailUsageFilters ? `/${productUsages.length}` : ''})`}
                 </Text>
                 
                 {isLoadingUsages ? (
                   <ActivityIndicator size="small" color={colors.primary[600]} style={styles.loadingUsages} />
                 ) : productUsages.length > 0 ? (
-                  <View style={styles.usagesList}>
-                    {productUsages.map((usage, index) => {
+                  <>
+                    {(detailAvailableCultures.length > 1 || detailAvailablePests.length > 1) && (
+                      <View style={styles.detailFiltersContainer}>
+                        {detailAvailableCultures.length > 1 && (
+                          <View style={styles.detailFilterDropdown}>
+                            <DropdownSelector
+                              label="Filtrer par culture"
+                              placeholder="Toutes les cultures"
+                              items={detailAvailableCultures.map((culture) => ({
+                                id: culture,
+                                label: culture,
+                              }))}
+                              selectedItems={detailSelectedCultures.map((culture) => ({
+                                id: culture,
+                                label: culture,
+                              }))}
+                              onSelectionChange={(items) => setDetailSelectedCultures(items.map((item) => item.label))}
+                              multiSelect={true}
+                              searchable={true}
+                              inlineSearch={true}
+                            />
+                          </View>
+                        )}
+
+                        {detailAvailablePests.length > 1 && (
+                          <View style={styles.detailFilterDropdown}>
+                            <DropdownSelector
+                              label="Filtrer par ravageur"
+                              placeholder="Tous les ravageurs"
+                              items={detailAvailablePests.map((pest) => ({
+                                id: pest,
+                                label: pest,
+                              }))}
+                              selectedItems={detailSelectedPests.map((pest) => ({
+                                id: pest,
+                                label: pest,
+                              }))}
+                              onSelectionChange={(items) => setDetailSelectedPests(items.map((item) => item.label))}
+                              multiSelect={true}
+                              searchable={true}
+                              inlineSearch={true}
+                            />
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {filteredProductUsages.length > 0 ? (
+                      <View style={styles.usagesList}>
+                        {filteredProductUsages.map((usage, index) => {
                       const usageState = getUsageState(usage.usage_state);
                       return (
                         <View key={usage.id || index} style={styles.usageCard}>
@@ -1143,7 +1226,13 @@ export default function PhytosanitaryProductsSettingsScreen({
                       </View>
                     );
                     })}
-                  </View>
+                      </View>
+                    ) : (
+                      <Text style={styles.noUsagesText}>
+                        Aucun usage ne correspond aux filtres sélectionnés
+                      </Text>
+                    )}
+                  </>
                 ) : (
                   <Text style={styles.noUsagesText}>Aucun usage autorisé trouvé</Text>
                 )}
@@ -1462,11 +1551,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   detailsContentContainer: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xl,
+    flexGrow: 1,
+    padding: Platform.OS === 'web' ? spacing.lg : spacing.md,
+    paddingBottom: Platform.OS === 'web' ? spacing.xl : spacing['3xl'],
   },
   detailTitle: {
     marginBottom: spacing.lg,
+    color: colors.text.primary,
   },
   detailRow: {
     marginBottom: spacing.md,
@@ -1506,6 +1597,13 @@ const styles = StyleSheet.create({
   loadingUsages: {
     marginVertical: spacing.md,
   },
+  detailFiltersContainer: {
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  detailFilterDropdown: {
+    marginBottom: spacing.xs,
+  },
   usagesList: {
     gap: spacing.md,
   },
@@ -1519,13 +1617,15 @@ const styles = StyleSheet.create({
   usageHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.sm,
+    gap: spacing.sm,
   },
   usageTitle: {
     flex: 1,
     fontWeight: '600',
     color: colors.text.primary,
+    lineHeight: 20,
   },
   usageStateBadge: {
     paddingHorizontal: spacing.sm,
@@ -1541,19 +1641,21 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   usageDetailRow: {
-    flexDirection: 'row',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
     marginTop: spacing.xs,
+    gap: Platform.OS === 'web' ? 0 : spacing.xs / 2,
   },
   usageDetailLabel: {
     fontSize: 12,
     color: colors.text.secondary,
     fontWeight: '600',
-    minWidth: 120,
+    minWidth: Platform.OS === 'web' ? 120 : undefined,
   },
   usageDetailValue: {
     fontSize: 12,
     color: colors.text.primary,
     flex: 1,
+    lineHeight: 18,
   },
   noUsagesText: {
     color: colors.text.secondary,

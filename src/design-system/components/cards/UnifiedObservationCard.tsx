@@ -9,6 +9,7 @@ import { formatObservationTitle } from '../../../utils/observationFormatters';
 
 export interface UnifiedObservationCardProps {
   observation: ObservationData;
+  attachmentSummary?: { imageCount: number; hasLocation: boolean } | undefined;
   onPress?: (observation: ObservationData) => void;
   onEdit?: (observation: ObservationData) => void;
   onDelete?: (observation: ObservationData) => void;
@@ -50,6 +51,7 @@ const Tag: React.FC<{
 
 export const UnifiedObservationCard: React.FC<UnifiedObservationCardProps> = ({
   observation,
+  attachmentSummary,
   onPress,
   onEdit,
   onDelete,
@@ -223,6 +225,24 @@ export const UnifiedObservationCard: React.FC<UnifiedObservationCardProps> = ({
         flexWrap: 'wrap',
         marginBottom: spacing.sm
       }}>
+        {attachmentSummary?.imageCount ? (
+          <Tag
+            icon="📷"
+            text={`${attachmentSummary.imageCount} photo${attachmentSummary.imageCount > 1 ? 's' : ''}`}
+            bgColor="#eef2ff"
+            textColor="#3730a3"
+          />
+        ) : null}
+
+        {attachmentSummary?.hasLocation ? (
+          <Tag
+            icon="📍"
+            text="localisation"
+            bgColor="#fffbeb"
+            textColor="#92400e"
+          />
+        ) : null}
+
         {/* Catégorie */}
         <Tag 
           icon={categoryConfig.icon} 

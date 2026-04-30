@@ -14,7 +14,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
-const EXPO_PUSH_RECEIPT_URL = 'https://exp.host/--/api/v2/push/getReceipts';
 
 interface PushMessage {
   to: string;
@@ -46,211 +45,328 @@ Deno.serve(async (req: Request) => {
 
   // Heure courante en UTC
   const now = new Date();
-  const currentHour = now.getUTCHours();
   const currentMinute = now.getUTCMinutes();
   // Jour de la semaine JS: 0=Dimanche, 1=Lundi ... 6=Samedi (même convention que selected_days)
   const currentDayOfWeek = now.getUTCDay();
+  const todayUtc = now.toISOString().slice(0, 10);
 
   // Fenêtre de ±2 minutes pour éviter les ratés de cron
-  const windowMinutes = [
-    (currentMinute - 2 + 60) % 60,
-    (currentMinute - 1 + 60) % 60,
-    currentMinute,
-    (currentMinute + 1) % 60,
-    (currentMinute + 2) % 60,
-  ];
-
-  // Construire les time strings à chercher (format "HH:MM:SS")
-  const targetTimes = windowMinutes.map(min =>
-    `${currentHour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:00`
-  );
-
-  console.log(`🕐 Heure courante UTC: ${currentHour}:${currentMinute} | Jour: ${currentDayOfWeek}`);
-  console.log(`🔍 Fenêtre horaire: ${targetTimes.join(', ')}`);
-
-  // Récupérer les notifications actives qui correspondent à cette plage horaire
-  const { data: notifications, error: notifError } = await supabase
-    .from('notifications')
-    .select(`
-      id,
-      user_id,
-      farm_id,
-      title,
-      message,
-      reminder_time,
-      selected_days,
-      notification_type
-    `)
-    .eq('is_active', true)
-    .in('reminder_time', targetTimes);
-
-  if (notifError) {
-    console.error('❌ Erreur récupération notifications:', notifError);
-    return new Response(JSON.stringify({ error: notifError.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!notifications || notifications.length === 0) {
-    console.log('ℹ️ Aucune notification à envoyer pour cette plage horaire');
-    return new Response(JSON.stringify({ sent: 0, message: 'Aucune notification à envoyer' }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Filtrer par jour de la semaine
-  const dueNotifications = notifications.filter((n: any) => {
-    const days: number[] = n.selected_days || [];
-    return days.includes(currentDayOfWeek);
+  const windowDates = [-2, -1, 0, 1, 2].map(offset => {
+    const d = new Date(now);
+    d.setUTCMinutes(currentMinute + offset, 0, 0);
+    return d;
   });
 
-  console.log(`📋 ${dueNotifications.length} notification(s) à envoyer après filtre jour`);
+  // Construire les time strings à chercher (format "HH:MM:SS")
+  const targetTimes = windowDates.map(d =>
+    `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}:00`
+  );
 
-  if (dueNotifications.length === 0) {
-    return new Response(JSON.stringify({ sent: 0, message: 'Aucune notification pour ce jour' }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  console.log(`🕐 Heure courante UTC: ${now.getUTCHours()}:${currentMinute} | Jour: ${currentDayOfWeek}`);
+  console.log(`🔍 Fenêtre horaire: ${targetTimes.join(', ')}`);
 
-  // Récupérer les push tokens actifs pour les utilisateurs concernés
-  const userIds = [...new Set(dueNotifications.map((n: any) => n.user_id))];
+  const vacationCache = new Map<string, boolean>();
+  const isVacationPaused = async (userId: string, farmId: number) => {
+    const key = `${userId}:${farmId}`;
+    if (vacationCache.has(key)) return vacationCache.get(key)!;
 
-  const { data: pushTokens, error: tokenError } = await supabase
-    .from('push_tokens')
-    .select('user_id, token, platform')
-    .in('user_id', userIds)
-    .eq('is_active', true);
+    const { data, error } = await supabase
+      .from('activity_streak_config')
+      .select('vacation_enabled, vacation_start, vacation_end')
+      .eq('user_id', userId)
+      .eq('farm_id', farmId)
+      .maybeSingle();
 
-  if (tokenError) {
-    console.error('❌ Erreur récupération push tokens:', tokenError);
-    return new Response(JSON.stringify({ error: tokenError.message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (!pushTokens || pushTokens.length === 0) {
-    console.log('ℹ️ Aucun push token actif trouvé pour ces utilisateurs');
-    return new Response(JSON.stringify({ sent: 0, message: 'Aucun token actif' }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Construire la map user_id → tokens
-  const tokensByUser: Record<string, string[]> = {};
-  for (const pt of pushTokens as any[]) {
-    if (!tokensByUser[pt.user_id]) tokensByUser[pt.user_id] = [];
-    tokensByUser[pt.user_id].push(pt.token);
-  }
-
-  // Construire les messages à envoyer
-  const messages: PushMessage[] = [];
-  const notificationMap: Record<string, string> = {}; // token → notification_id
-
-  for (const notification of dueNotifications as any[]) {
-    const tokens = tokensByUser[notification.user_id] || [];
-    for (const token of tokens) {
-      // Vérifier que le token est un Expo push token valide
-      if (!token.startsWith('ExponentPushToken[')) continue;
-
-      messages.push({
-        to: token,
-        title: notification.title,
-        body: notification.message,
-        sound: 'default',
-        channelId: 'thomas-reminders',
-        data: {
-          notificationId: notification.id,
-          farmId: notification.farm_id,
-        },
-      });
-      notificationMap[token] = notification.id;
+    if (error || !data) {
+      vacationCache.set(key, false);
+      return false;
     }
-  }
 
-  if (messages.length === 0) {
-    console.log('ℹ️ Aucun message valide à envoyer (tokens invalides?)');
-    return new Response(JSON.stringify({ sent: 0, message: 'Aucun token Expo valide' }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+    const paused = Boolean(
+      data.vacation_enabled &&
+      data.vacation_start &&
+      data.vacation_end &&
+      todayUtc >= data.vacation_start &&
+      todayUtc <= data.vacation_end
+    );
 
-  console.log(`📤 Envoi de ${messages.length} message(s) push...`);
+    vacationCache.set(key, paused);
+    return paused;
+  };
 
-  // Envoyer par batch de 100 (limite Expo)
-  const BATCH_SIZE = 100;
+  const getActiveTokens = async (userId: string): Promise<string[]> => {
+    const { data, error } = await supabase
+      .from('push_tokens')
+      .select('token')
+      .eq('user_id', userId)
+      .eq('is_active', true);
+
+    if (error || !data) return [];
+    return (data as any[])
+      .map(t => t.token as string)
+      .filter(token => token?.startsWith('ExponentPushToken['));
+  };
+
+  const sendExpoMessages = async (messages: PushMessage[]) => {
+    const BATCH_SIZE = 100;
+    let sent = 0;
+    let errors = 0;
+    const tickets: ExpoPushTicket[] = [];
+
+    for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+      const batch = messages.slice(i, i + BATCH_SIZE);
+      try {
+        const response = await fetch(EXPO_PUSH_URL, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(batch),
+        });
+        const responseData = await response.json();
+        const batchTickets: ExpoPushTicket[] = responseData.data || [];
+        tickets.push(...batchTickets);
+        sent += batchTickets.filter(ticket => ticket.status === 'ok').length;
+        errors += batchTickets.filter(ticket => ticket.status === 'error').length;
+      } catch (error) {
+        console.error('❌ Erreur Expo Push:', error);
+        errors += batch.length;
+      }
+    }
+
+    return { sent, errors, tickets };
+  };
+
   const results: { sent: number; errors: number; tickets: any[] } = {
     sent: 0,
     errors: 0,
     tickets: [],
   };
 
-  for (let i = 0; i < messages.length; i += BATCH_SIZE) {
-    const batch = messages.slice(i, i + BATCH_SIZE);
+  // Partie legacy: notifications personnalisées encore présentes en DB.
+  const { data: notifications, error: notifError } = await supabase
+    .from('notifications')
+    .select('id, user_id, farm_id, title, message, reminder_time, selected_days, notification_type')
+    .eq('is_active', true)
+    .in('reminder_time', targetTimes);
 
-    try {
-      const response = await fetch(EXPO_PUSH_URL, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-Encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(batch),
-      });
+  if (notifError) {
+    console.error('❌ Erreur récupération notifications:', notifError);
+  } else {
+    const dueNotifications = (notifications || []).filter((n: any) => {
+      const days: number[] = n.selected_days || [];
+      return days.includes(currentDayOfWeek);
+    });
 
-      const responseData = await response.json();
-      const tickets: ExpoPushTicket[] = responseData.data || [];
+    const legacyMessages: PushMessage[] = [];
+    const legacyMap: Record<string, any> = {};
 
-      // Loguer les résultats par notification
-      const logInserts = tickets.map((ticket, idx) => {
-        const token = batch[idx].to;
-        const notificationId = notificationMap[token];
-        const status = ticket.status === 'ok' ? 'sent' : 'error';
+    for (const notification of dueNotifications as any[]) {
+      const tokens = await getActiveTokens(notification.user_id);
+      for (const token of tokens) {
+        legacyMessages.push({
+          to: token,
+          title: notification.title,
+          body: notification.message,
+          sound: 'default',
+          channelId: 'thomas-reminders',
+          data: { notificationId: notification.id, farmId: notification.farm_id },
+        });
+        legacyMap[token] = notification;
+      }
+    }
 
-        if (ticket.status === 'ok') {
-          results.sent++;
-        } else {
-          results.errors++;
-          console.error(`❌ Erreur push pour token ${token.substring(0, 20)}...:`, ticket.message);
-        }
+    if (legacyMessages.length > 0) {
+      const legacyResult = await sendExpoMessages(legacyMessages);
+      results.sent += legacyResult.sent;
+      results.errors += legacyResult.errors;
+      results.tickets.push(...legacyResult.tickets);
 
-        results.tickets.push({ token: token.substring(0, 30), status, ticketId: ticket.id });
-
+      const logInserts = legacyResult.tickets.map((ticket, idx) => {
+        const message = legacyMessages[idx];
+        if (!message) return null;
+        const token = message.to;
+        const notification = legacyMap[token];
         return {
-          notification_id: notificationId,
-          status,
+          notification_id: notification?.id,
+          user_id: notification?.user_id,
+          status: ticket.status === 'ok' ? 'sent' : 'failed',
           sent_at: new Date().toISOString(),
           error_message: ticket.status === 'error' ? ticket.message : null,
           metadata: { ticketId: ticket.id, expoPushDetails: ticket.details },
         };
-      });
+      }).filter((row): row is NonNullable<typeof row> => Boolean(row?.notification_id && row.user_id));
 
-      // Insérer les logs
       if (logInserts.length > 0) {
-        const { error: logError } = await supabase
-          .from('notification_logs')
-          .insert(logInserts);
-
-        if (logError) {
-          console.error('⚠️ Erreur insertion logs:', logError);
-        }
+        const { error: logError } = await supabase.from('notification_logs').insert(logInserts);
+        if (logError) console.error('⚠️ Erreur insertion logs:', logError);
       }
-
-    } catch (error) {
-      console.error('❌ Erreur lors de l\'envoi du batch push:', error);
-      results.errors += batch.length;
     }
   }
 
-  console.log(`✅ Terminé: ${results.sent} envoyées, ${results.errors} erreurs`);
+  // ─────────────────────────────────────────────────────────────────────────
+  // PARTIE 2 : Notifications d'inactivité
+  // Vérifie si des utilisateurs n'ont pas renseigné de tâches/observations
+  // la veille (sur un jour "attendu"), et envoie un rappel si c'est le cas.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const inactivityResults = { sent: 0, skipped: 0 };
+
+  // Récupérer les configs actives dont l'heure correspond à la plage courante
+  const { data: inactivityConfigs, error: inactivErr } = await supabase
+    .from('inactivity_notification_config')
+    .select('id, user_id, farm_id, active_days, send_time')
+    .eq('is_active', true)
+    .in('send_time', targetTimes);
+
+  if (inactivErr) {
+    console.error('❌ Erreur récupération inactivity configs:', inactivErr);
+  } else if (inactivityConfigs && inactivityConfigs.length > 0) {
+    console.log(`🔔 ${inactivityConfigs.length} config(s) inactivité à évaluer`);
+
+    // Hier en UTC
+    const yesterday = new Date(now);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yesterdayDow = yesterday.getUTCDay(); // 0=Dim … 6=Sam
+    const yesterdayStart = new Date(yesterday);
+    yesterdayStart.setUTCHours(0, 0, 0, 0);
+    const yesterdayEnd = new Date(yesterday);
+    yesterdayEnd.setUTCHours(23, 59, 59, 999);
+
+    for (const cfg of inactivityConfigs as any[]) {
+      if (await isVacationPaused(cfg.user_id, cfg.farm_id)) {
+        inactivityResults.skipped++;
+        console.log(`⏸️ Farm ${cfg.farm_id}: rappel inactivité suspendu (vacances)`);
+        continue;
+      }
+
+      // Hier était-il un jour "attendu" ?
+      if (!cfg.active_days.includes(yesterdayDow)) {
+        inactivityResults.skipped++;
+        console.log(`⏭️  Farm ${cfg.farm_id}: hier (${yesterdayDow}) n'est pas un jour attendu`);
+        continue;
+      }
+
+      // Y a-t-il eu des tâches ou observations hier ?
+      const [{ count: taskCount }, { count: obsCount }] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('farm_id', cfg.farm_id)
+          .gte('created_at', yesterdayStart.toISOString())
+          .lte('created_at', yesterdayEnd.toISOString())
+          .then((r: { count: number | null }) => ({ count: r.count ?? 0 })),
+        supabase
+          .from('observations')
+          .select('id', { count: 'exact', head: true })
+          .eq('farm_id', cfg.farm_id)
+          .gte('created_at', yesterdayStart.toISOString())
+          .lte('created_at', yesterdayEnd.toISOString())
+          .then((r: { count: number | null }) => ({ count: r.count ?? 0 })),
+      ]);
+
+      const total = (taskCount as number) + (obsCount as number);
+      console.log(`📊 Farm ${cfg.farm_id}: ${total} action(s) hier`);
+
+      if (total > 0) {
+        inactivityResults.skipped++;
+        continue;
+      }
+
+      const tokens = await getActiveTokens(cfg.user_id);
+
+      if (tokens.length === 0) {
+        inactivityResults.skipped++;
+        continue;
+      }
+
+      const inactivityMessages: PushMessage[] = tokens
+        .map((token: string) => ({
+          to: token,
+          title: '📋 Aucune tâche hier',
+          body: "Vous n'avez renseigné aucune tâche ni observation hier. Pensez à mettre à jour votre exploitation !",
+          sound: 'default' as const,
+          channelId: 'thomas-reminders',
+          data: { type: 'inactivity', farmId: cfg.farm_id },
+        }));
+
+      if (inactivityMessages.length === 0) {
+        inactivityResults.skipped++;
+        continue;
+      }
+
+      const sent = await sendExpoMessages(inactivityMessages);
+      inactivityResults.sent += sent.sent;
+      console.log(`✅ Inactivité Farm ${cfg.farm_id}: ${sent.sent} push envoyé(s)`);
+    }
+  }
+
+  console.log(`✅ Terminé: ${results.sent} rappels + ${inactivityResults.sent} inactivité envoyés`);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PARTIE 3 : Rappel tâches quotidiennes
+  // Envoie un push simple à l'heure configurée, sur les jours choisis.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const dailyResults = { sent: 0, skipped: 0 };
+
+  const { data: dailyConfigs, error: dailyErr } = await supabase
+    .from('daily_reminder_config')
+    .select('id, user_id, farm_id, active_days, send_time')
+    .eq('is_active', true)
+    .in('send_time', targetTimes);
+
+  if (dailyErr) {
+    console.error('❌ Erreur récupération daily reminder configs:', dailyErr);
+  } else if (dailyConfigs && dailyConfigs.length > 0) {
+    console.log(`🔔 ${dailyConfigs.length} rappel(s) quotidien(s) à envoyer`);
+
+    for (const cfg of dailyConfigs as any[]) {
+      if (await isVacationPaused(cfg.user_id, cfg.farm_id)) {
+        dailyResults.skipped++;
+        console.log(`⏸️ Farm ${cfg.farm_id}: rappel quotidien suspendu (vacances)`);
+        continue;
+      }
+
+      if (!cfg.active_days.includes(currentDayOfWeek)) {
+        dailyResults.skipped++;
+        continue;
+      }
+
+      const tokens = await getActiveTokens(cfg.user_id);
+
+      if (tokens.length === 0) {
+        dailyResults.skipped++;
+        continue;
+      }
+
+      const dailyMessages: PushMessage[] = tokens
+        .map((token: string) => ({
+          to: token,
+          title: '📝 Rappel du jour',
+          body: "Pensez à renseigner vos tâches et observations d'aujourd'hui dans Thomas !",
+          sound: 'default' as const,
+          channelId: 'thomas-reminders',
+          data: { type: 'daily_reminder', farmId: cfg.farm_id },
+        }));
+
+      if (dailyMessages.length === 0) { dailyResults.skipped++; continue; }
+
+      const sent = await sendExpoMessages(dailyMessages);
+      dailyResults.sent += sent.sent;
+      console.log(`✅ Daily reminder farm ${cfg.farm_id}: ${sent.sent} push envoyé(s)`);
+    }
+  }
+
+  console.log(`✅ Bilan: rappels=${results.sent}, inactivité=${inactivityResults.sent}, quotidien=${dailyResults.sent}`);
 
   return new Response(
     JSON.stringify({
-      sent: results.sent,
-      errors: results.errors,
-      total: messages.length,
+      reminders: { sent: results.sent, errors: results.errors, total: results.tickets.length },
+      inactivity: inactivityResults,
+      daily: dailyResults,
       timestamp: now.toISOString(),
     }),
     { headers: { 'Content-Type': 'application/json' } }

@@ -13,11 +13,13 @@ const TABLET_SIDEBAR_WIDTH_RATIO = 0.35;
 interface ChatScreenProps {
   onStateChange?: (state: 'list' | 'conversation') => void;
   onFarmSelector?: () => void;
+  readOnlyMode?: boolean;
 }
 
 export default function ChatScreen({
   onStateChange,
   onFarmSelector,
+  readOnlyMode = false,
 }: ChatScreenProps = {}) {
   const navigation = useNavigation();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export default function ChatScreen({
     }
     
     // Créer l'objet chat avec les messages préchargés
-    setSelectedChat({ 
+    setSelectedChat({
       id: chatId, 
       title: '', 
       lastMessage: '', 
@@ -70,7 +72,7 @@ export default function ChatScreen({
       isArchived: false, 
       messageCount: 0,
       preloadedMessages: preloadedMessages || undefined // Ajouter les messages préchargés
-    });
+    } as any);
     
     // Notifier qu'on passe en mode conversation
     onStateChange?.('conversation');
@@ -144,23 +146,24 @@ export default function ChatScreen({
               onSelectChat={handleSelectChat}
               onCreateChat={handleCreateChat}
               onArchiveChat={handleArchiveChat}
+              isReadOnlyMode={readOnlyMode}
             />
           </View>
           
           {/* Conversation - 2/3 de l'écran */}
           <View style={{ flex: 1 }}>
-            <ChatConversation
-              chat={selectedChat}
-              onUpdateChat={handleUpdateChat}
-          onGoBack={() => {
-            console.log('🔙 [CHAT-SCREEN] onGoBack called (mobile mode) - returning to chat list');
-            setSelectedChatId(null);
-            setSelectedChat(null);
-            // Notifier qu'on retourne en mode liste
-            onStateChange?.('list');
-          }}
-              onFarmSelector={onFarmSelector}
-            />
+              <ChatConversation
+                chat={selectedChat}
+                onUpdateChat={handleUpdateChat}
+                onGoBack={() => {
+                  console.log('🔙 [CHAT-SCREEN] onGoBack called (mobile mode) - returning to chat list');
+                  setSelectedChatId(null);
+                  setSelectedChat(null);
+                  // Notifier qu'on retourne en mode liste
+                  onStateChange?.('list');
+                }}
+                {...(onFarmSelector ? { onFarmSelector } : {})}
+              />
           </View>
         </View>
       </Screen>
@@ -171,18 +174,18 @@ export default function ChatScreen({
   if (selectedChat) {
     return (
       <Screen backgroundColor={colors.background.primary}>
-        <ChatConversation
-          chat={selectedChat}
-          onUpdateChat={handleUpdateChat}
-          onGoBack={() => {
-            console.log('🔙 [CHAT-SCREEN] onGoBack called - returning to chat list');
-            setSelectedChatId(null);
-            setSelectedChat(null);
-            // Notifier qu'on retourne en mode liste
-            onStateChange?.('list');
-          }}
-          onFarmSelector={onFarmSelector}
-        />
+          <ChatConversation
+            chat={selectedChat}
+            onUpdateChat={handleUpdateChat}
+            onGoBack={() => {
+              console.log('🔙 [CHAT-SCREEN] onGoBack called - returning to chat list');
+              setSelectedChatId(null);
+              setSelectedChat(null);
+              // Notifier qu'on retourne en mode liste
+              onStateChange?.('list');
+            }}
+            {...(onFarmSelector ? { onFarmSelector } : {})}
+          />
       </Screen>
     );
   }
@@ -194,6 +197,7 @@ export default function ChatScreen({
         onSelectChat={handleSelectChat}
         onCreateChat={handleCreateChat}
         onArchiveChat={handleArchiveChat}
+        isReadOnlyMode={readOnlyMode}
       />
     </Screen>
   );

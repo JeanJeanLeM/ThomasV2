@@ -11,6 +11,7 @@ import { spacing } from '../spacing';
 import { Text } from './Text';
 import { FarmSelector } from './FarmSelector';
 import { Ionicons } from '@expo/vector-icons';
+import InterfaceTourTarget from '../../components/interface-tour/InterfaceTourTarget';
 
 export interface UnifiedHeaderProps {
   title: string;
@@ -127,17 +128,19 @@ export const UnifiedHeader: React.FC<UnifiedHeaderProps> = ({
         {/* Left side - Back button avec positionnement absolu */}
         <View style={getSideButtonContainerStyle(true)}>
           {showBackButton && onBack ? (
-            <TouchableOpacity
-              style={getBackButtonStyle()}
-              onPress={onBack}
-              activeOpacity={0.7}
-            >
-              <Ionicons 
-                name="chevron-back-outline" 
-                color={colors.gray?.[700] || '#374151'} 
-                size={20} 
-              />
-            </TouchableOpacity>
+            <InterfaceTourTarget targetId="header.back">
+              <TouchableOpacity
+                style={getBackButtonStyle()}
+                onPress={onBack}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="chevron-back-outline"
+                  color={colors.gray?.[700] || '#374151'}
+                  size={20}
+                />
+              </TouchableOpacity>
+            </InterfaceTourTarget>
           ) : null}
         </View>
 

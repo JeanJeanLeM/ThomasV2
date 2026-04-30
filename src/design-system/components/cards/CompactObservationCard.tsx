@@ -12,6 +12,7 @@ import { formatObservationTitle } from '../../../utils/observationFormatters';
 
 export interface CompactObservationCardProps {
   observation: ObservationData;
+  attachmentSummary?: { imageCount: number; hasLocation: boolean } | undefined;
   onPress?: (observation: ObservationData) => void;
   onDelete?: (observation: ObservationData) => void;
   onDeleteComplete?: () => void; // Called when animation completes
@@ -21,6 +22,7 @@ export interface CompactObservationCardProps {
 
 export const CompactObservationCard: React.FC<CompactObservationCardProps> = ({
   observation,
+  attachmentSummary,
   onPress,
   onDelete,
   onDeleteComplete,
@@ -105,6 +107,18 @@ export const CompactObservationCard: React.FC<CompactObservationCardProps> = ({
             {formatObservationTitle(observation.title, observation.category as string)}
           </Text>
         </View>
+
+        {/* Chevron */}
+        {(attachmentSummary?.imageCount || attachmentSummary?.hasLocation) ? (
+          <View style={{ flexDirection: 'row', gap: 4, marginLeft: spacing.xs }}>
+            {attachmentSummary.imageCount ? (
+              <Text style={{ fontSize: 14 }}>📷</Text>
+            ) : null}
+            {attachmentSummary.hasLocation ? (
+              <Text style={{ fontSize: 14 }}>📍</Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Chevron */}
         <View style={{ marginLeft: spacing.xs }}>

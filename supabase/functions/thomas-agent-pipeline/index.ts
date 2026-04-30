@@ -21,6 +21,13 @@ console.log('🚀 Thomas Agent Pipeline v2.0 - Real Implementation')
 
 interface UserContext {
   user_id: string
+  members: Array<{
+    user_id: string
+    first_name: string
+    last_name: string
+    full_name: string
+    role: string
+  }>
   plots: Array<{id: number, name: string, aliases: string[], llm_keywords: string[], is_active: boolean}>
   surface_units: Array<{id: number, name: string, plot_id: number, plot_name: string}>
   materials: Array<{id: number, name: string, category: string, llm_keywords?: string[], is_active: boolean}>
@@ -183,6 +190,16 @@ serve(async (req) => {
       }
       toolPlans = enrichedPlans
       console.log(`✅ [PIPELINE] Paramètres extraits`)
+    }
+
+    // 5. ÉTAPE 4.5: Matching membres (LLM) pour les tâches
+    const taskPlansCount = toolPlans.filter((tp) =>
+      tp?.tool_name === 'create_task_done' || tp?.tool_name === 'create_task_planned'
+    ).length
+    if (taskPlansCount > 0) {
+      console.log(`👥 [PIPELINE] ÉTAPE 4.5/6: Matching membres (${taskPlansCount} tâche(s))...`)
+      toolPlans = await enrichTaskPlansWithMemberMatching(supabaseClient, openaiKey, toolPlans, userContext)
+      console.log(`✅ [PIPELINE] Matching membres appliqué`)
     }
 
     // 6. ÉTAPE 5: Tool Execution
@@ -634,8 +651,31 @@ async function buildUserContext(supabase: any, userId: string, farmId: number): 
     .eq('farm_id', farmId)
     .eq('is_active', true)
 
+  const { data: farmMembers } = await supabase
+    .from('farm_members')
+    .select(`
+      user_id,
+      role,
+      profiles:user_id (
+        first_name,
+        last_name,
+        full_name
+      )
+    `)
+    .eq('farm_id', farmId)
+    .eq('is_active', true)
+
   return {
     user_id: userId,
+    members: (farmMembers || [])
+      .filter((member: any) => member?.user_id)
+      .map((member: any) => ({
+        user_id: member.user_id,
+        first_name: member.profiles?.first_name || '',
+        last_name: member.profiles?.last_name || '',
+        full_name: member.profiles?.full_name || '',
+        role: member.role || 'member'
+      })),
     plots: plots || [],
     surface_units: (surfaceUnits || []).map((su: any) => ({
       id: su.id,
@@ -1789,6 +1829,191 @@ Conversions: ${context.conversions?.map((c: any) => `${c.container_name} de ${c.
   return enrichedPlans
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const MEMBER_MATCHING_PROMPT_FALLBACK = `
+Tu identifies les membres de ferme mentionnes dans le message utilisateur.
+Retourne STRICTEMENT un JSON valide:
+{
+  "matched_member_ids": ["uuid", "..."],
+  "detected_people_count": 2
+}
+
+Regles:
+- matched_member_ids: uniquement des user_id presents dans la liste fournie.
+- detected_people_count: nombre total de personnes detectees dans le message ("nous etions 4", "a deux", etc.).
+- Si aucun membre n'est reconnu mais un nombre est detecte, retourne ce nombre dans detected_people_count.
+- Si rien n'est detecte, retourne [] et null.
+- Ne retourne aucune explication, uniquement le JSON.
+`.trim()
+
+function normalizeDetectedPeopleCount(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.floor(value)
+  }
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  return null
+}
+
+function normalizeMatchedMemberIds(rawIds: unknown, context: UserContext): string[] {
+  if (!Array.isArray(rawIds)) return []
+  const allowed = new Set((context.members || []).map((m) => String(m.user_id)))
+  return rawIds
+    .map((id) => String(id || '').trim())
+    .filter((id) => UUID_REGEX.test(id) && allowed.has(id))
+}
+
+async function getMemberMatchingPrompt(supabase: any): Promise<string> {
+  try {
+    const defaultResult = await supabase
+      .from('chat_prompts')
+      .select('content')
+      .eq('name', 'member_matching')
+      .eq('is_active', true)
+      .eq('is_default', true)
+      .single()
+
+    if (defaultResult.data?.content) {
+      return String(defaultResult.data.content)
+    }
+
+    const fallbackResult = await supabase
+      .from('chat_prompts')
+      .select('content')
+      .eq('name', 'member_matching')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (fallbackResult.data?.content) {
+      return String(fallbackResult.data.content)
+    }
+  } catch (error) {
+    console.warn('⚠️ [MEMBER-MATCH] Prompt member_matching introuvable, fallback utilisé')
+  }
+
+  return MEMBER_MATCHING_PROMPT_FALLBACK
+}
+
+async function matchMembersForMessage(
+  supabase: any,
+  openAIKey: string,
+  userMessage: string,
+  context: UserContext
+): Promise<{ matched_member_ids: string[]; detected_people_count: number | null }> {
+  if (!context.members || context.members.length === 0) {
+    return { matched_member_ids: [], detected_people_count: null }
+  }
+
+  const promptTemplate = await getMemberMatchingPrompt(supabase)
+  const membersCatalog = context.members
+    .map((member) => {
+      const nameParts = [member.first_name, member.last_name].filter(Boolean).join(' ').trim()
+      const fallbackName = member.full_name || nameParts || member.user_id
+      return `- ${member.user_id} | ${fallbackName} | role=${member.role}`
+    })
+    .join('\n')
+
+  const systemPrompt = promptTemplate
+    .replace('{{members_catalog}}', membersCatalog)
+    .replace('{{current_date_iso}}', new Date().toISOString().split('T')[0])
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage }
+        ],
+        temperature: 0,
+        max_tokens: 500,
+      }),
+    })
+
+    if (!response.ok) {
+      console.warn(`⚠️ [MEMBER-MATCH] OpenAI error: ${await response.text()}`)
+      return { matched_member_ids: [], detected_people_count: null }
+    }
+
+    const data = await response.json()
+    const raw = data?.choices?.[0]?.message?.content || ''
+    let parsed: any = {}
+
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      const jsonMatch = String(raw).match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0])
+      }
+    }
+
+    return {
+      matched_member_ids: normalizeMatchedMemberIds(parsed?.matched_member_ids, context),
+      detected_people_count: normalizeDetectedPeopleCount(parsed?.detected_people_count),
+    }
+  } catch (error) {
+    console.warn(`⚠️ [MEMBER-MATCH] Exception: ${(error as Error).message}`)
+    return { matched_member_ids: [], detected_people_count: null }
+  }
+}
+
+async function enrichTaskPlansWithMemberMatching(
+  supabase: any,
+  openAIKey: string,
+  toolPlans: any[],
+  context: UserContext
+): Promise<any[]> {
+  if (!toolPlans.length) return toolPlans
+
+  const enrichedPlans: any[] = []
+
+  for (const plan of toolPlans) {
+    const isTaskPlan = plan?.tool_name === 'create_task_done' || plan?.tool_name === 'create_task_planned'
+    if (!isTaskPlan) {
+      enrichedPlans.push(plan)
+      continue
+    }
+
+    const matchingSource = plan.reconstructed_message || plan.original_user_message || ''
+    const matching = await matchMembersForMessage(supabase, openAIKey, matchingSource, context)
+    const explicitPeopleCount = normalizeDetectedPeopleCount(plan?.parameters?.number_of_people)
+
+    const mergedParameters: Record<string, unknown> = {
+      ...(plan.parameters || {}),
+      matched_member_ids: matching.matched_member_ids,
+    }
+
+    if (explicitPeopleCount == null && matching.matched_member_ids.length > 0) {
+      mergedParameters.number_of_people = matching.matched_member_ids.length
+    } else if (explicitPeopleCount == null && matching.detected_people_count != null) {
+      mergedParameters.number_of_people = matching.detected_people_count
+    }
+
+    console.log(
+      `👥 [MEMBER-MATCH] ${plan.tool_name}: matched=${matching.matched_member_ids.length}, ` +
+      `detected_people=${matching.detected_people_count ?? 'none'}, explicit_people=${explicitPeopleCount ?? 'none'}`
+    )
+
+    enrichedPlans.push({
+      ...plan,
+      parameters: mergedParameters
+    })
+  }
+
+  return enrichedPlans
+}
+
 // ============================================================================
 // HELP CONTENT BY TOPIC (intent help)
 // ============================================================================
@@ -2157,6 +2382,11 @@ async function createTaskFromTool(
   analysisId: string
 ) {
   const params = toolPlan.parameters || {}
+  const matchedMemberIds = normalizeMatchedMemberIds(params.matched_member_ids, context)
+  const explicitPeopleCount = normalizeDetectedPeopleCount(params.number_of_people)
+  const resolvedPeopleCount = explicitPeopleCount != null
+    ? explicitPeopleCount
+    : (matchedMemberIds.length > 0 ? matchedMemberIds.length : 1)
   
   console.log(`📋 [CREATE-TASK] Paramètres reçus:`, JSON.stringify(params, null, 2))
   
@@ -2176,7 +2406,7 @@ async function createTaskFromTool(
       quantity_nature: params.quantity_nature,
       quantity_type: params.quantity_type,
       duration: params.duration,
-      number_of_people: params.number_of_people || 1,
+      number_of_people: resolvedPeopleCount,
       date: params.date || params.scheduled_date
     }
   }
@@ -2208,7 +2438,7 @@ async function createTaskFromTool(
     surface_unit_ids: contextualized.context.surface_unit_ids || [],
     material_ids: contextualized.context.material_ids || [],
     plants: params.crops?.length > 0 ? params.crops : (params.crop ? [params.crop] : []),
-    number_of_people: params.number_of_people || 1,
+    number_of_people: resolvedPeopleCount,
     ai_confidence: toolPlan.confidence || 0.9,
     standard_action: (params.standard_action && String(params.standard_action).trim()) || null
   }
@@ -2245,6 +2475,24 @@ async function createTaskFromTool(
   
   console.log(`✅ [CREATE-TASK] Tâche créée: ${task.id}`)
 
+  if (matchedMemberIds.length > 0) {
+    const taskMembersRows = matchedMemberIds.map((memberUserId) => ({
+      task_id: task.id,
+      user_id: memberUserId,
+      role: 'participant'
+    }))
+
+    const { error: taskMembersError } = await supabase
+      .from('task_members')
+      .upsert(taskMembersRows, { onConflict: 'task_id,user_id' })
+
+    if (taskMembersError) {
+      console.warn(`⚠️ [CREATE-TASK] task_members upsert error: ${taskMembersError.message}`)
+    } else {
+      console.log(`✅ [CREATE-TASK] task_members créés: ${matchedMemberIds.length}`)
+    }
+  }
+
   // Préparer card_summary pour UI
   const highlights = [
     params.crop ? `Culture: ${params.crop}` : null,
@@ -2262,7 +2510,9 @@ async function createTaskFromTool(
 
   // extracted_data : pas de quantity_type si aucune quantité (garde-fou)
   const rawExtracted = { ...contextualized.extracted_data, ...params }
-  const extracted_data = hasQty ? rawExtracted : { ...rawExtracted, quantity_type: null }
+  const extracted_data = hasQty
+    ? { ...rawExtracted, number_of_people: resolvedPeopleCount, matched_member_ids: matchedMemberIds }
+    : { ...rawExtracted, quantity_type: null, number_of_people: resolvedPeopleCount, matched_member_ids: matchedMemberIds }
 
   // Créer l'action analysée
   const { data: analyzedAction } = await supabase

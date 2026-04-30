@@ -3,6 +3,7 @@ import { PlotService } from './plotService';
 import { MaterialService } from './MaterialService';
 import { CultureService, cultureService } from './CultureService';
 import { DirectSupabaseService } from './DirectSupabaseService';
+import { TaskService, type TaskMemberData } from './TaskService';
 import type { PlotData } from '../design-system/components/cards/PlotCardStandard';
 import type { MaterialFromDB } from './MaterialService';
 import type { Culture, UserCulturePreferences, UserPhytosanitaryPreferences } from '../types';
@@ -19,6 +20,8 @@ export interface FarmDataCache {
 
 export interface TaskData {
   id: string;
+  user_id?: string;
+  created_by_first_name?: string;
   title: string;
   date: string;
   status: 'en_attente' | 'en_cours' | 'terminee';
@@ -38,6 +41,7 @@ export interface TaskData {
   quantity_nature?: string; // Nature spécifique (laitues, compost, bouillie...)
   quantity_type?: string; // Type: engrais, produit_phyto, recolte, plantation, vente
   phytosanitary_product_amm?: string | null; // AMM du produit phytosanitaire (pour matching)
+  members?: TaskMemberData[]; // Membres attribués à la tâche
 }
 
 // Durées de cache par type de données
@@ -264,7 +268,7 @@ export class FarmDataCacheService {
     try {
       const tasksResult = await DirectSupabaseService.directSelect(
         'tasks',
-        'id,title,date,status,type,priority,action,standard_action,duration_minutes,number_of_people,plants,plot_ids,surface_unit_ids,material_ids,quantity_value,quantity_unit,quantity_converted_value,quantity_converted_unit,quantity_nature,quantity_type,phytosanitary_product_amm',
+        'id,user_id,title,date,status,type,priority,action,standard_action,duration_minutes,number_of_people,plants,plot_ids,surface_unit_ids,material_ids,quantity_value,quantity_unit,quantity_converted_value,quantity_converted_unit,quantity_nature,quantity_type,phytosanitary_product_amm',
         [
           { column: 'farm_id', value: farmId },
           { column: 'is_active', value: true } // Filtrer uniquement les tâches actives
@@ -276,7 +280,13 @@ export class FarmDataCacheService {
         return [];
       }
       
-      const tasks = (tasksResult.data || []).map((task: any) => {
+      const rawTasks = tasksResult.data || [];
+      const taskIds = rawTasks.map((task: any) => task.id).filter(Boolean);
+      const creatorUserIds = rawTasks.map((task: any) => task.user_id).filter(Boolean);
+      const taskMembersByTaskId = await TaskService.getTaskMembersByTaskIds(taskIds);
+      const creatorNameByUserId = await TaskService.getProfileFirstNamesByUserIds(creatorUserIds);
+
+      const tasks = rawTasks.map((task: any) => {
         const normalizeIdArray = (value: unknown): string[] => {
           if (Array.isArray(value)) {
             return value.map((v) => String(v)).filter((v) => /^\d+$/.test(v));
@@ -296,6 +306,8 @@ export class FarmDataCacheService {
 
         return {
           id: task.id,
+          user_id: task.user_id || undefined,
+          created_by_first_name: task.user_id ? creatorNameByUserId[task.user_id] : undefined,
           title: task.title,
           date: task.date,
           status: task.status,
@@ -321,6 +333,7 @@ export class FarmDataCacheService {
           quantity_nature: task.quantity_nature, // Nature spécifique (nom du produit pour affichage)
           quantity_type: task.quantity_type, // Type de quantité
           phytosanitary_product_amm: task.phytosanitary_product_amm || null, // AMM pour matching
+          members: taskMembersByTaskId[task.id] || [],
         };
       });
       

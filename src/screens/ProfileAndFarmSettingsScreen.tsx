@@ -13,6 +13,7 @@ import { Text } from '../design-system/components';
 import { useFarm } from '../contexts/FarmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { userInvitationService } from '../services/UserInvitationService';
+import InterfaceTourTarget from '../components/interface-tour/InterfaceTourTarget';
 
 interface ProfileAndFarmSettingsScreenProps {
   navigation: { goBack: () => void };
@@ -20,6 +21,7 @@ interface ProfileAndFarmSettingsScreenProps {
   onFarmEdit: () => void;
   onFarmMembers: () => void;
   onMyInvitations: () => void;
+  onCommunity: () => void;
 }
 
 export default function ProfileAndFarmSettingsScreen({
@@ -27,6 +29,7 @@ export default function ProfileAndFarmSettingsScreen({
   onFarmEdit,
   onFarmMembers,
   onMyInvitations,
+  onCommunity,
 }: ProfileAndFarmSettingsScreenProps) {
   const { activeFarm } = useFarm();
   const { user: authUser } = useAuth();
@@ -80,6 +83,14 @@ export default function ProfileAndFarmSettingsScreen({
       onPress: onMyInvitations,
       badge: invitationCount > 0 ? invitationCount : undefined,
     },
+    {
+      id: 'community',
+      title: 'Communauté',
+      subtitle: 'Rejoindre ou gérer une communauté',
+      icon: <UsersIcon color={colors.primary[600]} size={28} />,
+      borderColor: colors.primary[600],
+      onPress: onCommunity,
+    },
   ];
 
   return (
@@ -87,36 +98,47 @@ export default function ProfileAndFarmSettingsScreen({
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
           <View style={styles.optionsContainer}>
-            {options.map((option) => (
-              <TouchableOpacity
-                key={option.id}
-                style={[styles.optionCard, { borderLeftColor: option.borderColor }]}
-                onPress={option.onPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.optionHeader}>
-                  <View style={styles.optionIcon}>
-                    {option.icon}
-                  </View>
-                  <View style={styles.optionContent}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text variant="h4" style={styles.optionTitle}>
-                        {option.title}
-                      </Text>
-                      {option.badge != null && (
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>{option.badge}</Text>
-                        </View>
-                      )}
+            {options.map((option) => {
+              const card = (
+                <TouchableOpacity
+                  style={[styles.optionCard, { borderLeftColor: option.borderColor }]}
+                  onPress={option.onPress}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.optionHeader}>
+                    <View style={styles.optionIcon}>
+                      {option.icon}
                     </View>
-                    <Text variant="caption" style={styles.optionSubtitle}>
-                      {option.subtitle}
-                    </Text>
+                    <View style={styles.optionContent}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text variant="h4" style={styles.optionTitle}>
+                          {option.title}
+                        </Text>
+                        {option.badge != null && (
+                          <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{option.badge}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text variant="caption" style={styles.optionSubtitle}>
+                        {option.subtitle}
+                      </Text>
+                    </View>
+                    <ChevronRightIcon color={colors.gray[400]} size={20} />
                   </View>
-                  <ChevronRightIcon color={colors.gray[400]} size={20} />
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              );
+
+              if (option.id !== 'members') {
+                return <View key={option.id}>{card}</View>;
+              }
+
+              return (
+                <InterfaceTourTarget key={option.id} targetId="profile-farm.option.members">
+                  {card}
+                </InterfaceTourTarget>
+              );
+            })}
           </View>
         </View>
       </ScrollView>

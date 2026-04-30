@@ -12,6 +12,7 @@ import { TaskData } from './TaskCard';
 
 export interface UnifiedTaskCardProps {
   task: TaskData;
+  attachmentSummary?: { imageCount: number; hasLocation: boolean } | undefined;
   onPress?: (task: TaskData) => void;
   onEdit?: (task: TaskData) => void;
   onDelete?: (task: TaskData) => void;
@@ -53,6 +54,7 @@ const Tag: React.FC<{
 
 export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
   task,
+  attachmentSummary,
   onPress,
   onEdit,
   onDelete,
@@ -212,6 +214,25 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
         marginBottom: spacing.sm
       }}>
         {/* Parcelles (plots) */}
+        {attachmentSummary?.imageCount ? (
+          <Tag
+            icon="📷"
+            text={`${attachmentSummary.imageCount} photo${attachmentSummary.imageCount > 1 ? 's' : ''}`}
+            bgColor="#eef2ff"
+            textColor="#3730a3"
+          />
+        ) : null}
+
+        {attachmentSummary?.hasLocation ? (
+          <Tag
+            icon="📍"
+            text="localisation"
+            bgColor="#fffbeb"
+            textColor="#92400e"
+          />
+        ) : null}
+
+        {/* Parcelles (plots) */}
         {task.plot_ids && task.plot_ids.length > 0 && (
           <Tag 
             icon="📍" 
@@ -278,6 +299,26 @@ export const UnifiedTaskCard: React.FC<UnifiedTaskCardProps> = ({
             text={`${task.number_of_people} pers.`} 
             bgColor="#f3e8ff" 
             textColor="#7c3aed" 
+          />
+        )}
+
+        {/* Membres identifiés */}
+        {task.members && task.members.length > 0 && (
+          <Tag
+            icon="🧑"
+            text={task.members.map((member) => member.first_name).join(', ')}
+            bgColor="#eef2ff"
+            textColor="#3730a3"
+          />
+        )}
+
+        {/* Auteur de saisie */}
+        {task.created_by_first_name && (
+          <Tag
+            icon="✍️"
+            text={task.created_by_first_name}
+            bgColor="#ecfeff"
+            textColor="#0e7490"
           />
         )}
 
