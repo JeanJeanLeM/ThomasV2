@@ -95,9 +95,18 @@ const InterfaceTourModal: React.FC<InterfaceTourModalProps> = ({
       setIsResolvingTarget(true);
       let foundLayout: InterfaceTourTargetLayout | null = null;
 
+      const shouldWaitUntilVisible =
+        !step.targetId.startsWith('tab.') &&
+        step.targetId !== 'tour.preview.next';
+
       for (let attempt = 0; attempt < 20; attempt += 1) {
         foundLayout = await measureTarget(step.targetId);
-        if (foundLayout) break;
+        if (foundLayout) {
+          const isVisibleEnough =
+            !shouldWaitUntilVisible ||
+            (foundLayout.y >= 0 && foundLayout.y <= viewportHeight - 160);
+          if (isVisibleEnough || attempt === 19) break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 120));
       }
 

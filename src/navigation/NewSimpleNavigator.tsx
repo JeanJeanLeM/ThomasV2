@@ -205,7 +205,7 @@ const NewSimpleNavigator: React.FC = () => {
     setIsInterfaceTourMode(false);
     navigation.setNavigationParams((prev) => ({ ...prev, interfaceTourMode: false }));
     if (userId) {
-      await InterfaceTourService.abortTour(userId);
+      await InterfaceTourService.completeTour(userId);
     }
     await restoreFarmAfterInterfaceTour();
 
@@ -222,8 +222,7 @@ const NewSimpleNavigator: React.FC = () => {
       }
     }
 
-    await maybeLaunchChatOnboarding();
-  }, [maybeLaunchChatOnboarding, navigation, restoreFarmAfterInterfaceTour, user?.id]);
+  }, [navigation, restoreFarmAfterInterfaceTour, user?.id]);
 
   const handleCompleteInterfaceTour = React.useCallback(async () => {
     const userId = user?.id;
@@ -240,6 +239,13 @@ const NewSimpleNavigator: React.FC = () => {
   const handleInterfaceStepChange = React.useCallback(
     async (stepIndex: number, action: InterfaceTourAction) => {
       setInterfaceTourStepIndex(stepIndex);
+      const step = INTERFACE_TOUR_STEPS[stepIndex];
+      navigation.setNavigationParams((prev) => ({
+        ...prev,
+        interfaceTourMode: true,
+        interfaceTourStepId: step?.id,
+        interfaceTourTargetId: step?.targetId,
+      }));
       if (user?.id) {
         await InterfaceTourService.updateStep(user.id, stepIndex);
       }
