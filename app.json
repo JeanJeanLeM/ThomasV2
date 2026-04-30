@@ -37,7 +37,7 @@
         "backgroundColor": "#22c55e"
       },
       "package": "marketgardener.thomas.v2",
-      "versionCode": 45,
+      "versionCode": 46,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
