@@ -36,14 +36,19 @@ Cette procedure sert de checklist a chaque mise a jour production.
 2. Verifier les claviers numeriques :
    - `Input` et `EnhancedInput` doivent utiliser `decimal-pad` pour les decimaux iOS.
    - Les champs parcelle `Longueur`, `Largeur`, `Longueur unite`, `Largeur unite` doivent accepter `,` et `.`.
-3. Committer puis pousser :
+3. Mettre a jour le versioning avant chaque push production :
+   - `app.json` : `expo.version` et `expo.runtimeVersion`
+   - `package.json` : `version`
+   - `package-lock.json` : version racine et package racine
+   - verifier l'ecran de chargement apres deploiement
+4. Committer puis pousser :
    ```bash
    git add <fichiers>
    git commit -m "feat(release): prepare web ios production update"
    git push origin webappIOS
    ```
-4. Verifier le deploiement Netlify declenche par `netlify.toml`.
-5. Tester sur Safari iOS : login, chat, formulaires dimensions/unites, notifications, installation ecran d'accueil.
+5. Verifier le deploiement Netlify declenche par `netlify.toml`.
+6. Tester sur Safari iOS : login, chat, formulaires dimensions/unites, notifications, installation ecran d'accueil.
 
 ## Android
 
