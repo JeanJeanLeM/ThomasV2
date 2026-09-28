@@ -10,6 +10,7 @@
     "build": "expo build",
     "build:web": "expo export --platform web",
     "serve:web": "npx serve dist",
+    "motion": "node marketing/motion/serve.mjs",
     "lint": "eslint src/**/*.{js,jsx,ts,tsx}",
     "lint:fix": "eslint src/**/*.{js,jsx,ts,tsx} --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,md}\"",
