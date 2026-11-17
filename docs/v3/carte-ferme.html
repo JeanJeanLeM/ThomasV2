@@ -1,0 +1,218 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carte de la ferme — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html" aria-current="page">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Carte de la ferme · <span class="status decided">décidé</span></p>
+      <h1>Dessiner, ajouter et modifier les formes. Modifier la ferme.</h1>
+      <p class="lede">Le plan / carte de la ferme est le dashboard spatial de l’exploitation : fond satellite (ou orthophoto), formes des parcelles, fiche et emprise de la ferme. Il vit dans la coquille partagée (Chat ↔ Dashboard + nav collapsible). Ce n’est pas un logiciel carto séparé, ni un clone Desktop V2.</p>
+      <div class="card"><strong>Objectif.</strong> L’agriculteur voit sa ferme sur une image réelle, y dessine ses parcelles, corrige les contours, et met à jour les infos de la ferme (nom, adresse, centrage). L’agent peut ouvrir la carte, proposer un mode dessin, ou une fiche à confirmer.</div>
+
+      <h2>Périmètre · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Dans le premier lot</th><th>Hors premier lot</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Fond satellite / ortho · centrage ferme · zoom / pan · dessiner polygone / rectangle / cercle · ajouter une forme (nouvelle parcelle ou liaison) · modifier sommets / translater / supprimer géométrie · fiche ferme (nom, adresse, CP, centre) · emprise / limite ferme optionnelle · mesures surface &amp; périmètre · agent-natif · ordi dessin, tél consultation</td>
+            <td>Calque planches sur satellite · import cadastral automatique · multi-calques avancés · mesure de distances entre objets · édition collaborative simultanée · GPS live terrain pour tracer</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Deux niveaux d’objets</h2>
+      <table>
+        <thead><tr><th>Niveau</th><th>Objet</th><th>Rôle spatial</th><th>Fiche</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Ferme</strong></td>
+            <td><code>farms</code></td>
+            <td>Centre carte (<code>map_center</code>) et, optionnellement, emprise / limite (<code>geometry</code>). Sert à cadrer le fond satellite.</td>
+            <td>Nom, adresse, code postal, éventuellement pays / commune. Modifiable depuis Compte et depuis la carte.</td>
+          </tr>
+          <tr>
+            <td><strong>Parcelle</strong></td>
+            <td><code>plots</code></td>
+            <td>Polygone métier (<code>geometry</code>). Vérité spatiale dès qu’il est renseigné.</td>
+            <td>Nom (obligatoire), type, dimensions, actif / inactif. Peut exister <em>sans</em> géométrie (liste seule).</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Règle.</strong> Les sous-parcelles (<code>surface_units</code> / planches) ne sont pas dessinées sur le satellite en v1. Leur géométrie utile reste la disposition du plan de culture — voir <a href="planification.html">Planification</a>.</div>
+
+      <h2>Coquille et navigation</h2>
+      <div class="card"><strong>Décidé A · coquille unique.</strong> Les écrans carte ordi Figma portent la même barre Chat / Dashboard + nav V3 que la planification. Pas de chrome Basile / Desktop parallèle.</div>
+      <p>Entrée nav <strong>Ferme → Plan de la ferme</strong> (et lien depuis Parcelles : « Voir sur la carte »). Même barre Chat / Dashboard que le reste. Sur Dashboard, la zone centrale est la carte ; un panneau latéral (ordi) ou une fiche pleine page (tél) affiche la sélection.</p>
+      <table>
+        <thead><tr><th></th><th>Ordinateur</th><th>Téléphone</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Carte</td>
+            <td>Grande surface · outils dessin · panneau fiche à droite ou bas</td>
+            <td>Consultation · tap parcelle · pas de dessin fin (message : « Continuer sur ordinateur » ou ouverture lecture seule)</td>
+          </tr>
+          <tr>
+            <td>Fiche ferme</td>
+            <td>Panneau « Modifier la ferme » ancré à la carte</td>
+            <td>Formulaire Compte / Ferme, avec bouton « Voir sur la carte »</td>
+          </tr>
+          <tr>
+            <td>Fiche parcelle</td>
+            <td>Sélection forme → panneau ; ou liste Parcelles</td>
+            <td>Liste / détail classique + lien carte</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Fond carte</h2>
+      <ol class="scenario">
+        <li>À l’ouverture, Thomas centre sur <code>farms.map_center</code> s’il existe ; sinon géocode adresse / code postal ; sinon demande un point (« Pose le centre de ta ferme sur la carte »).</li>
+        <li>Fond : tuiles satellite ou orthophoto (fournisseur à brancher en technique ; le cahier exige seulement un fond image réel du sol, pas un schéma abstrait).</li>
+        <li>Contrôles : zoom molette / pinch, pan, bouton « Recentrer sur la ferme », bascule éventuelle satellite / labels (routes) si le fournisseur le permet.</li>
+        <li>Après modification de l’adresse ou du centre ferme : proposition de recentrer (pas de saut brutal sans prévenir si l’utilisateur a déjà pan).</li>
+      </ol>
+
+      <h2>Dessiner une forme</h2>
+      <p>Mode explicite dans la barre d’outils carte. Un seul mode actif à la fois.</p>
+      <table>
+        <thead><tr><th>Outil</th><th>Geste</th><th>Résultat</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Polygone</strong></td>
+            <td>Clic = sommet ; double-clic ou « Terminer » ferme ; « Annuler point » retire le dernier sommet ; Échap annule le tracé.</td>
+            <td>Polygone fermé ≥ 3 sommets.</td>
+          </tr>
+          <tr>
+            <td><strong>Rectangle</strong></td>
+            <td>Clic-glisser ou deux coins opposés.</td>
+            <td>Rectangle aligné (rotation optionnelle en édition).</td>
+          </tr>
+          <tr>
+            <td><strong>Cercle / ellipse</strong></td>
+            <td>Centre + rayon (ou boîte englobante).</td>
+            <td>Forme approximée stockée en polygone densifié ou géométrie cercle selon le stock technique.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Pendant le tracé : aperçu en pointillés, sommets visibles, surface provisoire affichée. Impossible de terminer une forme auto-intersectante : message court, correction des sommets.</p>
+
+      <h2>Ajouter une forme → parcelle</h2>
+      <p>À la fermeture d’une forme valide, un panneau (ou carte chat si l’intention vient du chat) propose :</p>
+      <ol class="scenario">
+        <li><strong>Créer une nouvelle parcelle</strong> — nom (obligatoire), type (serre, plein champ…), reprise proposée de surface / longueur / largeur depuis la géométrie.</li>
+        <li><strong>Lier à une parcelle existante</strong> — liste des parcelles sans géométrie (ou toutes, avec avertissement d’écrasement).</li>
+        <li><strong>Annuler</strong> — la forme disparaît, rien n’est écrit.</li>
+      </ol>
+      <p>Autres entrées vers le même flux : liste Parcelles → « Dessiner sur la carte » (parcelle pré-sélectionnée) ; chat « Ajoute une serre sur la carte » → dashboard carte en mode dessin + carte de confirmation à la fin.</p>
+      <div class="quote"><p>Ajoute une serre plastique Serre 3 et dessine-la sur le plan.</p></div>
+      <p>Thomas peut d’abord créer la fiche (nom + type) puis ouvrir le mode dessin lié à cette parcelle, ou inverser : dessiner d’abord, puis nommer. Les deux ordres sont valides ; la confirmation écrit une seule fois.</p>
+
+      <h2>Modifier une forme (parcelle)</h2>
+      <table>
+        <thead><tr><th>Action</th><th>Détail</th></tr></thead>
+        <tbody>
+          <tr><td>Sélectionner</td><td>Clic sur la forme ; surbrillance + poignées aux sommets ; panneau fiche.</td></tr>
+          <tr><td>Déplacer un sommet</td><td>Drag poignée ; mise à jour live surface / périmètre.</td></tr>
+          <tr><td>Translater</td><td>Drag intérieur de la forme (sans poignée).</td></tr>
+          <tr><td>Redimensionner</td><td>Poignées boîte englobante (rectangles) ou sommets (polygones).</td></tr>
+          <tr><td>Ajouter / retirer un sommet</td><td>Double-clic sur une arête = ajouter ; supprimer sommet (min. 3).</td></tr>
+          <tr><td>Dupliquer</td><td>Crée une nouvelle forme décalée → flux « nouvelle parcelle ».</td></tr>
+          <tr><td>Supprimer la géométrie</td><td>La fiche <code>plots</code> reste ; <code>geometry</code> vide ; toujours listable.</td></tr>
+          <tr><td>Supprimer la parcelle</td><td>Confirmation. Règles d’historique / plans ouverts comme ailleurs (ne pas casser l’historique de culture sans prévenir).</td></tr>
+        </tbody>
+      </table>
+      <p>Snap optionnel aux sommets / arêtes voisins (interrupteur). Enregistrement : à chaque « Enregistrer » du panneau, ou auto-save silencieux après drop si pas d’ambiguïté — aligné sur le reste V3 (écriture claire sans friction inutile).</p>
+
+      <h2>Modifier la ferme</h2>
+      <p>Accessible depuis le panneau carte « Modifier la ferme », depuis Compte / fiche exploitation, ou via le chat.</p>
+      <table>
+        <thead><tr><th>Champ</th><th>Effet</th></tr></thead>
+        <tbody>
+          <tr><td>Nom</td><td>Affiché dans la barre (sélecteur multi-fermes).</td></tr>
+          <tr><td>Adresse, code postal</td><td>Géocodage proposé → nouveau <code>map_center</code> ; l’utilisateur confirme le recentrage.</td></tr>
+          <tr><td>Centre carte</td><td>Point posé sur la carte (« Définir le centre ») ou coordonnées.</td></tr>
+          <tr><td>Emprise / limite</td><td>Outil « Limite ferme » : dessiner ou modifier un polygone d’emprise (<code>farms.geometry</code>). Visuel distinct des parcelles (contour tireté). Optionnel.</td></tr>
+        </tbody>
+      </table>
+      <div class="quote"><p>Change l’adresse de la ferme et recentre la carte.</p></div>
+      <p>Carte de réglage chat → écrit <code>farms</code> → propose « Recentrer maintenant ». Multi-fermes : chaque ferme a sa propre carte ; la bascule de ferme dans la barre recharge fond + formes.</p>
+      <p>Droits : propriétaire / responsable modifient la ferme et les géométries ; les autres rôles consultent (sauf politique plus fine ultérieure).</p>
+
+      <h2>Mesures</h2>
+      <ul>
+        <li>Surface (m² et ha) et périmètre (m) calculés dès qu’une géométrie existe.</li>
+        <li>À la création ou après édition : proposition « Mettre à jour longueur / largeur / surface de la fiche » — l’agriculteur accepte ou garde les valeurs saisies à la main.</li>
+        <li>Les mesures ne remplacent pas la disposition en planches du plan de culture.</li>
+      </ul>
+
+      <h2>Agent-natif · scénarios</h2>
+      <table>
+        <thead><tr><th>Dit</th><th>Fait Thomas</th></tr></thead>
+        <tbody>
+          <tr><td>« Ouvre le plan de la ferme »</td><td>Dashboard → Plan de la ferme, recentré.</td></tr>
+          <tr><td>« Montre la serre 1 »</td><td>Zoom / sélection de la forme ; panneau fiche.</td></tr>
+          <tr><td>« Dessine une nouvelle parcelle »</td><td>Mode dessin ; à la fin, panneau création.</td></tr>
+          <tr><td>« Modifie le contour de Serre 2 »</td><td>Sélection + mode modifier forme.</td></tr>
+          <tr><td>« Mets à jour l’adresse de la ferme… »</td><td>Carte réglage ferme ; recentrage proposé.</td></tr>
+          <tr><td>« Quelle surface fait le plein champ nord ? »</td><td>Lecture depuis <code>geometry</code> ou fiche ; réponse chat.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Données</h2>
+      <table>
+        <thead><tr><th>Table</th><th>Champs carte</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>farms</code></td>
+            <td><code>name</code>, adresse, code postal, <code>map_center</code> (lat/lng), <code>geometry</code> emprise (GeoJSON, optionnel)</td>
+          </tr>
+          <tr>
+            <td><code>plots</code></td>
+            <td><code>geometry</code> polygone (GeoJSON, optionnel) + champs métier existants (<code>name</code>, <code>type</code>, dimensions, <code>is_active</code>…)</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Détail schéma : <a href="donnees.html">Données</a>. Contexte chat : <a href="contexte.html">Contexte</a>. Coquille : <a href="fondation.html">Fondation</a>.</p>
+
+      <h2>Écrans Figma</h2>
+      <p>Page « 03 Ferme &amp; ressources » : <em>Carte · Ordi · satellite + outils dessin</em>, <em>Carte · Ordi · modifier la ferme</em> (fiche + emprise + poignées), <em>Carte · Tél · consultation</em>. Coquille « 00 » pour la barre partagée.</p>
+
+      <h2>Décidé (C1–C6)</h2>
+      <div class="card"><strong>C1 · Carte dans Thomas.</strong> Un registre Dashboard de la coquille V3, fond satellite / ortho, pas d’app carto parallèle.</div>
+      <div class="card"><strong>C2 · Dessiner.</strong> Polygone, rectangle, cercle ; tracé guidé ; pas d’auto-intersection.</div>
+      <div class="card"><strong>C3 · Ajouter.</strong> Forme fermée → créer parcelle ou lier à une existante ; nom obligatoire à la création.</div>
+      <div class="card"><strong>C4 · Modifier formes.</strong> Sommets, translation, suppression géométrie ou parcelle ; mesures proposées à la fiche.</div>
+      <div class="card"><strong>C5 · Modifier la ferme.</strong> Fiche (nom, adresse, CP, centre) + emprise optionnelle ; recentrage confirmé ; multi-fermes = une carte chacune.</div>
+      <div class="card"><strong>C6 · Surfaces.</strong> Ordi = dessin / édition. Tél = consultation / sélection / fiches. Agent ouvre et orchestre ; confirmation selon règles V3.</div>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

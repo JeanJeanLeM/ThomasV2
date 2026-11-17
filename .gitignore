@@ -16,6 +16,7 @@ npm-debug.*
 # Environment variables
 .env
 .env.local
+scripts/jev-bench/out/
 .env.development.local
 .env.test.local
 .env.production.local
@@ -73,4 +74,7 @@ tmp/
 temp/
 supabase/.temp/
 
-docs/
+# docs/ hors cahier V3 (le slash final empêcherait toute exception)
+docs/*
+!docs/v3/
+!docs/v3/**

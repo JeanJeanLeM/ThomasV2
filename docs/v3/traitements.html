@@ -1,0 +1,114 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Traitements — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html" aria-current="page">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Traitements · <span class="status">brouillon</span></p>
+      <h1>Un traitement est une tâche avec du phyto.</h1>
+      <p class="lede">On n’ajoute pas une table séparée pour l’acte. On enrichit la tâche : produit, molécule, doses, surface, et la mention que la dose vient d’ePhy quand c’est le cas.</p>
+
+      <h2>Enregistrement · <span class="status decided">décidé</span></h2>
+      <p>Une ligne <code>tasks</code> avec champs phyto. Exemple : « J’ai traité au soufre mes tomates. »</p>
+      <ol class="scenario">
+        <li>Thomas reconnaît une tâche de traitement.</li>
+        <li>Il cherche d’abord dans le catalogue phyto <strong>de l’exploitation</strong> (produits déjà utilisés) la molécule ou le nom dit — ici le soufre.</li>
+        <li>S’il trouve plusieurs produits, il propose le choix sous la carte.</li>
+        <li>La carte porte : produit, molécule, culture, lieu, date, et les quantités.</li>
+      </ol>
+
+      <h3>Quantités et conversion</h3>
+      <table>
+        <thead>
+          <tr><th>Champ</th><th>Rôle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Unité utilisateur</td><td>Ce que l’agriculteur dit : cuve, pulvé, sachet, kg…</td></tr>
+          <tr><td>Quantité utilisateur</td><td>La valeur dans cette unité.</td></tr>
+          <tr><td>Unité universelle</td><td>kg, L, ou unité ePhy retenue.</td></tr>
+          <tr><td>Quantité universelle</td><td>Équivalent converti.</td></tr>
+          <tr><td>Explication de conversion</td><td>Texte : soit une règle déjà en code / dans <code>user_conversion_units</code>, soit une formulation LLM à confirmer.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Catalogue ferme · produits détenus · <span class="status decided">décidé</span></h2>
+      <p>L’exploitation a une liste de produits phyto qu’elle possède ou a déjà utilisés. Accessible depuis le panneau (sous Traitements / Ressources) et depuis le chat (« qu’est-ce que j’ai comme soufre ? », « produits contre les pucerons que j’ai en stock »).</p>
+      <table>
+        <thead><tr><th>Écran</th><th>Contenu</th></tr></thead>
+        <tbody>
+          <tr><td>Liste produits ferme</td><td>Nom commercial, molécule, usages habituels, dernière utilisation, filtre AB / non-AB.</td></tr>
+          <tr><td>Fiche produit ferme</td><td>Détail, AMM si connue, conversions de dose déjà validées sur la ferme.</td></tr>
+        </tbody>
+      </table>
+      <p>À l’enregistrement d’un traitement, Thomas cherche d’abord ici. À la proposition depuis une observation, la même liste est explorée avant ePhy.</p>
+
+      <h2>Exploration ePhy · <span class="status decided">décidé</span></h2>
+      <p>Lecture seule, source toujours citée. Filtrée par le mode AB de la ferme quand il est défini. Trois entrées, combinables :</p>
+      <table>
+        <thead><tr><th>Entrée</th><th>Exemple chat</th><th>Résultat</th></tr></thead>
+        <tbody>
+          <tr><td>Par molécule</td><td>« Que dit ePhy sur le soufre ? »</td><td>Usages, cultures, doses, restrictions, AT éventuelles.</td></tr>
+          <tr><td>Par plante / culture</td><td>« Traitements ePhy pour la tomate »</td><td>Liste filtrable par bioagresseur ou molécule.</td></tr>
+          <tr><td>Par bioagresseur</td><td>« Contre les pucerons en ePhy »</td><td>Produits / usages, puis croisement culture et AB.</td></tr>
+        </tbody>
+      </table>
+      <p>L’agriculteur peut enchaîner : bioagresseur → culture → voir d’abord « ce que j’ai déjà », puis le reste ePhy. Choisir un produit peut ouvrir une carte de traitement à enregistrer ; ce n’est pas automatique.</p>
+      <p>Quand Thomas propose un produit et une dose pour la surface, il le dit clairement : la source est ePhy. Ce n’est pas un conseil réglementaire opposable.</p>
+
+      <h2>Depuis une observation · <span class="status decided">décidé</span></h2>
+      <p>Après « j’ai vu des pucerons », Thomas peut demander s’il souhaite un traitement. L’ordre de recherche est fixe :</p>
+      <ol class="scenario">
+        <li>Produits déjà utilisés par l’exploitation (et, plus tard, signaux issus des traitements d’autres utilisateurs consentants — meilleurs résultats sur des ravageurs à très nombreuses solutions).</li>
+        <li>Puis ePhy, filtré selon le mode de production de la ferme (agriculture biologique ou non).</li>
+      </ol>
+      <p>Le mode AB / non-AB de la ferme est un réglage d’exploitation. Il ajuste les propositions. L’agriculteur peut ignorer la proposition et ne rien enregistrer.</p>
+
+      <h2>Autorisations temporaires · <span class="status decided">décidé</span></h2>
+      <p>Certains produits ne sont autorisés que sous dérogation ou autorisation temporaire. Thomas doit pouvoir :</p>
+      <ul>
+        <li>Repérer qu’un usage est exceptionnel / temporaire dans la source (ePhy ou catalogue ferme).</li>
+        <li>L’afficher explicitement sur la carte (période, statut exceptionnel).</li>
+        <li>Laisser confirmer quand même, avec la mention visible — sans cacher le caractère temporaire.</li>
+      </ul>
+      <p>La source exacte des dates de dérogation et le rafraîchissement restent à brancher techniquement ; le comportement produit est : jamais proposer un usage temporaire comme s’il était permanent.</p>
+
+      <h2>Décidé</h2>
+      <div class="card"><strong>Tr1.</strong> Tâche + champs phyto + molécule + double unité/quantité + explication de conversion.</div>
+      <div class="card"><strong>Tr2.</strong> Propose produit et dose pour la surface, en citant ePhy.</div>
+      <div class="card"><strong>Tr3.</strong> Depuis une observation : demander ; chercher d’abord les produits de la ferme (puis base usagers), puis ePhy ; filtrer AB / non-AB.</div>
+      <div class="card"><strong>Tr4.</strong> Usages à autorisation temporaire : visibles, datés, jamais présentés comme permanents.</div>
+      <div class="card"><strong>Tr5.</strong> Catalogue des produits détenus / déjà utilisés sur la ferme : liste + fiche, prioritaire avant ePhy.</div>
+      <div class="card"><strong>Tr6.</strong> Exploration ePhy par molécule, par plante, par bioagresseur (combinable), toujours sourcée.</div>
+      <p>Écrans Figma : page « 05 Traitements ».</p>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

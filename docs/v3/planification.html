@@ -1,0 +1,346 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Planification — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html" aria-current="page">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Planification · <span class="status decided">décidé</span></p>
+      <h1>Cahier V3 inspiré de Basile. Recode unifié. Agent-first.</h1>
+      <p class="lede"><strong>Basile Pro</strong> sert de <em>référence métier</em> pour rédiger ce cahier (objets, vues ordi utiles, Gantt, drag, besoins). On ne porte pas son code ni sa logique UI. On <strong>recode</strong> la planification dans Thomas V3 : même coquille, même style, même harness agent que le reste. Chemin principal = chat (carte confirmable). Les vues ordi (Gantt, occupation) approfondissent et permettent la manipulation fine.</p>
+
+      <div class="card"><strong>Principe produit.</strong> Basile / Desktop = matière à cahier (quoi doit rester possible). V3 = une seule app, un seul style, agent-natif. En cas de doute d’implémentation → ce cahier + Figma V3. En cas de doute parcours → chat d’abord, puis vue ordi si besoin.</div>
+
+      <h2>Agent-first / AI-first · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Couche</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Agent (Thomas)</strong></td>
+            <td>Intention planification via le chat. Jev extrait culture, lieu, semaines, disposition, quantité. Le LLM formule. Le code écrit <code>plans</code> après confirmation (même règles que le reste de la V3). Ex. « fenouil serre 1 planches 1 m S12 » → carte plan.</td>
+          </tr>
+          <tr>
+            <td><strong>Lecture agent</strong></td>
+            <td>« Qu’est-ce que j’ai en serre 1 en mars ? », « allonge la culture fenouil de 2 semaines » — réponses + mutations bornées, sans obliger d’ouvrir le Gantt.</td>
+          </tr>
+          <tr>
+            <td><strong>Vues ordi V3</strong></td>
+            <td>Occupation, drag de phase, lot planches×semaines, édition détaillée — même style que le reste de Thomas. L’agent peut <em>ouvrir</em> la bonne vue / le bon plan prérempli.</td>
+          </tr>
+          <tr>
+            <td><strong>Téléphone</strong></td>
+            <td>Chat + liste + calendrier semaine. Pas de Gantt. L’agent est le seul « éditeur riche » mobile.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Aligné sur la fondation : le code orchestre, Jev juge, le LLM dialogue. La planification V3 n’est pas un clone Basile ni un agent libre — c’est le même harness V3, branché sur les <em>objets métier</em> retenus dans ce cahier.</p>
+
+      <h2>Référence Basile → objets / vues ordi · <span class="status decided">décidé</span></h2>
+      <p>Inventaire relu dans Basile (app locale, mode démo) pour <em>alimenter</em> le cahier — pas pour le recopier. Blocs utiles côté ordi :</p>
+      <table>
+        <thead><tr><th>Bloc Basile</th><th>Écrans</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Calendriers</strong></td>
+            <td>Planification · par parcelle · par culture · récoltes</td>
+            <td>Vues d’occupation dans le temps (Gantt / bandes semaines). C’est le cœur ordi.</td>
+          </tr>
+          <tr>
+            <td><strong>Configurer</strong></td>
+            <td>Jardin · Cultures · Itinéraires · Variétés · Rotation</td>
+            <td>Bibliothèque et géométrie. Fiches itinéraire / coûts : cahier <a href="itineraires.html">Itinéraires</a> (ordi) ; tél = lecture chat.</td>
+          </tr>
+          <tr>
+            <td>Tâches</td>
+            <td>Todo semaines · modèles</td>
+            <td>Gestes issus des plans / itinéraires.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Les quatre vues calendrier (ordi)</h3>
+      <table>
+        <thead><tr><th>Vue</th><th>Lignes</th><th>Comportement Basile à reprendre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Planification</strong></td>
+            <td>Un plan = une ligne</td>
+            <td>Bandeau semis / plantation / culture / récolte. Toggle <em>Calendrier étendu</em> ↔ <em>Informations étendues</em>. Zoom ± mois. Filtre culture, tri semaine. Ajout d’itinéraire en bas de grille.</td>
+          </tr>
+          <tr>
+            <td><strong>Par parcelle</strong></td>
+            <td>Parcelle → planches (surface units)</td>
+            <td>Occupation culture / récolte sur chaque planche. Taux de remplissage. Sélection planches × semaines pour créer un lot. Zoom Semaine / ±6 m / ±1 an… Drag d’un plan non placé vers une planche.</td>
+          </tr>
+          <tr>
+            <td><strong>Par culture</strong></td>
+            <td>Culture → sous-lignes = plans</td>
+            <td>Gantt éditable (voir interactions ci-dessous) : drag centre, poignées sur les bords des phases. Édition / suppression depuis la ligne.</td>
+          </tr>
+          <tr>
+            <td><strong>Récoltes</strong></td>
+            <td>Culture / semaine</td>
+            <td>Projection kg ou unité ITK. Lecture pour caler le commercial — paniers plus tard.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Formulaire plan (ordi, modal)</h3>
+      <p>Modal large (~80 vw) en deux colonnes (référence métier Basile, à recoder dans le style V3) :</p>
+      <ul>
+        <li><strong>À gauche · Résumé culture</strong> — image, plants / plantation, total campagne, récolte estimée, revenu estimé.</li>
+        <li><strong>À droite · onglets soulignés</strong> (pas des pills) : Détails de plantation · Espacement · Parcelle &amp; planches · Récoltes &amp; revenus · Tâches. Navigation <em>Précédent / Annuler / Suivant</em>.</li>
+      </ul>
+      <table>
+        <thead><tr><th>Onglet</th><th>Contenu réel</th></tr></thead>
+        <tbody>
+          <tr><td>Détails</td><td>Culture + Itinéraire + Variétés (%) · durées cycle (pépinière / culture / récolte / stockage) · semaine plantation · année · nb planches · planches/groupe · semaines entre plantations · mini vue annuelle 52 sem. colorée</td></tr>
+          <tr><td>Espacement</td><td>Occupation % · marge bord · espacement sur rang · nb rangs · densités (m² / m planche / m linéaire) · sync « toutes les planches pareilles »</td></tr>
+          <tr><td>Parcelle &amp; planches</td><td>Option « assigner maintenant » · multi-sélection parcelles / SU · sinon plan sans lieu (placement plus tard au calendrier parcelle)</td></tr>
+          <tr><td>Récoltes &amp; revenus</td><td>Rendement ITK · pertes · prix canal</td></tr>
+          <tr><td>Tâches</td><td>Projection optionnelle des gestes (P2)</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Calendrier par parcelle</strong> : toolbar <em>Planifier</em> (mode lot Semis/Plantation/Récolte) · Aujourd’hui · Zoom Semaine / ±6 m / ±9 m / ±1–5 ans · panneau « Cultures non placées » (drag &amp; drop) · légende Culture / Récolte · lignes = planches sous chaque parcelle.</p>
+      <p><strong>Calendrier par culture</strong> : blocs culture dépliables · Gantt éditable · bouton « Planifier une culture » · mêmes zooms · légende Pépinière / Culture / Récolte.</p>
+
+      <h2>Modes d’implantation · flexibilité · <span class="status decided">décidé</span></h2>
+      <p>Un plan n’impose <strong>pas</strong> le enchaînement fixe pépinière → plantation → culture. L’agriculteur compose le cycle. Les presets ci-dessous sont des raccourcis ; le chat et le formulaire ordi peuvent en ajouter, retirer ou réordonner des phases.</p>
+      <table>
+        <thead><tr><th>Preset</th><th>Phases typiques</th><th>Exemple chat</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Semis pépinière puis plantation</strong></td>
+            <td>Semis → pépinière → plantation → culture → récolte</td>
+            <td>« Tomates semées en motte S10, plantées S16 en serre 1 »</td>
+          </tr>
+          <tr>
+            <td><strong>Plant acheté puis planté</strong></td>
+            <td>Réception plant → plantation → culture → récolte <em>(pas de semis)</em></td>
+            <td>« J’ai acheté 200 plants de salade, plantés demain en planche 2 »</td>
+          </tr>
+          <tr>
+            <td><strong>Semis direct</strong></td>
+            <td>Semis en place → culture → récolte <em>(pas de pépinière ni plantation)</em></td>
+            <td>« Carottes en semis direct serre 1, S12 »</td>
+          </tr>
+          <tr>
+            <td><strong>Plant acheté, élevé, puis planté</strong></td>
+            <td>Réception → pépinière / rempotage(s) → plantation → culture → récolte</td>
+            <td>« Plants de poivron achetés, rempotés, plantés S18 »</td>
+          </tr>
+          <tr>
+            <td><strong>Production de plants (vente)</strong></td>
+            <td>Semis → pépinière → (rempotage) → vente plants <em>(pas de culture pleine terre)</em></td>
+            <td>« 500 plants de tomate à vendre fin avril »</td>
+          </tr>
+          <tr>
+            <td><strong>Sur mesure</strong></td>
+            <td>Toute combinaison utile (plusieurs rempotages, stockage, etc.)</td>
+            <td>L’agent propose une carte ; l’agriculteur retire / ajoute une phase</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Règles.</strong> (1) Chaque phase est optionnelle sauf le sens du plan (on sait ce qu’on cultive / vend). (2) Origine du matériel : semence ferme, semence achetée, plant acheté — indépendante des phases suivantes. (3) Destination : culture en place, vente de plants, ou les deux sur des lots distincts. (4) Un rempotage est une phase (ou un geste) de pépinière, pas un second type de plan. (5) Sur le Gantt, seules les phases présentes apparaissent ; durée 0 = absente, pas une bande fantôme.</div>
+      <p>Marquer le réel reste agent-natif : « j’ai semé », « j’ai rempoté », « j’ai planté », « j’ai vendu les plants » → cartes / tâches liées au plan. Les booléens V2 <code>sowing_done</code> / <code>planting_done</code> deviennent des jalons parmi d’autres (réception plant, rempotage, vente plants), pas un couple obligatoire.</p>
+
+      <h2>Interactions Gantt · drag &amp; resize · <span class="status decided">décidé</span></h2>
+      <p>Ordinateur uniquement. Inspiré de Basile <code>PlanningByCultureCalendarView</code>, mais les bandes suivent les <em>phases présentes</em> du plan (voir modes d’implantation), pas toujours pépinière → culture → récolte. Le pas est la <strong>semaine</strong>. Au lâcher, on écrit les durées / dates des phases concernées.</p>
+
+      <h3>Par culture — allonger ou déplacer une période</h3>
+      <table>
+        <thead><tr><th>Geste</th><th>Zone</th><th>Effet</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Déplacer</strong></td>
+            <td>Clic-glisser au centre de la bande</td>
+            <td>Tout le plan glisse ensemble (semis + plantation + récolte). Les durées ne changent pas.</td>
+          </tr>
+          <tr>
+            <td><strong>Allonger / raccourcir pépinière</strong></td>
+            <td>Poignée bord <em>gauche</em> de la pépinière</td>
+            <td>Ajuste <code>customNurseryWeeks</code> : tirer à gauche = semis plus tôt = pépinière plus longue (min. 1 sem.).</td>
+          </tr>
+          <tr>
+            <td><strong>Décaler la plantation</strong></td>
+            <td>Poignée entre pépinière et culture (fin pépinière = début culture)</td>
+            <td>Déplace la date / semaine de plantation ; rééquilibre pépinière et durée de culture.</td>
+          </tr>
+          <tr>
+            <td><strong>Allonger / raccourcir culture</strong></td>
+            <td>Poignée bord <em>droit</em> de la culture (= début récolte)</td>
+            <td>Ajuste <code>customCultureWeeks</code> ; le début de récolte suit. La récolte peut se compresser en miroir si besoin.</td>
+          </tr>
+          <tr>
+            <td><strong>Allonger / raccourcir récolte</strong></td>
+            <td>Poignée bord <em>droit</em> de la récolte</td>
+            <td>Ajuste <code>customHarvestWeeks</code> (min. 1 sem. si récolte présente).</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Feedback.</strong> Pendant le drag : aperçu fantôme décalé d’un nombre entier de semaines. Au drop : sauvegarde silencieuse (toast succès / erreur). Pas de confirmation modale pour un simple resize.</div>
+      <p>Les mêmes durées restent éditables dans le modal (onglet Détails) : le Gantt et le formulaire partagent les mêmes champs.</p>
+
+      <h3>Par parcelle — placer et lots</h3>
+      <ul>
+        <li><strong>Drag &amp; drop placement</strong> : depuis le panneau « Cultures non placées », glisser un plan vers une ligne planche / SU → assigne <code>plotId</code> + <code>surfaceUnitId</code>.</li>
+        <li><strong>Mode Planifier</strong> : sélection rectangle (planches × plage de semaines) → ouvre le modal avec répartition (semis / plantation / récolte comme ancre de date).</li>
+        <li>Les bandes culture / récolte sur une planche sont surtout en lecture d’occupation ; l’édition fine des durées se fait en vue <em>par culture</em> ou dans le modal.</li>
+      </ul>
+
+      <h3>Téléphone</h3>
+      <p>Pas de drag Gantt. Pour allonger une période : chat (« allonge la culture fenouil de 2 semaines ») ou détail plan en liste (champs durée). Placement sur planche : chat ou choix dans le détail simple.</p>
+
+      <h2>Ordi vs téléphone · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th></th><th>Ordinateur</th><th>Téléphone</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Vues d’ensemble</td>
+            <td>Les 4 vues occupation V3 (+ fiche plan) dans la coquille partagée</td>
+            <td><strong>Non.</strong> Pas de Gantt, pas d’occupation planche, pas de zoom multi-années.</td>
+          </tr>
+          <tr>
+            <td>Itinéraires / variétés / cultures</td>
+            <td>Galerie + fiche complète (Configurer)</td>
+            <td><strong>Non.</strong> Lecture courte via chat seulement (« quel itinéraire carotte serre ? ») — sans ouvrir une fiche.</td>
+          </tr>
+          <tr>
+            <td>Créer / ajuster un plan</td>
+            <td>Grille + modal wizard ; disposition visuelle</td>
+            <td>Chat (carte à confirmer) + liste plans + calendrier semaine des gestes</td>
+          </tr>
+          <tr>
+            <td>Marquer semis / plantation</td>
+            <td>Possible dans calendrier / todo</td>
+            <td>Chat (T-01) ou case dans le calendrier semaine</td>
+          </tr>
+          <tr>
+            <td>Rotation / paniers</td>
+            <td>Plus tard (P3)</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Règle produit.</strong> Tout ce qui demande largeur (occupation spatiale + temps) = ordi. Le téléphone enregistre et consulte la ligne de temps personnelle (ce que je fais cette semaine), pas la carte de la ferme.</div>
+
+      <h2>Plan ↔ tâches faites · outil desktop unifié · <span class="status decided">décidé</span></h2>
+      <p>La planification et le suivi des gestes (prévus / faits) sont <strong>le même produit</strong> Thomas V3, pas Basile d’un côté et Desktop de l’autre. Sur ordi : une coquille, un style, deux <em>vues</em> du même noyau de données.</p>
+      <table>
+        <thead><tr><th>Vue ordi</th><th>Montre</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Planification</strong> (Gantt / parcelle / culture / récoltes)</td>
+            <td>Occupation spatiale × temps, phases du plan, jalons</td>
+            <td>Composer et ajuster le plan ; voir où en est la culture</td>
+          </tr>
+          <tr>
+            <td><strong>Calendrier</strong> (liste / semaine / filtres)</td>
+            <td>Tâches <code>en_attente</code> et <code>terminee</code> (temps + gestes)</td>
+            <td>Voir et cocher le travail prévu / fait ; filtrer personne, parcelle, culture</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Boucle.</strong> Plan → peut projeter des gestes (P2, optionnel) en tâches prévues liées au plan. Tâche faite (chat T-01 ou case calendrier) → ligne <code>tasks</code> +, si le geste est un jalon (semis, rempotage, plantation, vente plants, fin…), mise à jour du plan. Le Gantt relit ces jalons (phase commencée / faite). Une observation agronomique (bioagresseur, etc.) reste le domaine <a href="observations.html">Observations</a> — ce n’est pas le suivi des tâches.</div>
+      <table>
+        <thead><tr><th>Action</th><th>Effet plan</th><th>Effet tâches / temps</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>« J’ai semé les carottes planche 3, 1 h »</td>
+            <td>Ouvre ou confirme le plan ; jalon semis fait + date</td>
+            <td>Tâche terminée (durée, lieu, culture) liée au plan</td>
+          </tr>
+          <tr>
+            <td>Case cochée « Planter fenouil S16 » dans le calendrier</td>
+            <td>Jalon plantation fait</td>
+            <td>Tâche passée en <code>terminee</code> (durée si connue, sinon complétable)</td>
+          </tr>
+          <tr>
+            <td>Drag d’une phase sur le Gantt</td>
+            <td>Dates / durées du plan</td>
+            <td>Décale les tâches prévues encore liées à cette phase (si projetées)</td>
+          </tr>
+          <tr>
+            <td>« Qu’est-ce qui a été fait en serre 1 cette semaine ? »</td>
+            <td>Lecture jalons des plans concernés</td>
+            <td>Lecture des tâches terminées — réponse agent, ou ouverture du calendrier filtré</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><strong>Desktop unifié.</strong> Même panneau latéral V3 : sous Production, <em>Planification</em> et <em>Calendrier</em> côte à côte. Depuis une ligne de plan → « voir les gestes ». Depuis une tâche → « ouvrir le plan ». Pas de second logiciel, pas de double saisie. Le chat reste le chemin principal pour enregistrer le fait ; les vues ordi servent à surveiller, cocher et corriger en masse.</p>
+
+      <h2>Disposition flexible · <span class="status decided">décidé</span></h2>
+      <p>Comme déjà décidé (P4) : la parcelle a une surface fixe ; la découpe en planches appartient au plan. Sur ordi, la vue <em>par parcelle</em> montre les planches du plan ouvert (équivalents Basile <code>surface_units</code>). Une culture suivante peut tout redécouper. L’historique cumule plus de noms de planches que l’espace simultané.</p>
+      <div class="quote"><p>Serre 1 en fenouil : planches de 1 m, inter-planche 20 cm.</p></div>
+      <p>Sur téléphone, Thomas propose le nombre de planches et la disposition dans la carte chat — sans canvas.</p>
+
+      <h2>Objet plan</h2>
+      <p>Une ligne <code>plans</code> : culture, année, itinéraire (optionnel), variété, <strong>mode d’implantation / phases</strong>, origine (semence / plant), parcelle / planches si placé, semaines, quantité, disposition, densités. Confirmation obligatoire. Jalons faits (semis, réception plant, rempotage, plantation, vente plants…) + dates. Fin : <code>ended_on</code> (ou vente plants terminée).</p>
+      <div class="quote"><p>Je veux du fenouil en serre 1, planches de 1 m, allées de 20 cm, semaine 12, 2026.</p></div>
+      <div class="quote"><p>J’ai semé les carottes de la planche 3 ce matin.</p></div>
+
+      <h2>Téléphone — écrans retenus</h2>
+      <table>
+        <thead><tr><th>Écran</th><th>Contenu</th></tr></thead>
+        <tbody>
+          <tr><td>Chat planification</td><td>Placer / ajuster / disposition / marquer geste. Carte confirmable.</td></tr>
+          <tr><td>Liste plans</td><td>Année en cours, filtre culture / parcelle, ouvrir détail simple (pas wizard 5 onglets).</td></tr>
+          <tr><td>Calendrier semaine</td><td>Gestes prévus / faits (semis, plantation, autres tâches projetées). Cases à cocher.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Ordi — écrans Figma (priorité)</h2>
+      <div class="card"><strong>Décidé A · coquille unique.</strong> Tous les écrans ordi de planification portent la barre Chat / Dashboard + nav V3 (PRODUCTION / FERME / RESSOURCES). La sidebar type Basile (<em>CONFIGURER</em>, Thomas dans la colonne) n’est plus une source d’implémentation.</div>
+      <ol class="scenario">
+        <li>Coquille V3 : barre Chat / Dashboard + nav (Planification, Calendrier, Plan de la ferme, …).</li>
+        <li>Planification Gantt (ligne = plan) + lien gestes → Calendrier.</li>
+        <li>Calendrier par parcelle (ligne = planche).</li>
+        <li>Calendrier par culture (Gantt éditable).</li>
+        <li>Calendrier des récoltes.</li>
+        <li>Calendrier des tâches (unifié, P8).</li>
+        <li>Modal plan (par-dessus la coquille ; onglets Détails → Tâches).</li>
+        <li>Itinéraires (galerie + fiche) — ordi seulement.</li>
+      </ol>
+
+      <h2>Décidé</h2>
+      <div class="card"><strong>P0 · Cadre.</strong> Cahier V3 inspiré Basile / Desktop ; recode unifié, agent-first. Figma 04 + ce doc.</div>
+      <div class="card"><strong>P1 · Premier lot.</strong> Placer une culture (semaines, variété, quantité, <em>mode d’implantation</em>) + marquer les jalons utiles — d’abord par chat (carte), vues ordi en appui.</div>
+      <div class="card"><strong>P2 · Tâches projetées.</strong> Après confirmation : proposer de prédéfinir les gestes (optionnel).</div>
+      <div class="card"><strong>P3 · Paniers et rotation.</strong> Plus tard (déjà esquissés dans Basile).</div>
+      <div class="card"><strong>P4 · Disposition.</strong> Portée par le plan ; vue parcelle ordi = planches du plan ouvert.</div>
+      <div class="card"><strong>P5 · Surfaces.</strong> Ordi = coquille V3 (4 vues occupation + calendrier tâches + config). Téléphone = chat + liste + calendrier semaine. Pas de Gantt ni fiche itinéraire mobile.</div>
+      <div class="card"><strong>P6 · Drag Gantt (ordi).</strong> Par culture : move centre ; poignées sur les phases <em>présentes</em> (pas de bande fantôme). Parcelle : drag non placés + lot. Mobile : chat / champs, pas de drag.</div>
+      <div class="card"><strong>P7 · Implantation flexible.</strong> Presets : semis pépinière→plantation, plant acheté→plantation, semis direct, plant acheté→élevage/rempotage→plantation, production/vente de plants, sur mesure. Origine et destination indépendantes. Rempotage = phase/geste de pépinière.</div>
+      <div class="card"><strong>P8 · Plan ↔ tâches · desktop unifié.</strong> Une app V3 : vues Planification + Calendrier sur les mêmes données. Plan projette des gestes (opt.) ; tâche faite met à jour jalons du plan. Agent-first pour le réel ; ordi pour surveiller / cocher / corriger. Observations ≠ suivi des tâches.</div>
+      <p>Écrans Figma : page « 04 Planification » — coquille V3 sur tous les Desktop · *, titre P8, nav avec <em>Calendrier</em>, bandeau « Ouvrir le calendrier », écran <em>Desktop · Calendrier des tâches (unifié)</em>. Page « 01 Temps » : menus téléphone + renvoi desktop unifié.</p>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

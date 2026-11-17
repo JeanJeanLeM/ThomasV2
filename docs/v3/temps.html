@@ -1,0 +1,177 @@
+﻿<!DOCTYPE html>
+<html lang="fr"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Temps — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+<meta id="ConnectiveDocSignExtentionInstalled" name="ConnectiveDocSignExtentionInstalled" data-extension-version="1.0.11"></head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html" aria-current="page">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main spellcheck="true">
+      <p class="kicker">Temps · <span class="status">brouillon</span></p>
+      <h1>Déclarer un travail une seule fois.</h1>
+      <p class="lede">L’agriculteur dit ce qu’il a fait, où, sur quelle production et pendant combien de temps. Thomas propose l’intervention. Après confirmation, elle alimente le tableau de bord du temps.</p>
+
+      <h2>Référence</h2>
+      <p>Le modèle visé est un suivi du temps simplifié, du type de ceux utilisés pour les chantiers et les équipes. On retient la personne, la durée, les horaires s’ils sont dits, la date, le lieu et l’activité.</p>
+      <p>Dans la V2, une tâche peut déjà porter une durée et des personnes. T-01 en fait un enregistrement de temps confirmé dans le chat, visible ensuite dans un tableau de bord, et formulé de la même façon pour toutes les filières.</p>
+
+      <h2>Objets déjà en base</h2>
+      <p>T-01 enregistre une ligne dans <code>tasks</code>. Il relie des données qui existent déjà. Le détail des tables est dans <a href="donnees.html">Données</a>.</p>
+      <table>
+        <thead>
+          <tr><th>Champ dit</th><th>Où c’est rangé</th><th>Exemple</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Activité</td><td><code>tasks.action</code> et <code>tasks.standard_action</code></td><td>Désherbage</td></tr>
+          <tr><td>Durée de l’action</td><td><code>tasks.duration_minutes</code></td><td>2 h — durée du chantier, pas multipliée</td></tr>
+          <tr><td>Nombre de personnes</td><td><code>tasks.number_of_people</code> · <span class="status decided">décidé</span></td><td>Décimal autorisé : 1, 2, ou 1,5 si Marie part à mi-parcours. Type à passer en nombre décimal.</td></tr>
+          <tr><td>Effort total</td><td><code>tasks.person_minutes</code> · optionnel · <span class="status decided">décidé</span></td><td>Personnes × durée. Ex. 1,5 × 120 min = 180. Calculé si les deux sont connus ; affichable sans être saisi.</td></tr>
+          <tr><td>Date</td><td><code>tasks.date</code></td><td>Aujourd’hui, sauf mention contraire</td></tr>
+          <tr><td>Horaires</td><td><code>tasks.time_start</code>, <code>tasks.time_end</code> · <span class="status decided">décidé</span></td><td>De 8 h à 10 h. Colonnes à ajouter. Si seule la durée est dite, les horaires restent vides. Si début et fin sont dits, la durée se calcule.</td></tr>
+          <tr><td>Heure seule (V2)</td><td><code>tasks.time</code></td><td>Conservée si déjà remplie. Le chat V3 privilégie début/fin.</td></tr>
+          <tr><td>Participants</td><td><code>tasks.user_id</code>, <code>task_members</code> · <span class="status decided">décidé</span></td><td>Une seule ligne de tâche. Les personnes citées sont des participants, pas des lignes séparées.</td></tr>
+          <tr><td>Parcelle</td><td><code>tasks.plot_ids</code> vers <code>plots</code></td><td>Serre 1</td></tr>
+          <tr><td>Sous-parcelle</td><td><code>tasks.surface_unit_ids</code> vers <code>surface_units</code></td><td>Planche 3, rang 4</td></tr>
+          <tr><td>Production</td><td><code>tasks.plants</code>, nom repris de <code>cultures</code></td><td>Tomate, pommier, blé</td></tr>
+          <tr><td>Précision de lieu</td><td><code>tasks.location_precision</code> · <span class="status decided">décidé</span></td><td>Début de ligne. Colonne texte à ajouter.</td></tr>
+          <tr><td>Note</td><td><code>tasks.notes</code></td><td>Les plants du bout étaient plus sales.</td></tr>
+        </tbody>
+      </table>
+      <p>Thomas reconnaît la parcelle et la sous-parcelle par leur nom, leurs alias et leurs mots-clés, en priorité parmi la disposition du plan ouvert. S’il ne les trouve pas, il demande. Il n’invente pas un nouveau découpage de planches pendant la déclaration du temps : changer largeur / inter-planche / nombre de planches se fait en <a href="planification.html">planification</a>.</p>
+
+      <h2>Plan de culture</h2>
+      <p>Dès que la culture, la parcelle et la sous-parcelle sont reconnues, Thomas consulte le plan de culture déjà en place. La table <code>plans</code> relie une culture à une parcelle et, quand elle est dite, à une sous-parcelle. Elle porte déjà le semis fait, la plantation faite, et leurs dates.</p>
+      <p>Pour « carotte, serre 1, planche 3 », il vérifie le plan ouvert de la planche 3. S’il est déjà en carottes, il le dit. S’il est en autre culture, il le signale et demande quoi faire. S’il n’y a pas de plan ouvert, il le dit aussi.</p>
+      <p>Si la culture est dite et que la parcelle ne l’est pas, Thomas ne bloque pas. Il prend tous les plans ouverts de cette culture et le dit : « Je considère que toutes les parcelles de tomates ont été faites. » Il propose de préciser une parcelle, une sous-parcelle ou une partie. L’agriculteur peut confirmer sans rien ajouter.</p>
+      <p>Si la culture n’est pas dite, Thomas cherche les plans ouverts de la parcelle ou de la sous-parcelle. Une seule culture est retenue et annoncée. Plusieurs cultures deviennent des choix dans le chat : l’agriculteur en sélectionne une ou plusieurs d’un clic, ou les nomme dans un message. Il peut aussi laisser l’ensemble, et Thomas le dit.</p>
+      <p>Si la durée manque, Thomas la demande dans la même proposition. L’agriculteur peut l’indiquer, ou confirmer sans durée et la compléter plus tard. Une information manquante ne doit pas interrompre la déclaration quand le plan de culture permet une hypothèse claire.</p>
+      <p>Certaines actions changent ce plan. Semer, planter et implanter ouvrent une culture, ou marquent le semis ou la plantation sur le plan déjà ouvert. Détruire, enlever, retirer ou arracher la culture la termine : Thomas propose une date de fin. La ligne du plan reste. L’historique est conservé, et une culture suivante ouvrira une nouvelle ligne.</p>
+      <p>Retirer une bâche, un filet ou des tuteurs ne termine pas la culture. Le calendrier, les densités et les itinéraires sont ceux de Basil, décrits dans <a href="planification.html">Planification</a> et <a href="itineraires.html">Itinéraires &amp; coûts</a> (les temps confirmés alimentent l’ITK réel et le coût culture). T-01 ne fait qu’ouvrir, confirmer ou clore le plan de l’année.</p>
+
+      <h2>Durée et horaires · <span class="status decided">décidé</span></h2>
+      <p>Les deux sont prévus. « Deux heures » remplit <code>duration_minutes</code>. « De 8 h à 10 h » remplit <code>time_start</code> et <code>time_end</code>, et calcule la durée. Un seul des deux suffit pour confirmer. Les deux peuvent coexister.</p>
+
+      <h2>Équipe · une seule ligne · <span class="status decided">décidé</span></h2>
+      <p><strong>Une seule ligne</strong> <code>tasks</code>. Trois mesures distinctes :</p>
+      <table>
+        <thead>
+          <tr><th>Mesure</th><th>Colonne</th><th>Rôle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Durée de l’action</td><td><code>duration_minutes</code></td><td>Combien de temps a duré le chantier.</td></tr>
+          <tr><td>Nombre de personnes</td><td><code>number_of_people</code></td><td>Effectif, y compris fractionnaire (1,5). Marie partie à mi-parcours compte pour 0,5 de plus que l’auteur seul.</td></tr>
+          <tr><td>Effort total</td><td><code>person_minutes</code></td><td>Optionnel. Personnes × durée. Utile pour le coût de main-d’œuvre. Calculé dès que les deux premiers sont connus.</td></tr>
+        </tbody>
+      </table>
+      <p>L’auteur reste <code>user_id</code>. Les personnes citées et reconnues vont dans <code>task_members</code> (présence nominative). Le nombre décimal peut différer du simple décompte des membres : « on était deux, Marie est partie à la moitié » → 1,5 personne, durée 2 h, effort 3 h. Dans le chat, une seule carte. Dans le tableau de bord, une seule ligne.</p>
+      <div class="quote"><p>On a désherbé la serre 1 pendant deux heures avec Marie ; elle est partie à mi-chemin pour autre chose.</p></div>
+      <p>Une carte : désherbage, durée 2 h, 1,5 personne, effort 3 h, serre 1, auteur + Marie.</p>
+
+      <h2>Précision de lieu · <span class="status decided">décidé</span></h2>
+      <p>Il n’y a pas d’objet « zone ». La parcelle et la sous-parcelle suffisent pour le lieu connu. On ajoute un texte libre, <code>tasks.location_precision</code>, pour ce qui ne mérite pas une nouvelle sous-parcelle. Simple ajout de colonne.</p>
+      <div class="card"><strong>Exemples.</strong> Début de ligne. Milieu de ligne. Quatrième poteau. Bordure nord.</div>
+      <p>La précision est facultative. Sans elle, la tâche reste rattachée à la parcelle, et à la sous-parcelle si elle a été dite. Une même précision vaut pour toute la déclaration.</p>
+
+      <h2>Fin de culture · <span class="status decided">décidé</span></h2>
+      <p>Colonne <code>plans.ended_on</code> à ajouter. Tant qu’elle est vide, le plan est ouvert. Arracher, enlever ou détruire la culture la renseigne. La ligne reste pour l’historique.</p>
+
+      <h2>Scénario T-01</h2>
+      <p>Les variantes de lieu sont dans Figma, page « 01 Temps ». La page « 03 Discussions » montre la conversation : une carte résumé, le détail qui s’ouvre au clic, et les demandes placées sous la carte quand une information manque. Les écrans F et G montrent plusieurs activités, puis un travail fait à côté d’un travail à planifier.</p>
+
+      <h3>T-01a · Maraîchage</h3>
+      <div class="quote"><p>J’ai passé deux heures à désherber les tomates de la serre 1, planche 3, début de ligne.</p></div>
+      <ol class="scenario">
+        <li>Thomas reconnaît une intervention de travail, pas une question.</li>
+        <li>Il retrouve la parcelle Serre 1 et la sous-parcelle Planche 3 dans la base.</li>
+        <li>Il regarde le plan de culture ouvert de la planche 3. S’il est déjà en tomates, il le confirme. S’il indique une autre culture, il le signale avant d’enregistrer.</li>
+        <li>Si la culture est dite sans parcelle, il retient toutes les parcelles de cette culture et l’écrit. L’agriculteur peut préciser, ou confirmer sans préciser.</li>
+        <li>Si la culture n’est pas dite, il propose celles du plan ouvert. Une seule est annoncée. S’il y en a plusieurs, l’agriculteur en clique une ou plusieurs, les écrit, ou garde l’ensemble.</li>
+        <li>Si la durée n’est pas dite, il la demande dans la proposition. Elle peut rester vide et être complétée ensuite.</li>
+        <li>Il propose : 2 h, désherbage, tomate, parcelle Serre 1, sous-parcelle Planche 3, précision « début de ligne », aujourd’hui, auteur du message. Une remarque dite en plus, par exemple « les plants du bout étaient plus sales », va dans la note.</li>
+        <li>Si la carte est complète, elle s’enregistre sans confirmation. Sinon l’agriculteur confirme. Le tableau de bord montre la ligne.</li>
+      </ol>
+
+      <h3>T-01b · Arboriculture</h3>
+      <div class="quote"><p>J’ai taillé les pommiers de la parcelle B, rang 4, milieu de rang, pendant deux heures.</p></div>
+      <p>Même carte : 2 h, taille, pommier, parcelle B, sous-parcelle Rang 4, précision « milieu de rang ».</p>
+
+      <h3>T-01c · Grande culture</h3>
+      <div class="quote"><p>J’ai semé 12 hectares de blé en trois heures.</p></div>
+      <p>Même carte : 3 h, semis, blé, parcelle déjà enregistrée. La surface de 12 ha est celle de la parcelle si elle est connue, sinon elle reste dans la quantité déjà prévue sur la tâche. Sans sous-parcelle dite, ce champ reste vide. Une précision comme « bordure nord » peut s’ajouter. Comme l’action est un semis, Thomas ouvre un plan de culture en blé, ou confirme celui qui est déjà ouvert.</p>
+
+      <div class="quote"><p>J’ai désherbé mes tomates.</p></div>
+      <p>Thomas voit les plans ouverts en tomates. Il propose le désherbage sur toutes ces parcelles, et il l’écrit. Il propose aussi de limiter à une parcelle ou à une sous-parcelle. Sans durée, il la demande, sans empêcher de confirmer.</p>
+
+      <h3>T-01d · Plusieurs activités, durées déjà séparées</h3>
+      <div class="quote"><p>Ce matin, j’ai désherbé les tomates une heure et récolté les salades une demi-heure, en serre 1.</p></div>
+      <p>L’orchestrateur sépare deux interventions faites. Il propose deux cartes : désherbage, 1 h, tomate, serre 1 ; récolte, 30 min, salade, serre 1. La serre, dite une seule fois, est recopiée sur les deux et annoncée. Si chaque carte est complète, elles s’enregistrent sans confirmation (voir plus bas). Sinon l’agriculteur confirme, ou n’en garde qu’une.</p>
+
+      <h3>T-01f · Répartition d’une durée partagée · <span class="status decided">décidé</span></h3>
+      <p>Quand plusieurs activités ou cultures partagent <strong>une seule durée totale</strong>, Thomas ne invente pas les parts. Il propose une UI de répartition en % (curseurs), total 100 %. Chaque part devient une ligne <code>tasks</code> avec sa durée calculée.</p>
+      <div class="quote"><p>J’ai désherbé les laitues et récolté les laitues pendant 3 heures.</p></div>
+      <p>Deux parts : désherbage laitues / récolte laitues. Durée totale 3 h. Curseurs à 50 % / 50 % par défaut → 1 h 30 chacun. L’agriculteur ajuste, puis valide la répartition.</p>
+      <div class="quote"><p>J’ai désherbé les tomates et les épinards pendant 2 heures, 70 % épinards.</p></div>
+      <p>Deux parts sur la même action (désherbage) : tomates 30 % (36 min), épinards 70 % (1 h 24). Le % dit dans le message préremplit les curseurs. S’il manque encore un champ bloquant, la répartition reste éditable ; sinon validation suffit.</p>
+      <p>Les écrans sont dans Figma, page « 10 Temps — répartition ».</p>
+
+      <h3>T-01e · Un fait et un prévu</h3>
+      <div class="quote"><p>J’ai désherbé les tomates de la serre 1 pendant une heure. Demain, je taille les pommiers.</p></div>
+      <p>L’orchestrateur reconnaît deux intentions de natures différentes. La première est une tâche à enregistrer, statut <code>terminee</code>, datée d’aujourd’hui. La seconde est une tâche à planifier, statut <code>en_attente</code>, datée de demain. Elle n’entre pas dans le temps déjà fait. Si la parcelle des pommiers manque, la question est sous la carte « Prévu ». La carte « Fait » peut être confirmée tout de suite.</p>
+      <p>Le calendrier des séries est décrit dans <a href="planification.html">Planification</a>. T-01 se limite à poser la tâche prévue, avec sa date, pour qu’elle réapparaisse au bon jour.</p>
+
+      <h3>Ouvrir et fermer une culture</h3>
+      <div class="quote"><p>J’ai semé des carottes sur la planche 3 de la serre 1 pendant une heure.</p></div>
+      <p>Thomas propose le temps, puis le plan. Si la planche 3 n’a pas de culture ouverte, il propose une nouvelle ligne <code>plans</code> : carotte, serre 1, planche 3, semis fait à la date dite. Si une autre culture y est encore ouverte, il propose d’abord de la terminer.</p>
+      <div class="quote"><p>J’ai enlevé les carottes de la planche 3.</p></div>
+      <p>Thomas propose de fermer le plan ouvert des carottes, avec la date du jour. La ligne n’est pas effacée.</p>
+
+      <h2>Confirmation automatique · <span class="status decided">décidé</span></h2>
+      <p>Si la tâche paraît <strong>complète</strong> (champs nécessaires remplis, pas d’ambiguïté, pas de répartition à trancher, confiance suffisante), Thomas l’enregistre tout de suite. La carte s’affiche comme déjà enregistrée. Pas de bouton confirmer obligatoire.</p>
+      <p>Dès qu’il manque une info, qu’un nom est ambigu, ou qu’une durée partagée doit être répartie, la carte attend une action.</p>
+
+      <h2>Supprimer depuis le chat · <span class="status decided">décidé</span></h2>
+      <p>« Supprime la dernière tâche », « annule le désherbage de ce matin », ou une action sur la carte déjà enregistrée : Thomas propose la suppression (statut <code>annulee</code> ou masquage selon le registre). Confirmation courte si la cible est claire ; sinon il liste les candidates.</p>
+      <div class="quote"><p>Supprime le désherbage des tomates de ce matin.</p></div>
+      <p>Carte : tâche trouvée, action supprimer. Après accord, elle disparaît du calendrier actif.</p>
+
+      <h2>Tableau de bord</h2>
+      <p>Le tableau s’ouvre depuis le panneau, entrée Calendrier, ou depuis une carte enregistrée. Il liste les interventions et permet de filtrer par personne, période, parcelle, sous-parcelle, production et activité. La précision et la note s’affichent sur la ligne. Sur le téléphone, la liste remplace la conversation. Sur l’ordinateur, elle occupe la colonne principale, à la place du chat, le temps de la consultation.</p>
+      <p>Les écrans de répartition, d’enregistrement auto et de suppression sont dans Figma, page « 10 Temps — répartition ».</p>
+
+      <h2>Décidé pour T-01</h2>
+      <div class="card"><strong>Durée et horaires.</strong> Les deux. Durée seule, ou début/fin, ou les deux.</div>
+      <div class="card"><strong>Équipe.</strong> Une seule ligne. <code>number_of_people</code> décimal. <code>duration_minutes</code> = durée du chantier. <code>person_minutes</code> = personnes × durée, optionnel / calculé.</div>
+      <div class="card"><strong>Répartition.</strong> Durée partagée entre activités ou cultures → curseurs % (total 100 %), une ligne par part.</div>
+      <div class="card"><strong>Auto-enregistrement.</strong> Carte complète → pas de confirmation. Sinon action requise.</div>
+      <div class="card"><strong>Suppression chat.</strong> Possible, avec cible claire ou choix parmi candidates.</div>
+      <div class="card"><strong>Colonnes à ajouter ou adapter.</strong> <code>location_precision</code>, <code>time_start</code>, <code>time_end</code>, <code>person_minutes</code>, <code>number_of_people</code> en décimal, <code>plans.ended_on</code>.</div>
+      <div class="card"><strong>Tâche prévue.</strong> T-01 la détecte et la propose avec le statut <code>en_attente</code>. Le calendrier ordi et la planification partagent les mêmes données (voir <a href="planification.html">Planification · P8</a>) : desktop unifié, pas deux outils.</div>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+
+
+</body></html>

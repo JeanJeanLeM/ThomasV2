@@ -1,0 +1,250 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Données — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html" aria-current="page">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Données · <span class="status">brouillon</span> (contrat vibe-coding)</p>
+      <h1>Schéma aligné sur le produit. Une vérité par objet.</h1>
+      <p class="lede">Cette page est le contrat entre le cahier et le code. Chaque entité cite ses colonnes produit, son statut (existe V2 / à ajouter / à adapter), et la règle d’écriture (confirmation chat ou dashboard). Pas de second modèle « pour l’IA » : l’état mince du harness lit ces tables, filtrées.</p>
+
+      <div class="card"><strong>Règles transverses · décidé.</strong> (1) Toute écriture structurée issue du chat passe une carte confirmée. (2) Soft delete / <code>is_active</code> plutôt que purge immédiate. (3) Scope <code>farm_id</code> partout. (4) La filière ne duplique pas les tables — mêmes schémas, libellés différents. (5) Météo / conseil : pas de colonnes dans ce lot.</div>
+
+      <h2>Carte des entités</h2>
+      <table>
+        <thead><tr><th>Domaine</th><th>Tables clés</th><th>Page cahier</th></tr></thead>
+        <tbody>
+          <tr><td>Ferme &amp; lieux</td><td><code>farms</code>, <code>plots</code>, <code>surface_units</code></td><td>Contexte, Carte ferme</td></tr>
+          <tr><td>Temps</td><td><code>tasks</code>, <code>task_members</code></td><td>Temps</td></tr>
+          <tr><td>Observations</td><td><code>observations</code>, <code>attachments</code></td><td>Observations</td></tr>
+          <tr><td>Planification</td><td><code>plans</code>, (gestes projetés → <code>tasks</code>)</td><td>Planification</td></tr>
+          <tr><td>ITK &amp; coûts</td><td><code>itineraries</code>, <code>itinerary_task_templates</code>, <code>crops</code>, <code>crop_cost_items</code></td><td>Itinéraires</td></tr>
+          <tr><td>Commercial</td><td><code>invoices</code>, <code>prix_vente</code>, conversions, clients</td><td>Commercial</td></tr>
+          <tr><td>Sol</td><td><code>soil_analyses</code> (+ <code>results[]</code>)</td><td>Sol</td></tr>
+          <tr><td>Documents</td><td><code>documents</code>, <code>attachments</code></td><td>Documents</td></tr>
+          <tr><td>Compte</td><td>membres, rôles, invitations</td><td>Compte</td></tr>
+          <tr><td>Mémoire</td><td>résumés épisodiques (à ajouter) ; cache outils non durable</td><td>Fondation</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Ferme &amp; lieux</h2>
+      <div class="schema">
+        <article class="entity new">
+          <header><h3>Exploitation</h3><code>farms</code></header>
+          <ul>
+            <li><code>name</code>, adresse, code postal</li>
+            <li><code>map_center</code> · centrage carte</li>
+            <li><code>geometry</code> · <span class="status decided">décidé</span> à ajouter · emprise optionnelle</li>
+            <li><code>hourly_labor_rate</code> · <span class="status">brouillon</span> · taux pour coûts temps (Itinéraires)</li>
+            <li>Tuiles satellite = fond, pas une table métier</li>
+          </ul>
+        </article>
+        <p class="link-note">contient</p>
+        <article class="entity new">
+          <header><h3>Parcelle</h3><code>plots</code></header>
+          <ul>
+            <li><code>name</code>, <code>aliases</code>, <code>llm_keywords</code></li>
+            <li><code>type</code> : serre plastique, serre verre, tunnel, plein champ, hydroponie, pépinière, autre</li>
+            <li><code>length</code>, <code>width</code>, <code>surface_area</code></li>
+            <li><code>geometry</code> · <span class="status decided">décidé</span> GeoJSON optionnel</li>
+            <li><code>is_active</code> · désactivation sans perte d’historique</li>
+          </ul>
+        </article>
+        <p class="link-note">divisée en</p>
+        <article class="entity">
+          <header><h3>Sous-parcelle</h3><code>surface_units</code></header>
+          <p>Nom produit = sous-parcelle. La disposition utile vient du <strong>plan</strong> (planches du cycle), pas d’un découpage unique définitif.</p>
+          <ul>
+            <li><code>plot_id</code>, <code>name</code>, <code>code</code>, <code>sequence_number</code>, alias / mots-clés</li>
+            <li><code>type</code> : planche, rang, ligne, carré, plate-bande…</li>
+            <li><code>length</code>, <code>width</code>, <code>area</code></li>
+          </ul>
+        </article>
+      </div>
+
+      <h2>Temps de travail</h2>
+      <div class="schema">
+        <article class="entity">
+          <header><h3>Temps de travail</h3><code>tasks</code></header>
+          <ul>
+            <li><code>date</code>, <code>time</code> (V2 conservé)</li>
+            <li><code>duration_minutes</code> · durée chantier (non multipliée)</li>
+            <li><code>time_start</code>, <code>time_end</code> · <span class="status decided">décidé</span> à ajouter</li>
+            <li><code>number_of_people</code> · <span class="status decided">décidé</span> décimal (ex. 1,5)</li>
+            <li><code>person_minutes</code> · <span class="status decided">décidé</span> optionnel = personnes × durée</li>
+            <li><code>action</code>, <code>standard_action</code></li>
+            <li><code>plot_ids</code>, <code>surface_unit_ids</code></li>
+            <li><code>location_precision</code> · <span class="status decided">décidé</span> texte libre</li>
+            <li><code>plants</code> · noms culture (pas FK obligatoire vers catalogue)</li>
+            <li><code>plan_id</code> · <span class="status">brouillon</span> lien série / plan si connu (jalons + coûts)</li>
+            <li><code>user_id</code> + <code>task_members</code> · une ligne, plusieurs participants</li>
+            <li><code>quantity_value</code> / <code>quantity_unit</code> · dit</li>
+            <li><code>quantity_converted_value</code> / <code>quantity_converted_unit</code> · si conversion</li>
+            <li><code>notes</code> · distinct de la précision de lieu</li>
+            <li><code>status</code> · <code>terminee</code> | <code>en_attente</code></li>
+          </ul>
+        </article>
+        <article class="entity new">
+          <header><h3>Fin de culture</h3><code>plans.ended_on</code></header>
+          <p><span class="status decided">décidé</span> · date ; vide = plan ouvert. Semer / planter / implanter ouvre ou complète. Détruire / enlever / arracher propose la fin. Historique conservé.</p>
+        </article>
+      </div>
+      <p><strong>Droits chat temps :</strong> choisir parcelle / sous-parcelle existantes ; recopier culture connue ; comparer au plan ouvert ; multi-activités = multi-lignes ; ne <em>pas</em> créer parcelle depuis T-01 (<code>VAL_UNKNOWN_PLOT</code>).</p>
+
+      <h2>Observations</h2>
+      <div class="schema">
+        <article class="entity">
+          <header><h3>Observation</h3><code>observations</code></header>
+          <ul>
+            <li><code>title</code>, <code>nature</code> (obligatoire)</li>
+            <li><code>category</code> · neuf valeurs produit, défaut <code>autre</code></li>
+            <li><code>severity</code> · <code>basse</code> | <code>moyen</code> | <code>haute</code></li>
+            <li><code>crop</code>, <code>plot_ids</code>, <code>surface_unit_ids</code></li>
+            <li><code>observed_on</code> · <span class="status decided">décidé</span> date dite, défaut aujourd’hui</li>
+            <li><code>location_precision</code>, <code>notes</code> · à ajouter</li>
+            <li><code>material_ids</code>, <code>related_member_ids</code> · à ajouter</li>
+            <li><code>status</code> défaut <code>active</code>, <code>is_active</code></li>
+            <li><code>audio_file_id</code>, <code>created_at</code></li>
+          </ul>
+        </article>
+      </div>
+      <p>Détail métier : <a href="observations.html">Observations</a>. Photo / GPS → <code>attachments</code>, pas confusion avec bibliothèque <code>documents</code> sauf archivage demandé.</p>
+
+      <h2>Planification &amp; ITK</h2>
+      <div class="schema">
+        <article class="entity">
+          <header><h3>Plan / série</h3><code>plans</code></header>
+          <ul>
+            <li><code>plot_id</code>, <code>surface_unit_id</code> (si placé), <code>crop_name</code> / lien culture</li>
+            <li><code>itinerary_id</code> · optionnel · ITK de base</li>
+            <li>Mode d’implantation / phases présentes · overrides durées (série adaptée)</li>
+            <li>Origine matériel (semence / plant) · variété · semaines · densités · disposition</li>
+            <li>Jalons : semis, réception plant, rempotage, plantation, vente plants… + dates</li>
+            <li><code>ended_on</code> · fin de culture</li>
+            <li>Booléens V2 <code>sowing_done</code> / <code>planting_done</code> → jalons parmi d’autres</li>
+          </ul>
+        </article>
+        <article class="entity new">
+          <header><h3>ITK de base</h3><code>itineraries</code> + <code>itinerary_task_templates</code></header>
+          <p><span class="status decided">décidé</span> · entités structurées (mémoire métier). Phases, fenêtres, gestes types, densités / rendements, intrants types. Réf. Basile — recode V3. Voir <a href="itineraires.html">Itinéraires</a>.</p>
+        </article>
+        <article class="entity new">
+          <header><h3>Fiche culture</h3><code>crops</code> (ferme / catalogue)</header>
+          <p>Identité, aliases chat, filière, ITK liés, variétés, charges types indicatives.</p>
+        </article>
+        <article class="entity new">
+          <header><h3>Charges hors temps</h3><code>crop_cost_items</code></header>
+          <p>À ajouter · semences, engrais, pots, terreau, autre ; lien culture / plan / campagne ; montant ; lien document / facture optionnel. Amortissements = postes cadrés, éventuellement absents v1.</p>
+        </article>
+      </div>
+
+      <h2>Documents &amp; pièces jointes</h2>
+      <div class="schema">
+        <article class="entity">
+          <header><h3>Document de ferme</h3><code>documents</code></header>
+          <ul>
+            <li><code>farm_id</code>, <code>user_id</code></li>
+            <li><code>name</code>, <code>description</code>, <code>category</code></li>
+            <li><code>file_name</code>, <code>file_type</code>, <code>mime_type</code>, <code>file_size</code></li>
+            <li><code>file_path</code>, <code>storage_bucket</code></li>
+            <li><code>linked_entity_type</code> / <code>linked_entity_id</code></li>
+            <li><code>is_active</code>, timestamps</li>
+          </ul>
+        </article>
+        <p class="link-note">et / ou</p>
+        <article class="entity">
+          <header><h3>Pièce jointe</h3><code>attachments</code></header>
+          <ul>
+            <li>Types : <code>image</code>, <code>pdf</code>, <code>file</code>, <code>location</code></li>
+            <li>Liens : <code>observation_id</code>, <code>task_id</code>, <code>invoice_id</code>, <code>analysis_id</code>, <code>message_id</code></li>
+          </ul>
+        </article>
+        <article class="entity">
+          <header><h3>Analyse de sol</h3><code>soil_analyses</code></header>
+          <p>Métadonnées + <code>results[]</code> creux (texture → ETM…). Catalogue : <a href="sol.html">Sol</a>. Pipeline fichier : <a href="documents.html">Documents</a>.</p>
+        </article>
+      </div>
+
+      <h2>Commercial (aperçu colonnes)</h2>
+      <table>
+        <thead><tr><th>Table</th><th>Rôle</th><th>Règle d’écriture</th></tr></thead>
+        <tbody>
+          <tr><td><code>invoices</code> (+ lignes)</td><td>Vente / facture ; URL document optionnelle</td><td>Prix dit sur la vente ; pas de réécriture grille</td></tr>
+          <tr><td><code>prix_vente</code></td><td>Grille culture × canal</td><td>Réglage explicite ou import liste confirmé (D5)</td></tr>
+          <tr><td>conversions</td><td>Contenant → contenu</td><td>Utilisée à la lecture / facture si ligne existe</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Mémoire (persistence)</h2>
+      <table>
+        <thead><tr><th>Couche</th><th>Stockage</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>État ferme mince</td><td>Tables ci-dessus, requêtes filtrées</td><td>Pas de table « contexte » dupliquée</td></tr>
+          <tr><td>Fil courant</td><td>Messages / session conversation</td><td>Hors nav historique dense</td></tr>
+          <tr><td>Épisodique</td><td>Table résumés versionnés · à ajouter</td><td>Rechercheable ; pas dump brut</td></tr>
+          <tr><td>Métier structuré</td><td>ITK / plans / coûts</td><td>Déjà listé</td></tr>
+          <tr><td>Faits confirmés</td><td>Lignes métier post-confirmation</td><td>Source opérationnelle</td></tr>
+          <tr><td>Cache outils</td><td>Cache applicatif / TTL court</td><td>Non durable ; hors DB métier</td></tr>
+        </tbody>
+      </table>
+
+      <h2>État mince — ce que le code charge pour un message</h2>
+      <ol class="scenario">
+        <li>Ferme + vue (soi / ferme / personne) + droits membre.</li>
+        <li>Candidats : parcelles actives, sous-parcelles / planches des plans ouverts, cultures / plans ouverts, membres, matériels, quelques prix.</li>
+        <li>Fil courant (N derniers messages + cartes en attente).</li>
+        <li>À la demande seulement : ITK, document, ePhy, résumé épisodique, agrégats coût.</li>
+      </ol>
+      <p>Jamais : dump de toutes les tâches historiques, tous les documents, tout ePhy.</p>
+
+      <h2>Migrations prioritaires (synthèse)</h2>
+      <table>
+        <thead><tr><th>Priorité</th><th>Changement</th><th>Statut produit</th></tr></thead>
+        <tbody>
+          <tr><td>P0</td><td><code>tasks.time_start/end</code>, <code>number_of_people</code> décimal, <code>person_minutes</code>, <code>location_precision</code></td><td><span class="status decided">décidé</span></td></tr>
+          <tr><td>P0</td><td><code>plans.ended_on</code> + jalons implantation flexible</td><td><span class="status decided">décidé</span></td></tr>
+          <tr><td>P0</td><td><code>observations.observed_on</code> (+ precision, notes, liens)</td><td><span class="status decided">décidé</span></td></tr>
+          <tr><td>P1</td><td><code>plots.geometry</code>, <code>farms.geometry</code> / centre</td><td><span class="status decided">décidé</span></td></tr>
+          <tr><td>P1</td><td><code>documents</code> épuré + liens entité ; <code>attachments</code> unifié</td><td><span class="status decided">décidé</span></td></tr>
+          <tr><td>P1</td><td><code>itineraries</code> + templates ; overrides sur <code>plans</code></td><td><span class="status decided">décidé</span></td></tr>
+          <tr><td>P2</td><td><code>crop_cost_items</code>, taux horaire ferme</td><td><span class="status decided">décidé</span> (amort. différable)</td></tr>
+          <tr><td>P2</td><td>Résumés épisodiques</td><td><span class="status decided">décidé</span> (modèle) · schéma exact <span class="status">brouillon</span></td></tr>
+          <tr><td>—</td><td>Colonnes météo / conseil sur <code>tasks</code></td><td>Hors lot</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Hors de ce schéma (premier lot)</h2>
+      <p>Météo, conseil, communauté, paniers, rotation avancée, compta / amortissements complets, GED multi-versions. Le type « zone » au-dessus de la parcelle n’est pas un objet.</p>
+      <p>Contexte chargé : <a href="contexte.html">Contexte</a>. Tests qui verrouillent ce contrat : <a href="tests.html">Tests</a>. Événements si write échoue : <a href="erreurs.html">Erreurs</a>.</p>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

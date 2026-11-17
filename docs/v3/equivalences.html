@@ -1,0 +1,168 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Équivalences mobile ↔ desktop — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html" aria-current="page">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Équivalences mobile ↔ desktop · <span class="status decided">décidé</span></p>
+      <h1>Même produit. Capacités selon la surface.</h1>
+      <p class="lede">Une seule web app, une seule coquille. Téléphone et ordinateur ne dupliquent pas deux logiciels : ils exposent les mêmes données avec des capacités adaptées. Cette page est la matrice de référence pour le cahier et le futur Figma.</p>
+
+      <div class="card"><strong>Règle.</strong> Tout ce qui exige largeur, densité ou dessin fin = ordi. Le téléphone enregistre, consulte et confirme via le chat (et listes / calendrier semaine). L’agent est l’éditeur riche mobile.</div>
+
+      <h2>Coquille</h2>
+      <table>
+        <thead><tr><th>Capacité</th><th>Téléphone</th><th>Ordinateur</th></tr></thead>
+        <tbody>
+          <tr><td>Barre Chat ↔ Dashboard</td><td>Oui, compacte</td><td>Oui, permanente</td></tr>
+          <tr><td>Nav collapsible</td><td>Tiroir ~50 % ; chat assombri</td><td>Colonne gauche repliable</td></tr>
+          <tr><td>Fil de chat + cartes</td><td>Chemin principal d’écriture</td><td>Colonne ou plein contenu</td></tr>
+          <tr><td>Bulles d’activité outils</td><td>Oui (discret, in-chat)</td><td>Oui (même pattern)</td></tr>
+          <tr><td>Vue personne (soi / ferme / membre)</td><td>Oui</td><td>Oui</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Matrice par domaine · <span class="status decided">décidé</span></h2>
+
+      <h3>Temps</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Déclarer via chat (T-01)</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Répartition % multi-activités</td><td>✓ (curseurs)</td><td>✓</td></tr>
+          <tr><td>Calendrier liste / filtres</td><td>✓ simplifié</td><td>✓ riche</td></tr>
+          <tr><td>Édition masse / corrections tableau</td><td>—</td><td>✓</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Observations</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Constat chat + photo</td><td>✓ (caméra native)</td><td>✓ (fichier / drag)</td></tr>
+          <tr><td>Liste / fiche registre</td><td>✓</td><td>✓</td></tr>
+          <tr><td>GPS joint</td><td>✓ prioritaire</td><td>optionnel</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Carte ferme</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Consultation satellite + sélection</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Ouvrir fiche parcelle / ferme</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Dessiner / éditer géométrie</td><td>— (<code>MAP_EDIT_MOBILE_LIMIT</code>)</td><td>✓</td></tr>
+          <tr><td>Modifier emprise ferme</td><td>fiche texte limitée</td><td>✓ dessin + fiche</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Planification</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Placer / ajuster plan via chat</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Liste plans + détail simple</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Calendrier semaine gestes</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Gantt / 4 vues occupation</td><td>—</td><td>✓</td></tr>
+          <tr><td>Drag resize phases</td><td>—</td><td>✓</td></tr>
+          <tr><td>Modal plan multi-onglets</td><td>—</td><td>✓</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Itinéraires &amp; coûts</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Lecture ITK / coût via chat</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Fiche culture / ITK éditable</td><td>—</td><td>✓</td></tr>
+          <tr><td>Dashboard coûts culture</td><td>lecture courte</td><td>✓ complet</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Traitements</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Traiter via chat (catalogue / ePhy)</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Registre traitements + produits ferme</td><td>✓ liste</td><td>✓ liste + fiches</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Commercial</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Vente chat</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Grille prix / conversions</td><td>✓ liste</td><td>✓ édition confortable</td></tr>
+          <tr><td>Import liste de prix fichier</td><td>✓ via chat</td><td>✓ chat + drag registre</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Sol</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Ajouter analyse (saisie / fichier)</td><td>✓ chat + photo</td><td>✓ chat + PDF drag</td></tr>
+          <tr><td>Fiche analyse multi-postes</td><td>✓ lisible</td><td>✓ édition dense</td></tr>
+          <tr><td>Besoin NPK (outil)</td><td>✓ chat</td><td>✓ chat / fiche</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Documents</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Joindre photo / fichier au chat</td><td>✓ (caméra, galerie, fichiers)</td><td>✓ (drag &amp; drop)</td></tr>
+          <tr><td>Parcours facile (photo, analyse)</td><td>✓ prioritaire</td><td>✓</td></tr>
+          <tr><td>Parcours complexe (CSV planif, archive)</td><td>possible via chat, UX courte</td><td>✓ préféré (rapport d’import)</td></tr>
+          <tr><td>Registre Documents</td><td>liste + ouverture</td><td>liste + aperçu PDF + drag</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Compte</h3>
+      <table>
+        <thead><tr><th>Capacité</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Auth, profil, multi-fermes</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Invitation / QR</td><td>✓ (scan QR natif)</td><td>✓ (lien)</td></tr>
+          <tr><td>Hors ligne</td><td>✓ critique</td><td>✓ aussi</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Légende</h2>
+      <p>✓ = capacité produit attendue. — = non prévu sur cette surface (renvoi chat / ordi). Les détails métier restent dans les pages domaine ; cette matrice tranche seulement <em>où</em> ça se fait.</p>
+
+      <h2>Liens</h2>
+      <p><a href="fondation.html">Fondation</a> (coquille) · <a href="planification.html">Planification</a> (P5) · <a href="carte-ferme.html">Carte ferme</a> · <a href="documents.html">Documents</a> · <a href="erreurs.html">Erreurs</a> (<code>MAP_EDIT_MOBILE_LIMIT</code>, <code>NET_*</code>).</p>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

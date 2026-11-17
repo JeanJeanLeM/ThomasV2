@@ -1,0 +1,125 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Observations — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html" aria-current="page">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Observations · <span class="status">brouillon</span></p>
+      <h1>Un constat, distinct du travail.</h1>
+      <p class="lede">Une observation note ce que l’agriculteur a vu. Une tâche note ce qu’il a fait. Les deux peuvent tenir dans le même message. L’orchestrateur en fait deux cartes.</p>
+      <p>Cette définition reprend la table <code>observations</code> de la V2, puis ajoute les colonnes validées pour la V3.</p>
+
+      <h2>Ce que le message peut porter</h2>
+      <p>Le prompt reconnaît un constat obligatoire, et le sujet sur lequel il porte.</p>
+      <table>
+        <thead>
+          <tr><th>Sujet</th><th>Exemples</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Culture</td><td>Pucerons sur les tomates. Mildiou sur les vignes. Floraison des courgettes. Fruits mûrs.</td></tr>
+          <tr><td>Matériel</td><td>Le tracteur fait un bruit étrange. Relié à <code>materials</code> si le nom est reconnu.</td></tr>
+          <tr><td>Bâtiment</td><td>La serre 1 ne s’ouvre plus. Relié à la parcelle si elle est reconnue.</td></tr>
+          <tr><td>Personne</td><td>Un membre cité, relié à <code>farm_members</code> / <code>profiles</code> si reconnu.</td></tr>
+        </tbody>
+      </table>
+      <p>Le constat n’est pas seulement un problème. La croissance et la maturation sont des observations : floraison, levée, germination, fruits mûrs. La gravité par défaut est <code>moyen</code>, et <code>basse</code> pour un constat neutre comme une floraison.</p>
+
+      <h2>Ce que la table garde · <span class="status decided">décidé</span></h2>
+      <p>Une ligne appartient à une exploitation et à l’auteur du message. Le titre se construit à partir du constat et, s’il y en a une, de la culture : « Pucerons Tomates ».</p>
+      <table>
+        <thead>
+          <tr><th>Champ</th><th>Colonne</th><th>Règle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Titre</td><td><code>title</code></td><td>Obligatoire. Constat, puis culture si elle est dite.</td></tr>
+          <tr><td>Constat</td><td><code>nature</code></td><td>Obligatoire. Le texte du constat, par exemple « pucerons ».</td></tr>
+          <tr><td>Catégorie</td><td><code>category</code></td><td>Défaut <code>autre</code>. Valeurs listées plus bas.</td></tr>
+          <tr><td>Gravité</td><td><code>severity</code></td><td><code>basse</code>, <code>moyen</code>, <code>haute</code>. Défaut <code>moyen</code>.</td></tr>
+          <tr><td>Culture</td><td><code>crop</code></td><td>Nom libre. Vide si le sujet est un matériel ou un bâtiment.</td></tr>
+          <tr><td>Parcelle</td><td><code>plot_ids</code></td><td>Identifiants reconnus dans <code>plots</code>.</td></tr>
+          <tr><td>Sous-parcelle</td><td><code>surface_unit_ids</code></td><td>Identifiants reconnus dans <code>surface_units</code>.</td></tr>
+          <tr><td>Date dite</td><td><code>observed_on</code> · à ajouter</td><td>La date du constat. Si rien n’est dit : aujourd’hui. « Hier », « ce matin » se résolvent à une date.</td></tr>
+          <tr><td>Précision de lieu</td><td><code>location_precision</code> · à ajouter</td><td>Texte libre, comme sur les tâches. Début de ligne, bordure nord.</td></tr>
+          <tr><td>Note</td><td><code>notes</code> · à ajouter</td><td>Commentaire libre, distinct de la précision de lieu.</td></tr>
+          <tr><td>Matériel</td><td><code>material_ids</code> · à ajouter</td><td>Identifiants reconnus dans <code>materials</code>.</td></tr>
+          <tr><td>Personne liée</td><td><code>related_member_ids</code> · à ajouter</td><td>Membres cités et reconnus. Distinct de l’auteur (<code>user_id</code>).</td></tr>
+          <tr><td>Statut</td><td><code>status</code></td><td>Défaut <code>active</code>.</td></tr>
+          <tr><td>Visible</td><td><code>is_active</code></td><td>Vrai à la création. La suppression de l’écran le passe à faux.</td></tr>
+          <tr><td>Moment d’écriture</td><td><code>created_at</code></td><td>Horodatage de l’enregistrement. Distinct de <code>observed_on</code>.</td></tr>
+          <tr><td>Audio</td><td><code>audio_file_id</code></td><td>Lien facultatif vers <code>audio_files</code>.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Catégories</h3>
+      <table>
+        <thead>
+          <tr><th>Valeur</th><th>Ce qu’elle couvre</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ravageurs</code></td><td>Insectes, acariens, limaces. Pucerons, doryphores.</td></tr>
+          <tr><td><code>maladies</code></td><td>Champignons, virus. Mildiou, oïdium.</td></tr>
+          <tr><td><code>carences</code></td><td>Manques nutritifs. Fer, azote.</td></tr>
+          <tr><td><code>degats_climatiques</code></td><td>Grêle, gel, sécheresse.</td></tr>
+          <tr><td><code>degats_materiel</code></td><td>Panne d’un équipement ou d’un bâtiment.</td></tr>
+          <tr><td><code>problemes_sol</code></td><td>Compactage, drainage, pH.</td></tr>
+          <tr><td><code>croissance</code></td><td>Floraison, levée, germination.</td></tr>
+          <tr><td><code>maturation</code></td><td>Fruits mûrs.</td></tr>
+          <tr><td><code>autre</code></td><td>Défaut, quand aucune catégorie ne convient.</td></tr>
+        </tbody>
+      </table>
+      <p>L’écran de carte affiche parfois Faible, Moyen, Élevé et Critique. Les valeurs enregistrées restent <code>basse</code>, <code>moyen</code> et <code>haute</code>.</p>
+
+      <h2>Photo, position, voix</h2>
+      <p>Une photo ou une position GPS jointes au message sont une ligne de <code>attachments</code> (ex-<code>action_attachments</code>), reliée par <code>observation_id</code>. Le type est <code>image</code> ou <code>location</code>. L’image garde le fichier et son adresse publique. La position garde la latitude, la longitude, et l’adresse si elle est connue. La voix, elle, passe par <code>audio_file_id</code> sur l’observation. Les autres fichiers de ferme (PDF, factures, analyses) suivent le cahier <a href="documents.html">Documents</a> — une photo d’observation reste une pièce jointe d’action, pas un document de bibliothèque, sauf si l’agriculteur demande de l’archiver.</p>
+
+      <h2>Dans le chat</h2>
+      <p>En V3, les colonnes forment la carte résumé. L’écriture attend la confirmation, comme pour le temps.</p>
+      <div class="quote"><p>Hier j’ai vu des pucerons sur les tomates de la serre 1, début de ligne.</p></div>
+      <ol class="scenario">
+        <li>Thomas reconnaît une observation, catégorie ravageurs, gravité moyen si rien d’autre n’est dit.</li>
+        <li>Le constat est « pucerons ». La culture est « tomates ». Le titre proposé est « Pucerons Tomates ».</li>
+        <li>La date dite est hier → <code>observed_on</code>. Sans date dite, ce serait aujourd’hui.</li>
+        <li>Il retrouve la parcelle Serre 1. Précision « début de ligne ». Sans sous-parcelle dite, ce champ reste vide.</li>
+        <li>Après confirmation, la ligne est visible dans les observations. La supprimer la masque, <code>is_active</code> passe à faux.</li>
+      </ol>
+      <div class="quote"><p>Les courgettes fleurissent, et j’ai désherbé la planche 3 pendant une heure.</p></div>
+      <p>Deux cartes. La floraison est une observation de croissance. Le désherbage est une tâche. Chacune se confirme seule.</p>
+      <div class="quote"><p>Le tracteur Kubota fait un bruit étrange depuis ce matin.</p></div>
+      <p>Observation, catégorie <code>degats_materiel</code>. Matériel reconnu si présent dans <code>materials</code>. Date dite : aujourd’hui.</p>
+
+      <h2>Colonnes à ajouter</h2>
+      <div class="card"><strong>Date dite.</strong> <code>observed_on</code>. Défaut : aujourd’hui.</div>
+      <div class="card"><strong>Précision et note.</strong> <code>location_precision</code> et <code>notes</code>.</div>
+      <div class="card"><strong>Liens.</strong> <code>material_ids</code> et <code>related_member_ids</code>.</div>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>
