@@ -157,8 +157,8 @@
         <tbody>
           <tr><td>Ferme</td><td>Plan / carte de la ferme (satellite), parcelles</td></tr>
           <tr><td>Production</td><td>Planification, calendrier, observations, traitements</td></tr>
-          <tr><td>Ressources</td><td>Matériel, personnel, prix, conversions, documents</td></tr>
-          <tr><td>Commercial</td><td>Ventes</td></tr>
+          <tr><td>Ressources</td><td>Matériel, personnel, prix, conversions, documents (analyses sol + fiches culture/ITK liées — pas d’entrées nav Sol/ITK)</td></tr>
+          <tr><td>Commercial</td><td>Ventes · Achats (liste d’achat générale)</td></tr>
           <tr><td>Compte</td><td>Profil</td></tr>
         </tbody>
       </table>
@@ -223,8 +223,9 @@
           <tr><td>Personnel</td><td>Les membres actifs, par rôle.</td><td>Invitation chat ou écran : lien à envoyer (WhatsApp etc.). Lien / QR permanent pour stagiaires. Une personne seulement citée dans une tâche ne devient pas membre.</td></tr>
           <tr><td>Prix</td><td>Les cultures qui ont un prix, par canal.</td><td>Culture, canal, prix, unité. Une vente n’écrit pas dans cette grille.</td></tr>
           <tr><td>Conversions</td><td>Les lignes, et celles encore à préciser.</td><td>Contenant, contenu, valeur, unité.</td></tr>
-          <tr><td>Ventes</td><td>Les factures et leur total.</td><td>Client, quantité, unité dite, prix dit. PDF / photo de facture → voir <a href="documents.html">Documents</a>.</td></tr>
-          <tr><td>Documents</td><td>Fichiers de la ferme (PDF, images…), filtrés par catégorie.</td><td>Ajout / aperçu / lien vers analyse, facture, observation. Détail : <a href="documents.html">Documents</a>.</td></tr>
+          <tr><td>Documents</td><td>Fichiers de la ferme (PDF, images…), filtrés par catégorie. Seule porte nav vers analyses sol ; aussi fiches culture/ITK liées.</td><td>Ajout / aperçu / lien vers analyse, facture, observation, culture. Détail : <a href="documents.html">Documents</a>.</td></tr>
+          <tr><td>Ventes</td><td>Les factures et leur total.</td><td>Client, quantité, unité dite, prix dit. PDF / photo de facture → Documents.</td></tr>
+          <tr><td>Achats</td><td>Liste d’achat générale (semences, engrais, pots, matériel…).</td><td>Lignes à acheter / achetées. V1 : l’utilisateur achète. Agent autonome = plus tard. Voir <a href="navigation.html#commercial">Navigation</a>.</td></tr>
           <tr><td>Profil</td><td>La personne, son rôle, la ferme, la vue.</td><td>La vue : soi, toute la ferme, ou une personne pour le responsable et le propriétaire. Inviter quelqu’un se fait dans Personnel.</td></tr>
         </tbody>
       </table>
@@ -449,11 +450,11 @@
           <tr><td>Quel produit utiliser</td><td>Question ePhy. Il cherche le produit et l’usage, puis la liste de produits de l’exploitation. La réponse est indicative. Elle ne crée pas un traitement.</td></tr>
           <tr><td>Itinéraire technique</td><td>Il lit la base d’itinéraires. Elle est à ajouter au contexte : <code>itineraries</code>, fenêtres climatiques et gestes <code>itinerary_task_templates</code>, venus de Basil. Il décrit le cycle. Il ne pose un plan que si l’agriculteur le demande.</td></tr>
           <tr><td>Marquer une vente</td><td>Carte d’écriture. Facture au prix dit. La grille de prix ne change pas.</td></tr>
-          <tr><td>Commander des semences</td><td>Un caddie fictif, pas une commande envoyée. Lignes : culture, variété, quantité, unité, fournisseur s’il est dit. Thomas montre le stock <code>semences</code> déjà connu. Confirmer range le caddie. Acheter vraiment est une autre intention.</td></tr>
+          <tr><td>Ajouter à la liste d’achat</td><td>Liste d’achat générale (semences, engrais, pots, matériel…). Carte / lignes confirmables → registre Achats. V1 : l’utilisateur achète lui-même (hors app ou marque « acheté »). Commande autonome agent = phase ultérieure. Remplace l’ancien caddie semences seul.</td></tr>
           <tr><td>Météo</td><td>Lecture branchée sur la parcelle demandée, sinon sur la commune de la ferme. Aucune ligne n’est écrite.</td></tr>
         </tbody>
       </table>
-      <p>La base d’itinéraires et le caddie de semences sont des objets à ajouter — détail produit : <a href="itineraires.html">Itinéraires &amp; coûts</a>. Les autres intentions s’appuient sur des tables déjà là : tâches, plans, ePhy, factures, observations, semences en stock. Les parcours chat se spécifient dans ce cahier (fondation + domaines) ; le fichier Figma actuel est à archiver puis reconstruire <em>après</em> stabilisation du CDC (pas de nouvelles pages Figma « Harness / Intentions » pour l’instant).</p>
+      <p>La base d’itinéraires et la liste d’achat générale sont des objets à ajouter — ITK : <a href="itineraires.html">Itinéraires &amp; coûts</a> · Achats : <a href="navigation.html#commercial">Navigation</a> / Commercial. Accès Cultures/ITK sans entrée nav : Documents + planification. Analyses sol : Documents seulement. Layout ordi Chat+Dashboard : <a href="navigation.html#layout-ordi">schémas A/B/C à juger</a>.</p>
 
       <h2>Visibilité</h2>
       <p>Les données vivent dans la ferme. En V2, un membre actif voit les tâches de toute la ferme. La V3 garde ce partage, puis le filtre. Trois vues : les siennes, celles de tout le monde, ou celles d’une personne.</p>

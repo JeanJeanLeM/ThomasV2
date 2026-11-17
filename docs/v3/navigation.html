@@ -42,16 +42,17 @@
       <h2>Sommaire inventaire</h2>
       <ol class="scenario">
         <li><a href="#coquille">Coquille partagée</a> (barre, nav, chat, bulles, vue personne)</li>
+        <li><a href="#layout-ordi">Layout ordi A / B / C</a> — <em>à juger par Chach</em></li>
         <li><a href="#chat">Surface Chat</a></li>
         <li><a href="#auth">Auth &amp; états compte</a></li>
         <li><a href="#ferme">Ferme · carte &amp; parcelles</a></li>
         <li><a href="#production">Production · planif, calendrier, observations, traitements</a></li>
-        <li><a href="#itk">Itinéraires &amp; coûts</a></li>
-        <li><a href="#ressources">Ressources · matériel, personnel, prix, conversions, documents, sol</a></li>
-        <li><a href="#commercial">Commercial · ventes</a></li>
+        <li><a href="#itk">Itinéraires &amp; coûts</a> (sans entrée nav dédiée)</li>
+        <li><a href="#ressources">Ressources · documents, sol via Documents, …</a></li>
+        <li><a href="#commercial">Commercial · ventes &amp; liste d’achat</a></li>
         <li><a href="#compte-reg">Compte · profil &amp; multi-fermes</a></li>
         <li><a href="#ouvertures">Matrice « ce qui ouvre quoi »</a></li>
-        <li><a href="#ambigu">Ouvert / à préciser</a></li>
+        <li><a href="#ambigu">Reste ouvert</a></li>
       </ol>
 
       <!-- ========== COQUILLE ========== -->
@@ -115,12 +116,13 @@
           <tr><td>Personnel</td><td>Liste membres → invitation / rôles</td></tr>
           <tr><td>Prix</td><td>Grille prix → édition</td></tr>
           <tr><td>Conversions</td><td>Liste unités → édition</td></tr>
-          <tr><td>Documents</td><td>Liste fichiers → fiche / aperçu</td></tr>
-          <tr><td>Commercial</td><td>Ventes</td><td>Liste factures → fiche</td></tr>
+          <tr><td>Documents</td><td>Liste fichiers → fiche / aperçu (+ analyses sol, fiches culture/ITK liées)</td></tr>
+          <tr><td rowspan="2">Commercial</td><td>Ventes</td><td>Liste factures → fiche</td></tr>
+          <tr><td>Achats</td><td>Liste d’achat générale → lignes / fournisseur</td></tr>
           <tr><td>Compte</td><td>Profil</td><td>Personne, rôle, ferme, vue</td></tr>
         </tbody>
       </table>
-      <p>Itinéraires / coûts et Sol n’ont pas forcément une entrée nav top-level dédiée au premier lot : lecture via chat + fiches ordi accessibles depuis Planification / Documents / Parcelles (voir sections). <span class="status">à préciser</span> : libellé exact et place d’une entrée « Cultures / ITK » ou « Analyses sol » si on veut un registre visible — aujourd’hui le CDC les expose surtout via chat + fiches liées.</p>
+      <div class="card"><strong>Décidé 2026-11-17 · accès sans entrée nav.</strong> <em>Cultures / ITK</em> : pas d’entrée nav dédiée — accès via <strong>Documents</strong> et via <strong>planification de culture</strong> (liste / modal plan / chat). <em>Analyses sol</em> : accès <strong>uniquement via Documents</strong> (fichier + objet lié). Icônes et ordre fin de la nav : Figma ultérieur.</div>
 
       <h3>États coquille</h3>
       <table>
@@ -134,6 +136,110 @@
           <tr><td>Permission refusée</td><td>Message court, pas d’écriture</td><td><code>PERM_DENIED</code></td></tr>
         </tbody>
       </table>
+
+      <!-- ========== LAYOUT ORDI A/B/C ========== -->
+      <h2 id="layout-ordi">Layout ordinateur Chat + Dashboard · <span class="status">à juger</span></h2>
+      <p class="lede" style="font-size:18px;">Ne pas figer encore. Trois options schématiques pour arbitrage. Même barre Chat ↔ Dashboard et même nav dans les trois cas ; ce qui change = cohabitation du fil et du registre.</p>
+      <div class="card"><strong>À choisir (Chach).</strong> Ouvrir cette section en local (<code>docs/v3/navigation.html#layout-ordi</code>) ou dans le snapshot Context. Répondre <strong>A</strong>, <strong>B</strong> ou <strong>C</strong> (évent. variante C colonne fixe vs tiroir).</div>
+
+      <div class="wire-grid">
+        <article class="wire-option wire-a" id="layout-a">
+          <p class="choice-label">Option A — Bascule exclusive</p>
+          <p class="choice-tag">À juger</p>
+          <p>Un seul contenu à la fois. La barre bascule Chat <em>ou</em> Dashboard. Maximalement simple ; pas de lecture registre pendant qu’on répond.</p>
+          <div class="wire-frame" aria-hidden="true">
+            <div class="wire-bar">
+              <span class="wire-chip on">Chat</span>
+              <span class="wire-chip">Dashboard</span>
+              <span class="wire-chip">☰</span>
+              <span class="wire-mark">Thomas</span>
+            </div>
+            <div class="wire-body">
+              <div class="wire-nav"><span>Ferme</span><span>Prod.</span><span>Ress.</span></div>
+              <div class="wire-pane chat">
+                <strong>Fil seul (plein)</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines short"></div>
+                <div class="wire-lines block"></div>
+                <div class="wire-lines short"></div>
+              </div>
+            </div>
+          </div>
+          <p><strong>Pros.</strong> Clair, mobile-like, peu de densité. <strong>Cons.</strong> Allers-retours pour croiser chat et Gantt / carte.</p>
+        </article>
+
+        <article class="wire-option wire-b" id="layout-b">
+          <p class="choice-label">Option B — Split côte à côte</p>
+          <p class="choice-tag">À juger</p>
+          <p>Chat et dashboard visibles ensemble (ex. ~40 % / 60 %). La barre peut toujours « privilégier » un côté (focus), mais les deux restent à l’écran.</p>
+          <div class="wire-frame" aria-hidden="true">
+            <div class="wire-bar">
+              <span class="wire-chip on">Chat</span>
+              <span class="wire-chip on">Dashboard</span>
+              <span class="wire-chip">☰</span>
+              <span class="wire-mark">Thomas</span>
+            </div>
+            <div class="wire-body">
+              <div class="wire-nav"><span>Ferme</span><span>Prod.</span><span>Ress.</span></div>
+              <div class="wire-pane chat">
+                <strong>Chat</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines block"></div>
+                <div class="wire-lines short"></div>
+              </div>
+              <div class="wire-pane dash">
+                <strong>Dashboard (Gantt / liste…)</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines"></div>
+                <div class="wire-lines short"></div>
+                <div class="wire-lines block"></div>
+              </div>
+            </div>
+          </div>
+          <p><strong>Pros.</strong> Contexte registre pendant le dialogue. <strong>Cons.</strong> Largeur minimale ; densité élevée sur laptop étroit.</p>
+        </article>
+
+        <article class="wire-option wire-c" id="layout-c">
+          <p class="choice-label">Option C — Dashboard plein + chat colonne / tiroir</p>
+          <p class="choice-tag">À juger</p>
+          <p>Le registre occupe le centre. Le chat est une <strong>colonne latérale</strong> (fixe) ou un <strong>tiroir</strong> (repliable depuis la barre). Variante possible : tiroir droit ouvert / icône « Chat » pour rouvrir.</p>
+          <div class="wire-frame" aria-hidden="true">
+            <div class="wire-bar">
+              <span class="wire-chip">Chat ▦</span>
+              <span class="wire-chip on">Dashboard</span>
+              <span class="wire-chip">☰</span>
+              <span class="wire-mark">Thomas</span>
+            </div>
+            <div class="wire-body">
+              <div class="wire-nav"><span>Ferme</span><span>Prod.</span><span>Ress.</span></div>
+              <div class="wire-pane dash">
+                <strong>Dashboard principal</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines block"></div>
+                <div class="wire-lines"></div>
+                <div class="wire-lines short"></div>
+              </div>
+              <div class="wire-drawer">
+                <strong style="display:block;color:var(--ink);font-size:12px;margin-bottom:6px;">Chat (colonne / tiroir)</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines short"></div>
+                <div class="wire-lines block"></div>
+              </div>
+            </div>
+          </div>
+          <p><strong>Pros.</strong> Ordi « outil » d’abord ; chat toujours à portée. <strong>Cons.</strong> Risque de traiter le chat comme panneau secondaire (à éviter pour agent-natif).</p>
+        </article>
+      </div>
+      <table>
+        <thead><tr><th>Critère</th><th>A Exclusive</th><th>B Split</th><th>C Colonne / tiroir</th></tr></thead>
+        <tbody>
+          <tr><td>Agent-natif (écriture chat)</td><td>Fort (focus fil)</td><td>Fort si chat assez large</td><td>Moyen → fort si tiroir large par défaut</td></tr>
+          <tr><td>Approfondir Gantt / carte</td><td>Faible (bascule)</td><td>Fort</td><td>Fort</td></tr>
+          <tr><td>Laptop 13″</td><td>Confortable</td><td>Serré</td><td>OK si tiroir repliable</td></tr>
+          <tr><td>Continuité tél → ordi</td><td>Très proche tél</td><td>Spécifique ordi</td><td>Spécifique ordi</td></tr>
+        </tbody>
+      </table>
+      <p>Tél reste inchangé : bascule exclusive (plein chat ou plein dashboard), nav tiroir — hors arbitrage A/B/C.</p>
 
       <!-- ========== CHAT ========== -->
       <h2 id="chat">Surface Chat · <span class="status decided">décidé</span></h2>
@@ -359,6 +465,7 @@
 
       <!-- ========== ITK ========== -->
       <h2 id="itk">Itinéraires &amp; coûts · <span class="status decided">décidé</span></h2>
+      <div class="card"><strong>Accès · décidé.</strong> Pas d’entrée nav « Cultures / ITK ». Ouverture via (1) <a href="documents.html">Documents</a> (fichier / fiche liée), (2) <a href="planification.html">Planification</a> (détail plan, modal ordi, chat place série), (3) chat lecture (« itinéraire laitue… », « coût tomates… »).</div>
       <table>
         <thead><tr><th>Surface</th><th>Tél</th><th>Ordi</th><th>Contrôles / ouvre</th></tr></thead>
         <tbody>
@@ -366,19 +473,19 @@
             <td>Lecture ITK / coût (chat)</td>
             <td>✓ prioritaire</td>
             <td>✓</td>
-            <td>Bulles activité lecture · ouverture dashboard filtrée</td>
+            <td>Bulles activité · peut ouvrir plan / document lié</td>
           </tr>
           <tr>
-            <td>Galerie + fiche culture / ITK</td>
-            <td>—</td>
+            <td>Fiche culture / ITK (depuis plan ou document)</td>
+            <td>— (lecture chat)</td>
             <td>✓ édition</td>
-            <td>Variétés, phases, charges types · lien plan</td>
+            <td>Variétés, phases, charges · retour planif / Documents</td>
           </tr>
           <tr>
             <td>Dashboard coûts culture</td>
             <td>lecture courte (chat)</td>
-            <td>✓ complet</td>
-            <td>Filtres culture / série / campagne · postes temps + hors temps</td>
+            <td>✓ complet (ouvert depuis plan / chat)</td>
+            <td>Filtres culture / série / campagne</td>
           </tr>
         </tbody>
       </table>
@@ -386,6 +493,7 @@
       <!-- ========== RESSOURCES ========== -->
       <h2 id="ressources">Ressources &amp; Sol · <span class="status decided">décidé</span></h2>
       <p>Pattern commun registres (Fondation) : <strong>vue d’ensemble</strong> (compte, cherche, filtre, liste) → <strong>fiche</strong> (formulaire rempli) · bouton <strong>+</strong> (formulaire vide) · chat peut ouvrir le formulaire prérempli.</p>
+      <div class="card"><strong>Sol · décidé.</strong> Pas d’entrée nav « Analyses ». Les analyses s’ouvrent <strong>uniquement via Documents</strong> (liste / fiche document lié → fiche analyse) et via le chat (photo / PDF → carte).</div>
 
       <h3>Matériel · Personnel · Prix · Conversions</h3>
       <table>
@@ -449,18 +557,18 @@
         </tbody>
       </table>
 
-      <h3>Sol (analyses)</h3>
+      <h3>Sol (analyses) — via Documents seulement</h3>
       <table>
         <thead><tr><th>Surface</th><th>Tél</th><th>Ordi</th><th>Ouvre</th></tr></thead>
         <tbody>
-          <tr><td>Chat analyse (photo/PDF/saisie)</td><td>✓ prioritaire</td><td>✓ + drag PDF</td><td>Carte multi-postes → Sol + Documents</td></tr>
-          <tr><td>Liste analyses</td><td>✓ lisible</td><td>✓</td><td>Fiche</td></tr>
-          <tr><td>Fiche analyse</td><td>✓ lecture</td><td>✓ édition dense postes</td><td>Document lié · besoin NPK (outil chat)</td></tr>
+          <tr><td>Chat analyse (photo/PDF/saisie)</td><td>✓ prioritaire</td><td>✓ + drag PDF</td><td>Carte multi-postes → document + objet analyse</td></tr>
+          <tr><td>Documents filtrés (catégorie analyse)</td><td>✓ liste</td><td>✓ liste + aperçu</td><td>Fiche document → fiche analyse</td></tr>
+          <tr><td>Fiche analyse</td><td>✓ lecture</td><td>✓ édition dense postes</td><td>Document lié · besoin NPK (chat) · <em>pas</em> d’entrée nav Sol</td></tr>
         </tbody>
       </table>
 
       <!-- ========== COMMERCIAL ========== -->
-      <h2 id="commercial">Commercial · ventes · <span class="status decided">décidé</span></h2>
+      <h2 id="commercial">Commercial · ventes &amp; achats · <span class="status decided">décidé</span></h2>
       <table>
         <thead><tr><th>Surface</th><th>Contrôles</th><th>Tél / Ordi</th><th>Ouvre</th></tr></thead>
         <tbody>
@@ -482,9 +590,16 @@
             <td>✓ / ✓</td>
             <td>Fiche client</td>
           </tr>
+          <tr>
+            <td><strong>Liste d’achat</strong> (registre Achats)</td>
+            <td>Lignes : libellé, qté, unité, fournisseur opt., statut (à acheter / acheté) · + · cocher</td>
+            <td>✓ / ✓</td>
+            <td>Chat « ajoute X à la liste » · pas d’achat autonome agent en v1</td>
+          </tr>
         </tbody>
       </table>
-      <p>Paniers / allocations : hors premier lot — pas d’écran retenu ici.</p>
+      <div class="card"><strong>Achats · décidé.</strong> Liste d’achat <em>générale</em> (semences, engrais, pots, matériel, consommables…) — pas un caddie semences seul. <strong>V1 :</strong> l’utilisateur achète lui-même (hors app ou marque « acheté »). <strong>Plus tard :</strong> l’agent pourra proposer / passer commande en autonomie — hors v1, à cadrer.</div>
+      <p>Paniers / allocations clients : hors premier lot — pas d’écran retenu ici.</p>
 
       <!-- ========== COMPTE ========== -->
       <h2 id="compte-reg">Compte · profil &amp; multi-fermes · <span class="status decided">décidé</span></h2>
@@ -530,12 +645,15 @@
           <tr><td>Plan (ligne)</td><td>Voir les gestes</td><td>Calendrier</td></tr>
           <tr><td>Tâche</td><td>Ouvrir le plan</td><td>Planification / modal plan</td></tr>
           <tr><td>Observation</td><td>Proposer traitement</td><td>Chat carte traitement (catalogue → ePhy)</td></tr>
-          <tr><td>Document</td><td>Ouvrir objet lié</td><td>Fiche Sol / Vente / Observation…</td></tr>
+          <tr><td>Document</td><td>Ouvrir objet lié</td><td>Fiche analyse (sol) / Vente / Observation / culture-ITK…</td></tr>
+          <tr><td>Documents</td><td>Filtre analyse / culture</td><td>Fiche analyse ou fiche culture/ITK (pas d’entrée nav Sol/ITK)</td></tr>
+          <tr><td>Planif (détail / modal)</td><td>Fiche culture / ITK / coûts</td><td>Édition culture (ordi) · lecture chat (tél)</td></tr>
           <tr><td>Import complexe</td><td>Rapport → confirmer lot</td><td>Écritures plans / objets (pas silencieux)</td></tr>
           <tr><td>Profil</td><td>Changer ferme / vue</td><td>Recharge filtres chat + dashboards</td></tr>
           <tr><td>Gantt (ordi)</td><td>Sélection / double-clic plan</td><td>Modal plan</td></tr>
           <tr><td>Gantt (ordi)</td><td>Bandeau Calendrier</td><td>Calendrier tâches unifié</td></tr>
           <tr><td>Composer</td><td>Fichier / photo</td><td>Pipeline Documents → carte(s)</td></tr>
+          <tr><td>Chat / nav Achats</td><td>« Ajoute … à la liste » / entrée Achats</td><td>Liste d’achat (lignes) — achat réel = utilisateur v1</td></tr>
         </tbody>
       </table>
 
@@ -550,35 +668,30 @@
         </tbody>
       </table>
 
-      <h2 id="ambigu">Ouvert / à préciser</h2>
+      <h2 id="ambigu">Reste ouvert</h2>
       <table>
         <thead><tr><th>Point</th><th>Statut</th><th>Note</th></tr></thead>
         <tbody>
           <tr>
-            <td>Entrée nav dédiée « Cultures / ITK » ou « Sol / Analyses »</td>
-            <td><span class="status">à préciser</span></td>
-            <td>Objets et dashboards décidés ; place exacte dans l’arbre nav pas figée (accès via chat + fiches liées OK pour v1).</td>
+            <td>Layout ordi Chat + Dashboard (A / B / C)</td>
+            <td><span class="status">à juger</span></td>
+            <td>Schémas ci-dessus <a href="#layout-ordi">#layout-ordi</a>. Ne pas implémenter avant choix Chach.</td>
           </tr>
           <tr>
-            <td>Layout ordi chat+dashboard simultanés vs exclusifs</td>
-            <td><span class="status">à préciser</span></td>
-            <td>Fondation dit « colonne ou plein contenu selon bascule » — proportion exacte / split view à figer au rebuild Figma.</td>
+            <td>Icônes / ordre fin de la nav</td>
+            <td><span class="status decided">décidé</span> → Figma</td>
+            <td>Catégories et entrées figées ici ; look = rebuild Figma.</td>
           </tr>
           <tr>
-            <td>Libellés icônes nav (ordre fin, icônes)</td>
-            <td><span class="status">à préciser</span></td>
-            <td>Catégories et entrées décidées ; look atomes = Figma ultérieur.</td>
-          </tr>
-          <tr>
-            <td>Semences / caddie</td>
-            <td><span class="status">à cadrer</span></td>
-            <td>Intention fondation ; écran registre non retenu premier lot.</td>
+            <td>Achat autonome par l’agent</td>
+            <td><span class="status">plus tard</span></td>
+            <td>V1 = utilisateur achète. Phase ultérieure : agent peut commander — hors scope v1.</td>
           </tr>
         </tbody>
       </table>
 
       <h2>Liens</h2>
-      <p><a href="fondation.html">Fondation</a> (coquille, registres, toolcalling) · <a href="equivalences.html">Équivalences</a> (tél↔ordi) · <a href="erreurs.html">Erreurs</a> · domaines : <a href="temps.html">Temps</a>, <a href="carte-ferme.html">Carte</a>, <a href="planification.html">Planification</a>, <a href="documents.html">Documents</a>, <a href="compte.html">Compte</a>.</p>
+      <p><a href="#layout-ordi">Schémas layout A/B/C</a> · <a href="fondation.html">Fondation</a> · <a href="equivalences.html">Équivalences</a> · <a href="erreurs.html">Erreurs</a> · <a href="documents.html">Documents</a> · <a href="planification.html">Planification</a> · <a href="itineraires.html">Itinéraires</a> · <a href="commercial.html">Commercial</a> · <a href="compte.html">Compte</a>.</p>
     </main>
   </div>
   <script src="editor.js"></script>
