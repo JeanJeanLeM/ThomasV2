@@ -42,7 +42,7 @@
       <h2>Sommaire inventaire</h2>
       <ol class="scenario">
         <li><a href="#coquille">Coquille partagée</a> (barre, nav, chat, bulles, vue personne)</li>
-        <li><a href="#layout-ordi">Layout ordi A / B / C</a> — <em>à juger par Chach</em></li>
+        <li><a href="#layout-ordi">Layout ordi C</a> — dashboard + chat tiroir repliable · <span class="status decided">décidé</span></li>
         <li><a href="#chat">Surface Chat</a></li>
         <li><a href="#auth">Auth &amp; états compte</a></li>
         <li><a href="#ferme">Ferme · carte &amp; parcelles</a></li>
@@ -78,8 +78,8 @@
           <tr>
             <td><strong>Zone contenu</strong></td>
             <td>Soit fil de chat, soit dashboard du registre ouvert</td>
-            <td>Plein écran sous la barre</td>
-            <td>Zone principale (chat et/ou dashboard selon bascule)</td>
+            <td>Plein écran sous la barre (bascule exclusive)</td>
+            <td>Dashboard plein + <strong>chat en tiroir repliable</strong> (C) — voir <a href="#layout-ordi">layout ordi</a></td>
           </tr>
           <tr>
             <td><strong>Profil (entrée)</strong></td>
@@ -94,8 +94,8 @@
       <table>
         <thead><tr><th>Contrôle</th><th>Action</th><th>Ouvre</th></tr></thead>
         <tbody>
-          <tr><td><strong>Bascule Chat</strong></td><td>Mode contenu = fil</td><td>Surface <a href="#chat">Chat</a></td></tr>
-          <tr><td><strong>Bascule Dashboard</strong></td><td>Mode contenu = dernier registre (ou invite à en choisir un)</td><td>Dashboard du registre courant</td></tr>
+          <tr><td><strong>Bascule / Chat</strong></td><td>Tél : mode contenu = fil. Ordi : ouvre / ferme le <em>tiroir chat</em> (repliable)</td><td>Surface <a href="#chat">Chat</a> (plein tél · tiroir ordi)</td></tr>
+          <tr><td><strong>Bascule Dashboard</strong></td><td>Tél : mode contenu = registre. Ordi : focus dashboard (chat peut rester ouvert en tiroir)</td><td>Dashboard du registre courant</td></tr>
           <tr><td><strong>Menu nav</strong></td><td>Ouvre / ferme la nav</td><td>Tiroir (tél) ou expand colonne (ordi)</td></tr>
           <tr><td><strong>Sélecteur ferme</strong></td><td>Bascule multi-fermes</td><td>Liste fermes ; recharge contexte + carte</td></tr>
           <tr><td><strong>Sélecteur vue</strong></td><td>Soi / toute la ferme / une personne</td><td>Menu vues (droits : voir Fondation Visibilité)</td></tr>
@@ -137,75 +137,28 @@
         </tbody>
       </table>
 
-      <!-- ========== LAYOUT ORDI A/B/C ========== -->
-      <h2 id="layout-ordi">Layout ordinateur Chat + Dashboard · <span class="status">à juger</span></h2>
-      <p class="lede" style="font-size:18px;">Ne pas figer encore. Trois options schématiques pour arbitrage. Même barre Chat ↔ Dashboard et même nav dans les trois cas ; ce qui change = cohabitation du fil et du registre.</p>
-      <div class="card"><strong>À choisir (Chach).</strong> Ouvrir cette section en local (<code>docs/v3/navigation.html#layout-ordi</code>) ou dans le snapshot Context. Répondre <strong>A</strong>, <strong>B</strong> ou <strong>C</strong> (évent. variante C colonne fixe vs tiroir).</div>
+      <!-- ========== LAYOUT ORDI C ========== -->
+      <h2 id="layout-ordi">Layout ordinateur Chat + Dashboard · <span class="status decided">décidé</span></h2>
+      <div class="card"><strong>Décidé C · tiroir chat repliable.</strong> Sur ordi : le <em>dashboard</em> occupe la zone principale. Le chat est un <strong>tiroir latéral repliable</strong> (pas une colonne fixe par défaut) — ouvert / fermé depuis la barre. Agent-natif : le tiroir s’ouvre assez large pour écrire et confirmer des cartes ; on peut le replier pour gagner de la place sur Gantt / carte.</div>
+      <table>
+        <thead><tr><th>Règle</th><th>Comportement</th></tr></thead>
+        <tbody>
+          <tr><td>Défaut ordi</td><td>Dashboard plein + chat en tiroir (ouvert ou fermé selon contexte / dernier état)</td></tr>
+          <tr><td>Tiroir chat</td><td>Repliable depuis la barre (« Chat ») ; pas de colonne fixe permanente comme défaut</td></tr>
+          <tr><td>Nav</td><td>Colonne gauche collapsible (inchangée)</td></tr>
+          <tr><td>Tél</td><td>Inchangé : bascule exclusive plein chat ↔ plein dashboard ; nav tiroir</td></tr>
+          <tr><td>Non retenus</td><td>A (bascule exclusive ordi) · B (split côte à côte permanent)</td></tr>
+        </tbody>
+      </table>
 
       <div class="wire-grid">
-        <article class="wire-option wire-a" id="layout-a">
-          <p class="choice-label">Option A — Bascule exclusive</p>
-          <p class="choice-tag">À juger</p>
-          <p>Un seul contenu à la fois. La barre bascule Chat <em>ou</em> Dashboard. Maximalement simple ; pas de lecture registre pendant qu’on répond.</p>
-          <div class="wire-frame" aria-hidden="true">
-            <div class="wire-bar">
-              <span class="wire-chip on">Chat</span>
-              <span class="wire-chip">Dashboard</span>
-              <span class="wire-chip">☰</span>
-              <span class="wire-mark">Thomas</span>
-            </div>
-            <div class="wire-body">
-              <div class="wire-nav"><span>Ferme</span><span>Prod.</span><span>Ress.</span></div>
-              <div class="wire-pane chat">
-                <strong>Fil seul (plein)</strong>
-                <div class="wire-lines"></div>
-                <div class="wire-lines short"></div>
-                <div class="wire-lines block"></div>
-                <div class="wire-lines short"></div>
-              </div>
-            </div>
-          </div>
-          <p><strong>Pros.</strong> Clair, mobile-like, peu de densité. <strong>Cons.</strong> Allers-retours pour croiser chat et Gantt / carte.</p>
-        </article>
-
-        <article class="wire-option wire-b" id="layout-b">
-          <p class="choice-label">Option B — Split côte à côte</p>
-          <p class="choice-tag">À juger</p>
-          <p>Chat et dashboard visibles ensemble (ex. ~40 % / 60 %). La barre peut toujours « privilégier » un côté (focus), mais les deux restent à l’écran.</p>
-          <div class="wire-frame" aria-hidden="true">
-            <div class="wire-bar">
-              <span class="wire-chip on">Chat</span>
-              <span class="wire-chip on">Dashboard</span>
-              <span class="wire-chip">☰</span>
-              <span class="wire-mark">Thomas</span>
-            </div>
-            <div class="wire-body">
-              <div class="wire-nav"><span>Ferme</span><span>Prod.</span><span>Ress.</span></div>
-              <div class="wire-pane chat">
-                <strong>Chat</strong>
-                <div class="wire-lines"></div>
-                <div class="wire-lines block"></div>
-                <div class="wire-lines short"></div>
-              </div>
-              <div class="wire-pane dash">
-                <strong>Dashboard (Gantt / liste…)</strong>
-                <div class="wire-lines"></div>
-                <div class="wire-lines"></div>
-                <div class="wire-lines short"></div>
-                <div class="wire-lines block"></div>
-              </div>
-            </div>
-          </div>
-          <p><strong>Pros.</strong> Contexte registre pendant le dialogue. <strong>Cons.</strong> Largeur minimale ; densité élevée sur laptop étroit.</p>
-        </article>
-
         <article class="wire-option wire-c" id="layout-c">
-          <p class="choice-label">Option C — Dashboard plein + chat colonne / tiroir</p>
-          <p class="choice-tag">À juger</p>
-          <p>Le registre occupe le centre. Le chat est une <strong>colonne latérale</strong> (fixe) ou un <strong>tiroir</strong> (repliable depuis la barre). Variante possible : tiroir droit ouvert / icône « Chat » pour rouvrir.</p>
+          <p class="choice-label">C retenu — Dashboard + chat tiroir repliable</p>
+          <p class="choice-tag" style="background:var(--mint);color:var(--green);">Décidé</p>
+          <p>Registre au centre. Chat = tiroir droit (ouvrir / fermer). Colonne fixe permanente = non.</p>
           <div class="wire-frame" aria-hidden="true">
             <div class="wire-bar">
-              <span class="wire-chip">Chat ▦</span>
+              <span class="wire-chip on">Chat ▦</span>
               <span class="wire-chip on">Dashboard</span>
               <span class="wire-chip">☰</span>
               <span class="wire-mark">Thomas</span>
@@ -220,26 +173,68 @@
                 <div class="wire-lines short"></div>
               </div>
               <div class="wire-drawer">
-                <strong style="display:block;color:var(--ink);font-size:12px;margin-bottom:6px;">Chat (colonne / tiroir)</strong>
+                <strong style="display:block;color:var(--ink);font-size:12px;margin-bottom:6px;">Chat (tiroir ouvert)</strong>
                 <div class="wire-lines"></div>
                 <div class="wire-lines short"></div>
                 <div class="wire-lines block"></div>
               </div>
             </div>
           </div>
-          <p><strong>Pros.</strong> Ordi « outil » d’abord ; chat toujours à portée. <strong>Cons.</strong> Risque de traiter le chat comme panneau secondaire (à éviter pour agent-natif).</p>
+          <p>Variante fermée : icône Chat dans la barre rouvre le tiroir. Largeur tiroir = confort cartes confirmables (Figma).</p>
+        </article>
+
+        <article class="wire-option wire-a" id="layout-a">
+          <p class="choice-label">A — Bascule exclusive</p>
+          <p class="choice-tag">Non retenu</p>
+          <p>Un seul contenu à la fois. Conservé ici comme référence écartée.</p>
+          <div class="wire-frame" aria-hidden="true">
+            <div class="wire-bar">
+              <span class="wire-chip on">Chat</span>
+              <span class="wire-chip">Dashboard</span>
+              <span class="wire-chip">☰</span>
+              <span class="wire-mark">Thomas</span>
+            </div>
+            <div class="wire-body">
+              <div class="wire-nav"><span>Ferme</span><span>Prod.</span><span>Ress.</span></div>
+              <div class="wire-pane chat">
+                <strong>Fil seul (plein)</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines short"></div>
+                <div class="wire-lines block"></div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article class="wire-option wire-b" id="layout-b">
+          <p class="choice-label">B — Split côte à côte</p>
+          <p class="choice-tag">Non retenu</p>
+          <p>Chat + dashboard toujours visibles ensemble. Écarté (densité laptop).</p>
+          <div class="wire-frame" aria-hidden="true">
+            <div class="wire-bar">
+              <span class="wire-chip on">Chat</span>
+              <span class="wire-chip on">Dashboard</span>
+              <span class="wire-chip">☰</span>
+              <span class="wire-mark">Thomas</span>
+            </div>
+            <div class="wire-body">
+              <div class="wire-nav"><span>Ferme</span><span>Prod.</span><span>Ress.</span></div>
+              <div class="wire-pane chat">
+                <strong>Chat</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines block"></div>
+              </div>
+              <div class="wire-pane dash">
+                <strong>Dashboard</strong>
+                <div class="wire-lines"></div>
+                <div class="wire-lines short"></div>
+                <div class="wire-lines block"></div>
+              </div>
+            </div>
+          </div>
         </article>
       </div>
-      <table>
-        <thead><tr><th>Critère</th><th>A Exclusive</th><th>B Split</th><th>C Colonne / tiroir</th></tr></thead>
-        <tbody>
-          <tr><td>Agent-natif (écriture chat)</td><td>Fort (focus fil)</td><td>Fort si chat assez large</td><td>Moyen → fort si tiroir large par défaut</td></tr>
-          <tr><td>Approfondir Gantt / carte</td><td>Faible (bascule)</td><td>Fort</td><td>Fort</td></tr>
-          <tr><td>Laptop 13″</td><td>Confortable</td><td>Serré</td><td>OK si tiroir repliable</td></tr>
-          <tr><td>Continuité tél → ordi</td><td>Très proche tél</td><td>Spécifique ordi</td><td>Spécifique ordi</td></tr>
-        </tbody>
-      </table>
-      <p>Tél reste inchangé : bascule exclusive (plein chat ou plein dashboard), nav tiroir — hors arbitrage A/B/C.</p>
+      <p>PNG de référence (jugement) : <code>media/layout-ordi-a.png</code> · <code>b</code> · <code>c</code> dans le Context Project.</p>
 
       <!-- ========== CHAT ========== -->
       <h2 id="chat">Surface Chat · <span class="status decided">décidé</span></h2>
@@ -634,7 +629,9 @@
       <table>
         <thead><tr><th>Depuis</th><th>Geste / contrôle</th><th>Vers</th></tr></thead>
         <tbody>
-          <tr><td>Barre</td><td>Chat / Dashboard</td><td>Fil ↔ dernier registre</td></tr>
+          <tr><td>Barre (tél)</td><td>Chat / Dashboard</td><td>Fil plein ↔ dashboard plein</td></tr>
+          <tr><td>Barre (ordi)</td><td>Chat</td><td>Ouvre / ferme tiroir chat (C décidé)</td></tr>
+          <tr><td>Barre (ordi)</td><td>Dashboard / entrée nav</td><td>Dashboard principal (chat tiroir indépendant)</td></tr>
           <tr><td>Barre / nav</td><td>Menu · entrée registre</td><td>Dashboard correspondant (ferme bascule en Dashboard)</td></tr>
           <tr><td>Nav fermée (tél)</td><td>Swipe bord gauche / bouton</td><td>Tiroir nav</td></tr>
           <tr><td>Tiroir ouvert</td><td>Tap fond assombri</td><td>Ferme nav</td></tr>
@@ -673,9 +670,9 @@
         <thead><tr><th>Point</th><th>Statut</th><th>Note</th></tr></thead>
         <tbody>
           <tr>
-            <td>Layout ordi Chat + Dashboard (A / B / C)</td>
-            <td><span class="status">à juger</span></td>
-            <td>Schémas ci-dessus <a href="#layout-ordi">#layout-ordi</a>. Ne pas implémenter avant choix Chach.</td>
+            <td>Largeur exacte du tiroir chat ordi · état ouvert par défaut</td>
+            <td><span class="status">à préciser</span></td>
+            <td>Figma / implémentation. Principe C + repliable déjà <span class="status decided">décidé</span>.</td>
           </tr>
           <tr>
             <td>Icônes / ordre fin de la nav</td>
@@ -691,7 +688,7 @@
       </table>
 
       <h2>Liens</h2>
-      <p><a href="#layout-ordi">Schémas layout A/B/C</a> · <a href="fondation.html">Fondation</a> · <a href="equivalences.html">Équivalences</a> · <a href="erreurs.html">Erreurs</a> · <a href="documents.html">Documents</a> · <a href="planification.html">Planification</a> · <a href="itineraires.html">Itinéraires</a> · <a href="commercial.html">Commercial</a> · <a href="compte.html">Compte</a>.</p>
+      <p><a href="#layout-ordi">Layout ordi C</a> · <a href="fondation.html">Fondation</a> · <a href="equivalences.html">Équivalences</a> · <a href="erreurs.html">Erreurs</a> · <a href="documents.html">Documents</a> · <a href="planification.html">Planification</a> · <a href="itineraires.html">Itinéraires</a> · <a href="commercial.html">Commercial</a> · <a href="compte.html">Compte</a>.</p>
     </main>
   </div>
   <script src="editor.js"></script>
