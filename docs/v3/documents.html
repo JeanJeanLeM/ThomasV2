@@ -1,0 +1,300 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documents &amp; pièces jointes — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html" aria-current="page">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Documents &amp; pièces jointes · <span class="status decided">décidé</span></p>
+      <h1>Joindre, classer, extraire. Confirmer avant d’écrire.</h1>
+      <p class="lede">Thomas V3 traite les fichiers comme le reste : agent-first. L’agriculteur envoie une photo, un PDF ou une liste ; Thomas propose une carte confirmable, range le fichier, et n’écrit les données structurées qu’après confirmation. Ce n’est pas un drive générique ni un clone du module Documents Desktop V2.</p>
+      <div class="card"><strong>Principe.</strong> Deux couches : (1) <em>pièce jointe</em> liée à une action / un objet (observation, tâche, facture, analyse) ; (2) <em>document de ferme</em> dans le registre Documents, consultable, filtrable, réutilisable. Un même fichier peut être les deux (ex. PDF d’analyse = fichier stocké + ligne analyse de sol).</div>
+      <div class="card"><strong>Décidé · entrée conversation.</strong> Tout élément ajoutable au chat (photo, PDF, CSV, capture…) est un document / pièce jointe au sens produit. Il n’y a pas de canal parallèle « import magique » hors pipeline de confirmation.</div>
+
+      <h2>Parcours facile vs complexe · <span class="status decided">décidé</span></h2>
+      <p>Deux niveaux d’effort UX, même pipeline (réception → classification → extraction éventuelle → carte → écriture).</p>
+      <table>
+        <thead><tr><th>Niveau</th><th>Exemples</th><th>UX</th><th>Sortie typique</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Facile</strong></td>
+            <td>Photo terrain · photo / PDF d’analyse de sol · photo de reçu</td>
+            <td>Trombone / caméra → une carte claire en quelques secondes. Peu de champs à corriger.</td>
+            <td>Observation + PJ · analyse Sol + document · facture légère + document</td>
+          </tr>
+          <tr>
+            <td><strong>Complexe</strong></td>
+            <td>CSV / export de planification · archive exportée d’un autre logiciel (lots, cultures, historiques)</td>
+            <td>Préféré sur ordi. Rapport d’import : lignes OK / partielles / KO. Confirmation par lot ou sélection. Correction guidée des erreurs (<code>DOC_IMPORT_COMPLEX_FAIL</code>).</td>
+            <td>Plans / tâches / cultures proposés — jamais un écrasement silencieux du plan V3</td>
+          </tr>
+        </tbody>
+      </table>
+      <ol class="scenario">
+        <li><strong>Facile — photo pucerons.</strong> [photo] + « sur les tomates serre 1 » → carte observation + PJ. Une confirmation.</li>
+        <li><strong>Facile — analyse sol.</strong> PDF labo + « serre 1 » → carte analyse multi-postes (postes absents = vides). Confirmation → Sol + Documents.</li>
+        <li><strong>Complexe — CSV planification.</strong> Fichier déposé → classification « import planif » → aperçu N cultures / M planches détectées → l’agriculteur coche ce qu’il importe → cartes / lot confirmable → écriture plans. Ce qui est illisible reste listé, pas inventé.</li>
+        <li><strong>Complexe — archive autre logiciel.</strong> Même esprit : inventaire de ce qui est reconnu (parcelles, cultures, ventes…) ; mapping explicite vers objets V3 ; confirmation par famille d’objets.</li>
+      </ol>
+      <div class="card"><strong>Règle.</strong> Le parcours complexe ne court-circuite pas le chat : il peut s’ouvrir en dashboard (rapport) mais l’écriture structurée reste confirmée. Un PDF de plan Basile / autre n’est pas le Gantt V3 — archivage document possible ; vérité planning = objets <code>plans</code>.</div>
+
+      <h2>Périmètre · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Dans le premier lot</th><th>Hors premier lot</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Images · PDF · CSV · analyse de sol · facture / bon · liste de prix · pièce jointe observation / tâche · <strong>import planif / archive (parcours complexe, confirmé)</strong> · registre Documents · chat + dashboard · ordi et tél</td>
+            <td>Vidéo · OCR métier exhaustif sans confirmation · signature électronique · GED multi-versions · import comptable automatisé · scan multi-pages avancé · partage public de liens · édition PDF in-app · remplacement silencieux du plan V3 par un export tiers</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Deux couches · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Couche</th><th>Rôle</th><th>Où ça vit</th><th>Exemple</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Pièce jointe</strong></td>
+            <td>Fichier attaché à un message ou à un objet métier. Ne se consulte pas comme une bibliothèque seule.</td>
+            <td><code>attachments</code> (évolution de <code>action_attachments</code>) + storage</td>
+            <td>Photo de pucerons sur une observation ; photo d’étiquette sur une tâche</td>
+          </tr>
+          <tr>
+            <td><strong>Document de ferme</strong></td>
+            <td>Fichier rangé pour la ferme, avec catégorie, nom, date. Consultable dans le registre Documents.</td>
+            <td><code>documents</code> + storage (bucket ferme)</td>
+            <td>PDF labo « Analyse serre 1 — mars » ; contrat ; reçu</td>
+          </tr>
+          <tr>
+            <td><strong>Objet métier structuré</strong></td>
+            <td>Lignes données (analyse, facture, prix). Le fichier est optionnel mais lié quand il existe.</td>
+            <td>Tables domaine (<code>soil_analyses</code> / analyses, <code>invoices</code>, <code>prix_vente</code>…)</td>
+            <td>Carte analyse NPK ; facture client ; ligne de prix canal</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Règle.</strong> On ne duplique pas la vérité : la facture est dans Ventes ; l’analyse dans Sol ; la grille dans Prix. Le registre Documents montre les <em>fichiers</em> et renvoie vers l’objet quand il existe. Desktop V2 « Documents / Analyses / Factures / Planification PDF » alimente le cahier — on ne porte pas ses écrans.</div>
+
+      <h2>Formats acceptés · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Famille</th><th>Extensions / MIME</th><th>Usage</th></tr></thead>
+        <tbody>
+          <tr><td>Image</td><td>JPEG, PNG, HEIC/HEIF, WebP</td><td>Photo terrain, capture d’écran, photo de facture / étiquette / tableau de labo</td></tr>
+          <tr><td>PDF</td><td><code>application/pdf</code></td><td>Analyse labo, facture, bon de livraison, contrat, liste de prix exportée</td></tr>
+          <tr><td>Tableur simple</td><td>CSV (et XLSX en lecture seule si fiable)</td><td>Liste de prix / catalogue à proposer en grille</td></tr>
+        </tbody>
+      </table>
+      <p>Taille max indicative v1 : 20 Mo / fichier. Au-delà : message clair, pas de file d’attente silencieuse. Plusieurs fichiers dans un même message = une intention par fichier (plusieurs cartes), sauf si l’agriculteur dit qu’ils forment un seul dossier.</p>
+
+      <h2>Comment on ajoute · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Canal</th><th>Geste</th><th>Comportement</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Chat (principal)</strong></td>
+            <td>Trombone / photo / glisser-déposer · ou texte « voici l’analyse… » + fichier</td>
+            <td>Classement d’intention → carte confirmable → écriture</td>
+          </tr>
+          <tr>
+            <td><strong>Dashboard registre</strong></td>
+            <td>Documents → Ajouter · ou Sol / Ventes → joindre un fichier à une fiche</td>
+            <td>Même pipeline de classification ; confirmation si extraction proposée</td>
+          </tr>
+          <tr>
+            <td><strong>Depuis une fiche</strong></td>
+            <td>« Joindre un fichier » sur observation, tâche, analyse, facture</td>
+            <td>Pièce jointe liée à l’objet ; pas de reclassement sauf si l’utilisateur demande d’extraire</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Sur téléphone : appareil photo, galerie, fichiers. Sur ordinateur : glisser-déposer dans le chat ou dans le registre. Hors ligne : la file d’attente locale reprend l’envoi au retour réseau (même règle que les messages).</p>
+
+      <h2>Pipeline de traitement · <span class="status decided">décidé</span></h2>
+      <ol class="scenario">
+        <li><strong>Réception</strong> — fichier uploadé dans le storage de la ferme ; empreinte / métadonnées (nom, mime, taille, auteur, date).</li>
+        <li><strong>Classification</strong> — le code + Jev (borné) proposent un type : image générique, PDF générique, analyse de sol, facture / bon, liste de prix, autre document. Le LLM aide à lire le contenu si besoin ; il ne décide pas seul des droits ni de l’écriture.</li>
+        <li><strong>Extraction (si utile)</strong> — champs structurés proposés sur la carte (parcelle, dates, montants, NPK, lignes de prix…). Champs incertains marqués ; l’agriculteur corrige avant confirmation.</li>
+        <li><strong>Carte confirmable</strong> — aperçu fichier + type + champs + destination (Sol / Ventes / Prix / Documents seuls / pièce jointe observation).</li>
+        <li><strong>Écriture</strong> — après confirmation : objet métier (si prévu) + document de ferme et/ou pièce jointe. Sans confirmation : rien n’est écrit côté données structurées ; le fichier uploadé peut rester en quarantaine temporaire puis être purgé, ou rangé en « autre » si l’utilisateur le demande.</li>
+      </ol>
+      <div class="card"><strong>Pas d’écriture silencieuse.</strong> Une extraction ne met jamais à jour la grille de prix, une facture ou une analyse sans carte confirmée. Même règle que le temps et les observations.</div>
+
+      <h2>Types métier et destinations</h2>
+
+      <h3>1 · Image (photo / capture)</h3>
+      <table>
+        <thead><tr><th>Cas</th><th>Destination</th><th>Traitement</th></tr></thead>
+        <tbody>
+          <tr><td>Photo liée à un constat</td><td>Observation + pièce jointe <code>image</code></td><td>Stockage + miniature ; pas d’OCR obligatoire</td></tr>
+          <tr><td>Photo liée à une tâche</td><td>Tâche + pièce jointe</td><td>Idem</td></tr>
+          <tr><td>Photo de facture / reçu</td><td>Voir <em>Facture</em></td><td>Vision / lecture → carte facture</td></tr>
+          <tr><td>Photo de tableau d’analyse</td><td>Voir <em>Analyse de sol</em></td><td>Lecture → carte analyse</td></tr>
+          <tr><td>Photo sans contexte</td><td>Documents · catégorie <code>photos</code> (ou demande de précision)</td><td>Thomas demande : observation, facture, analyse, ou simple archivage ?</td></tr>
+        </tbody>
+      </table>
+      <div class="quote"><p>[photo pucerons] Sur les tomates serre 1.</p></div>
+      <p>Carte observation + pièce jointe image. Confirmation unique.</p>
+
+      <h3>2 · PDF générique</h3>
+      <p>Rangé en document de ferme (catégorie selon classement ou <code>autre</code> / <code>rapports</code>). Aperçu première page si possible. Pas d’extraction forcée. L’agriculteur peut ensuite dire « extrais-en une analyse » ou « c’est une facture » → reclassement + nouvelle carte.</p>
+
+      <h3>3 · Analyse de sol (PDF ou image)</h3>
+      <p>Aligné sur <a href="sol.html">Sol</a>. Un bulletin labo est souvent dense : texture, calcaire, pH, MO, CEC, majeurs, oligos, parfois ETM / CE. Le fichier nourrit une <strong>carte analyse</strong> avec <em>tous les postes détectés</em> (valeur + unité + méthode si lisible) — catalogue complet côté Sol, stockage creux. Parcelle, dates, labo, référence, profondeur si présents. Après confirmation : enregistrement + document <code>analyse-sol</code>.</p>
+      <div class="quote"><p>Voici le PDF du labo pour la serre 1.</p></div>
+      <ol class="scenario">
+        <li>Thomas classe « analyse de sol », rattache Serre 1 si dit ou proposé.</li>
+        <li>Il extrait chaque poste lu (pas seulement NPK) ; les cases douteuses restent éditables ; rien n’est inventé pour les postes absents.</li>
+        <li>Confirmation → analyse complète + document. Le besoin NPK reste un outil séparé (règle de trois), pas une invention à partir du PDF.</li>
+      </ol>
+
+      <h3>4 · Liste de prix (PDF, CSV, image de grille)</h3>
+      <p>Aligné sur <a href="commercial.html">Commercial</a> / grille <code>prix_vente</code>. Thomas propose des <strong>lignes de prix</strong> (culture, canal, prix, unité) à accepter une par une ou en lot. <strong>Une vente n’écrit pas la grille</strong> (déjà décidé Co1) ; une liste de prix, elle, vise la grille — toujours avec confirmation.</p>
+      <div class="quote"><p>Voilà notre grille AMAP 2026 en PDF.</p></div>
+      <ol class="scenario">
+        <li>Classification « liste de prix » · canal proposé (AMAP) si détecté ou demandé.</li>
+        <li>Carte récap : N lignes nouvelles / M mises à jour / conflits.</li>
+        <li>L’agriculteur confirme tout, une sélection, ou annule. Rien n’écrase la grille sans ça.</li>
+        <li>Le fichier est rangé en document (catégorie <code>rapports</code> ou <code>autre</code> / libellé « Liste de prix ») avec lien vers le lot appliqué.</li>
+      </ol>
+
+      <h3>5 · Factures et bons (PDF ou photo)</h3>
+      <p>Aligné sur Commercial / Ventes. Deux directions :</p>
+      <table>
+        <thead><tr><th>Direction</th><th>Sens</th><th>Comportement V3 v1</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Sortante</strong></td><td>Vente (déjà le cœur chat)</td><td>Carte vente / facture au prix dit ; PDF généré ou joint optionnel sur <code>invoices.document_url</code></td></tr>
+          <tr><td><strong>Entrante</strong></td><td>Achat / reçu fournisseur</td><td>Carte « facture fournisseur » (montant, date, fournisseur si dit) + document ; <em>pas</em> de module compta / dépenses complet (Cp1)</td></tr>
+        </tbody>
+      </table>
+      <div class="quote"><p>[photo ticket] Achats semences chez semencier X, 240 €.</p></div>
+      <p>Carte facture entrante + document. Confirmation. Visible dans Ventes (filtre direction) et dans Documents.</p>
+      <div class="card"><strong>Limite v1.</strong> On enregistre la pièce et les champs utiles à la ferme. Pas d’export comptable, pas de rapprochement bancaire, pas de TVA avancée au-delà des totaux saisis / lus.</div>
+
+      <h3>6 · Autres catégories document</h3>
+      <p>Inspirées du schéma Desktop (à simplifier, pas à cloner) :</p>
+      <table>
+        <thead><tr><th>Catégorie</th><th>Exemples</th><th>Extraction auto v1</th></tr></thead>
+        <tbody>
+          <tr><td><code>analyse-sol</code></td><td>Rapports labo</td><td>Oui → carte analyse</td></tr>
+          <tr><td><code>certifications</code></td><td>AB, GlobalG.A.P.</td><td>Non (archivage)</td></tr>
+          <tr><td><code>assurance</code></td><td>Contrats assurance</td><td>Non</td></tr>
+          <tr><td><code>contrats</code></td><td>AMAP, location</td><td>Non</td></tr>
+          <tr><td><code>recus</code></td><td>Reçus divers</td><td>Oui si ressemble à facture</td></tr>
+          <tr><td><code>photos</code></td><td>Album ferme</td><td>Non</td></tr>
+          <tr><td><code>cartes</code></td><td>Plans scannés (≠ géométrie live)</td><td>Non — la vérité spatiale reste la <a href="carte-ferme.html">carte ferme</a></td></tr>
+          <tr><td><code>manuels</code></td><td>Manuels matériel</td><td>Non</td></tr>
+          <tr><td><code>rapports</code></td><td>Bilans, listes de prix exportées</td><td>Selon contenu (prix / autre)</td></tr>
+          <tr><td><code>autre</code></td><td>Défaut</td><td>Non</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Registre Documents (dashboard)</h2>
+      <p>Entrée nav <strong>Ressources → Documents</strong> (coquille V3). Même logique liste → fiche que les autres registres.</p>
+      <table>
+        <thead><tr><th>Vue</th><th>Contenu</th></tr></thead>
+        <tbody>
+          <tr><td>Liste</td><td>Nom, catégorie, date, taille, auteur, badge « lié à » (analyse / facture / observation…). Recherche + filtres catégorie / période / type mime.</td></tr>
+          <tr><td>Fiche</td><td>Aperçu (image / PDF), métadonnées, ouvrir / télécharger, renommer, changer catégorie, ouvrir l’objet lié, supprimer (soft <code>is_active</code>).</td></tr>
+          <tr><td>Ajout</td><td>Upload + catégorie proposée + option « Extraire… » selon type.</td></tr>
+        </tbody>
+      </table>
+      <p>Téléphone : liste + ouverture ; ajout via chat préféré. Ordinateur : glisser-déposer sur la liste, aperçu PDF confortable.</p>
+
+      <h2>Chat — intentions</h2>
+      <table>
+        <thead><tr><th>Intention</th><th>Entrée</th><th>Sortie</th></tr></thead>
+        <tbody>
+          <tr><td>Joindre une photo à un constat</td><td>Image ± texte</td><td>Carte observation (+ PJ)</td></tr>
+          <tr><td>Ajouter une analyse depuis fichier</td><td>PDF/image ± « analyse serre 1 »</td><td>Carte analyse + document</td></tr>
+          <tr><td>Importer une liste de prix</td><td>PDF/CSV/image</td><td>Carte lot de prix</td></tr>
+          <tr><td>Enregistrer une facture / un reçu</td><td>PDF/photo ± montant</td><td>Carte facture + document</td></tr>
+          <tr><td>Archiver un document</td><td>Fichier ± « range ça »</td><td>Carte document (catégorie)</td></tr>
+          <tr><td>Retrouver un document</td><td>« Où est l’analyse de mars ? »</td><td>Lecture + ouverture dashboard</td></tr>
+        </tbody>
+      </table>
+      <p>Ambiguïté : si le type n’est pas clair, Thomas pose une question à choix (observation / analyse / facture / prix / archiver) plutôt que d’inventer.</p>
+
+      <h2>Données</h2>
+      <div class="schema">
+        <article class="entity">
+          <header><h3>Document de ferme</h3><code>documents</code></header>
+          <ul>
+            <li><code>farm_id</code>, <code>user_id</code></li>
+            <li><code>name</code>, <code>description</code></li>
+            <li><code>category</code> (liste ci-dessus)</li>
+            <li><code>file_name</code>, <code>file_type</code>, <code>mime_type</code>, <code>file_size</code></li>
+            <li><code>file_path</code>, <code>storage_bucket</code></li>
+            <li><code>linked_entity_type</code> / <code>linked_entity_id</code> · optionnel (analyse, facture, observation…)</li>
+            <li><code>is_active</code>, <code>created_at</code>, <code>updated_at</code></li>
+          </ul>
+          <p>Base déjà présente en Desktop V2 — à reprendre / épurer en V3, avec lien d’entité explicite.</p>
+        </article>
+        <p class="link-note">fichier lié à une action</p>
+        <article class="entity">
+          <header><h3>Pièce jointe</h3><code>attachments</code> (ex-<code>action_attachments</code>)</header>
+          <ul>
+            <li>Types : <code>image</code>, <code>pdf</code>, <code>file</code>, <code>location</code></li>
+            <li>Liens possibles : <code>observation_id</code>, <code>task_id</code>, <code>invoice_id</code>, <code>analysis_id</code>, <code>message_id</code></li>
+            <li>Storage + URL publique contrôlée (droits ferme)</li>
+          </ul>
+        </article>
+      </div>
+      <p>Détail schéma global : <a href="donnees.html">Données</a>. Factures : <a href="commercial.html">Commercial</a>. Analyses : <a href="sol.html">Sol</a>. Photos observation : <a href="observations.html">Observations</a>.</p>
+
+      <h2>Droits et stockage</h2>
+      <ul>
+        <li>Tout fichier est scopé <code>farm_id</code>. RLS / politiques storage = membres de la ferme.</li>
+        <li>La vue personne (soi / ferme) filtre les listes si besoin ; les documents de ferme restent en général visibles à la ferme (comme parcelles / prix), sauf règle contraire à trancher plus tard pour HR.</li>
+        <li>Suppression = soft delete document + détachement ; purge storage async possible.</li>
+        <li>Pas de lien public permanent v1.</li>
+      </ul>
+
+      <h2>Écrans Figma</h2>
+      <p>Page « <strong>10 Documents</strong> » : chat photo observation · PDF analyse · photo facture · liste de prix · <em>Desktop · Documents liste</em> (coquille V3, nav Documents). Même barre Chat/Dashboard. Lien fichier : <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Thomas V3 — carte produit</a>.</p>
+
+      <h2>Décidé (D1–D8)</h2>
+      <div class="card"><strong>D1 · Deux couches.</strong> Pièces jointes (liées) + documents de ferme (registre) + objets métier. Une vérité par objet.</div>
+      <div class="card"><strong>D2 · Agent-first.</strong> Ajout principal via chat (ou upload registre qui passe le même pipeline). Confirmation avant écriture structurée.</div>
+      <div class="card"><strong>D3 · Formats v1.</strong> Images + PDF + CSV (XLSX best-effort). Pas de vidéo.</div>
+      <div class="card"><strong>D4 · Analyse de sol.</strong> Fichier → carte analyse (catalogue large : texture, pH, MO, CEC, majeurs, oligos, ETM…) + document <code>analyse-sol</code>. Voir <a href="sol.html">Sol</a> (S1–S3).</div>
+      <div class="card"><strong>D5 · Liste de prix.</strong> Fichier → propositions grille <code>prix_vente</code> confirmées. Une vente ne modifie pas la grille.</div>
+      <div class="card"><strong>D6 · Factures.</strong> Sortante = vente ; entrante = reçu/achat léger + document. Pas de compta (Cp1).</div>
+      <div class="card"><strong>D7 · Registre Documents.</strong> Nav Ressources · liste / fiche / filtres · liens vers objets.</div>
+      <div class="card"><strong>D8 · Ambiguïté.</strong> Type flou → question à choix, pas d’extraction inventée.</div>
+      <div class="card"><strong>D9 · Facile vs complexe.</strong> Photo / analyse = parcours court. CSV planif / archive logiciel = rapport d’import + confirmation par lot. Même pipeline de vérité.</div>
+      <div class="card"><strong>D10 · Nav.</strong> Documents est une entrée du sommaire et de la nav Ressources (coquille).</div>
+
+      <h2>Hors / plus tard</h2>
+      <div class="card"><strong>Planification PDF Desktop.</strong> N’est pas le Gantt V3. Un PDF de plan peut être archivé en document ; la vérité planning reste les plans / calendrier.</div>
+      <div class="card"><strong>GED avancée.</strong> Versions, dossiers imbriqués, partage externe : plus tard.</div>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+:root {
+  --ink: #1c2517;
+  --muted: #667061;
+  --paper: #f6f3ec;
+  --card: #fffcf7;
+  --line: #d9d3c5;
+  --green: #2e664c;
+  --mint: #e7f2eb;
+  --amber: #8a5a12;
+  --amber-bg: #f8efdc;
+  --shadow: 0 1px 0 rgba(28, 37, 23, 0.04);
+  --serif: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+  --sans: "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+a { color: var(--green); }
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+nav {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 28px 20px;
+  border-right: 1px solid var(--line);
+}
+
+nav .mark {
+  font-family: var(--serif);
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+nav .meta {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 28px;
+}
+
+nav a {
+  display: block;
+  color: var(--ink);
+  text-decoration: none;
+  padding: 8px 0;
+  font-size: 15px;
+}
+
+nav a[aria-current="page"] { color: var(--green); font-weight: 650; }
+
+main {
+  max-width: 820px;
+  padding: 48px 56px 96px;
+}
+
+h1, h2, h3 { font-family: var(--serif); font-weight: 600; letter-spacing: -0.02em; }
+h1 { font-size: 46px; line-height: 1.05; margin: 0 0 12px; }
+h2 { font-size: 28px; margin: 40px 0 12px; }
+h3 { font-size: 20px; margin: 28px 0 8px; }
+p { margin: 0 0 14px; }
+
+.lede { font-size: 20px; line-height: 1.45; max-width: 38em; }
+
+.kicker {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 13px;
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.status.decided { background: var(--mint); color: var(--green); }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  margin: 12px 0 20px;
+}
+
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+}
+
+th { font-size: 13px; color: var(--muted); font-weight: 650; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin: 12px 0;
+}
+
+.card strong { display: block; margin-bottom: 4px; }
+
+ol.scenario { padding-left: 20px; }
+ol.scenario li { margin: 0 0 8px; }
+
+.quote {
+  border-left: 3px solid var(--green);
+  margin: 12px 0;
+  padding: 4px 0 4px 14px;
+}
+
+main[contenteditable="true"] {
+  outline: none;
+  cursor: text;
+  min-height: 70vh;
+}
+
+.editor-bar {
+  position: fixed;
+  right: 20px;
+  bottom: 16px;
+  z-index: 5;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--muted);
+  box-shadow: var(--shadow);
+}
+
+.editor-bar[data-state="saved"] { color: var(--green); }
+.editor-bar[data-state="error"] { color: var(--amber); }
+
+.schema {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 24px;
+}
+
+.entity {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.entity header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+
+.entity h3 { margin: 0; font-size: 20px; }
+
+.entity code, td code, p code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.86em;
+}
+
+.entity ul { margin: 8px 0 0; padding-left: 18px; }
+.entity li { margin: 2px 0; }
+
+.entity.new { border-color: var(--green); background: var(--mint); }
+
+.link-note {
+  color: var(--muted);
+  font-size: 14px;
+  padding-left: 8px;
+}
+
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+  nav { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  main { padding: 32px 20px 72px; }
+  h1 { font-size: 36px; }
+}

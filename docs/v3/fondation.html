@@ -1,0 +1,519 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fondation — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html" aria-current="page">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Fondation · <span class="status decided">décidé</span></p>
+      <h1>Une coquille : chat, dashboard, nav.</h1>
+      <p class="lede">Thomas accompagne une exploitation végétale, quelle que soit sa filière. L’agriculteur parle dans le chat. La barre partagée bascule vers le dashboard pour approfondir. La navigation collapsible mène aux registres — Planification et Calendrier inclus, même outil.</p>
+
+      <h2>Méthode produit · <span class="status decided">décidé</span></h2>
+      <div class="card"><strong>Cahier d’abord, recode ensuite.</strong> Les outils existants (Thomas Desktop V2, Basile Pro, mobile V2) nourrissent le cahier : périmètre métier, écrans utiles, frictions. Ils ne dictent ni l’architecture, ni les composants, ni les parcours V3.</div>
+      <table>
+        <thead><tr><th>On garde</th><th>On ne reprend pas</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Besoins et objets (plans, tâches, ventes, traitements…). Intentions utilisateur. Ce qui doit rester possible.</td>
+            <td>Code, schémas UI tels quels, wizards lourds, menus parallèles, styles différents par outil.</td>
+          </tr>
+          <tr>
+            <td>Une seule logique produit et un seul style Thomas V3, chat + registres.</td>
+            <td>Porter Basile « dans » Thomas, ou Desktop « à côté » avec une autre peau.</td>
+          </tr>
+          <tr>
+            <td>Agent-natif : toute action courante passe d’abord par le chat (carte confirmable). Les vues ordi approfondissent et corrigent.</td>
+            <td>Formulaire-first comme chemin principal, même si le formulaire existe encore pour le détail.</td>
+          </tr>
+          <tr>
+            <td>Optimiser, simplifier, rendre plus agréable que V2 / Basile.</td>
+            <td>Reproduire feature-par-feature sans triage.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Règle de lecture des sources : <strong>inspirer le cahier</strong>, puis trancher dans ce dossier. En cas de doute d’implémentation → ce cahier + Figma V3, pas le repo source.</p>
+
+      <h3>Sources (matière à cahier, pas à porter)</h3>
+      <table>
+        <thead><tr><th>Source</th><th>Sert surtout pour</th><th>Hors scope de reprise</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Thomas Desktop V2</strong> (<code>Documents/Thomas/DesktopThomas</code>)</td>
+            <td>Registres ordi déjà en production : temps/tâches, cultures &amp; parcelles, matériel, prix &amp; canaux, factures, coûts, sol/analyses, équipe, chat desktop.</td>
+            <td>Sidebar multi-outils, wizards longs, peaux et composants Next actuels.</td>
+          </tr>
+          <tr>
+            <td><strong>Basile Pro</strong></td>
+            <td>Domaine planification : occupation spatiale × temps, Gantt, phases, itinéraires.</td>
+            <td>App séparée, navigation Calendriers/Configurer, style propre.</td>
+          </tr>
+          <tr>
+            <td><strong>Thomas Mobile V2</strong></td>
+            <td>Gestes terrain, cartes chat, hors-ligne / notifications à trancher plus tard.</td>
+            <td>Shell native parallèle à la web app V3.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Objectif d’adaptation : un seul produit Thomas V3. Les domaines Desktop et Basile fusionnent dans les registres et le chat déjà décrits ici — pas deux skins, pas deux logiques.</p>
+
+      <h3>Style unique Thomas V3 · <span class="status decided">décidé</span></h3>
+      <p>Un seul langage visuel pour chat, registres téléphone et vues ordi (y compris planification type Gantt). Défini dans Figma V3, pas hérité de Basile ni de Desktop.</p>
+      <table>
+        <thead><tr><th>Règle</th><th>Conséquence</th></tr></thead>
+        <tbody>
+          <tr><td>Une coquille partagée</td><td>Même chrome partout : barre d’outils (chat / dashboard) + nav collapsible + contenu. Pas de sidebar Desktop parallèle ni de nav Basile à part. <strong>Décidé A :</strong> tous les écrans ordi Figma (planif, carte, etc.) portent cette coquille — une seule vérité visuelle.</td></tr>
+          <tr><td>Mêmes atomes</td><td>Cartes chat, listes, formulaires, tableaux, bandes temps : même typo, couleurs, densités, états vides.</td></tr>
+          <tr><td>Agent-natif</td><td>Toute action courante a un chemin chat. Les écrans ordi (dashboard) approfondissent et corrigent.</td></tr>
+          <tr><td>Simplifier</td><td>Moins d’entrées de menu que Desktop V2. Production unit Planification + Calendrier (P8).</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Desktop V2 → domaines V3 (inventaire menu)</h3>
+      <p>Cartographie du menu actuel Desktop pour le triage cahier — à fusionner, pas à recopier :</p>
+      <table>
+        <thead><tr><th>Bloc Desktop V2</th><th>Domaine V3</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>Accueil · dashboard, tâches, chat</td><td>Fondation / Temps</td><td>Chat = coquille. Dashboard = registres + lectures.</td></tr>
+          <tr><td>Statistiques · cultures, comparateurs</td><td>Temps / Planification (lectures)</td><td>Simplifier : lectures agent + quelques vues ordi, pas une forêt de comparateurs.</td></tr>
+          <tr><td>Config · matériels, parcelles, conversion, semences</td><td>Contexte / Fondation registres</td><td>Semences à cadrer (planif ou ressources).</td></tr>
+          <tr><td>Coûts · factures, tiers, prix, canaux, conso, amort.</td><td>Commercial (+ hors v1 si trop large)</td><td>Prix/canaux/ventes = v1. Coûts/amort. = triage.</td></tr>
+          <tr><td>Documents · analyses, planif PDF, factures</td><td>Documents / Sol / Commercial</td><td>Bibliothèque fichiers + extraction confirmée. Analyses → Sol. Factures → Ventes. « Planif PDF » ≠ Gantt V3. Cahier : <a href="documents.html">Documents</a>.</td></tr>
+          <tr><td>Profil · ferme, équipe</td><td>Compte</td><td>Aligné.</td></tr>
+          <tr><td>Communauté / conseiller / admin</td><td>Reporté (index)</td><td>Hors premier lot agriculteur.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Support</h2>
+      <p>La V3 est d’abord une web app. iOS et Android ouvrent le même site. Une application native viendra seulement si les notifications, le hors-ligne ou l’audio l’exigent.</p>
+      <p>La coquille est <strong>partagée</strong> sur téléphone et ordinateur : barre d’outils + navigation collapsible + zone de contenu (chat ou dashboard). Les cadres sont dans Figma, page « 00 Coquille ».</p>
+
+      <h2>Coquille · barre partagée · <span class="status decided">décidé</span></h2>
+      <div class="card"><strong>Toujours présents.</strong> (1) <em>Barre d’outils</em> — bascule Chat / Dashboard, marque Thomas, actions globales (ferme / vue). (2) <em>Navigation collapsible</em> — registres de la ferme. (3) <em>Contenu</em> — soit le fil de chat, soit le dashboard du registre choisi. Une seule coquille pour Planification, Calendrier, Temps, Carte, etc.</div>
+      <div class="card"><strong>Décidé A · ordi.</strong> Tous les écrans ordinateur Figma V3 (planif, calendriers, carte, modales sur fond shell) utilisent cette coquille. Les anciennes sidebars type Basile (<em>CONFIGURER</em>, marque dans la colonne) sont hors vérité d’implémentation — frames « z ref » uniquement.</div>
+      <table>
+        <thead><tr><th>Élément</th><th>Rôle</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Barre d’outils</strong></td>
+            <td>Basculer Chat ↔ Dashboard. Afficher le contexte (ferme, vue soi / ferme). Ouvrir / fermer la nav.</td>
+            <td>Haut d’écran, compacte</td>
+            <td>Haut d’écran, permanente</td>
+          </tr>
+          <tr>
+            <td><strong>Vue Chat</strong></td>
+            <td>Fil d’échange + champ en bas. Cartes confirmables. Chemin principal d’écriture (agent-natif).</td>
+            <td>Plein contenu ; nav en tiroir</td>
+            <td>Colonne ou plein contenu selon bascule</td>
+          </tr>
+          <tr>
+            <td><strong>Vue Dashboard</strong></td>
+            <td>Registre ouvert (calendrier, Gantt, listes…). Approfondir / cocher / corriger. Mêmes données que le chat.</td>
+            <td>Plein contenu après choix d’une entrée</td>
+            <td>Zone principale à côté ou à la place du chat</td>
+          </tr>
+          <tr>
+            <td><strong>Nav collapsible</strong></td>
+            <td>Registres groupés (Ferme, Production, Ressources…). Pas d’historique de conversations.</td>
+            <td>Tiroir : glisser depuis la gauche (ou bouton barre) ; chat assombri derrière</td>
+            <td>Colonne gauche repliable (icônes seules / largeur texte)</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Sur téléphone : glissement du bord gauche (ou bouton menu de la barre) ouvre la nav sur environ la moitié de l’écran ; un tap sur le chat assombri la referme. Sur grand écran : la nav est une colonne collapsible ; la barre d’outils reste visible dans les deux modes.</p>
+      <p>Choisir une entrée de nav ouvre le <strong>dashboard</strong> de ce registre (et peut laisser le chat accessible via la barre). Revenir au chat = bascule barre, pas une autre app. Planification et Calendrier vivent dans la même coquille (P8).</p>
+      <table>
+        <thead>
+          <tr><th>Catégorie</th><th>Entrées</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Ferme</td><td>Plan / carte de la ferme (satellite), parcelles</td></tr>
+          <tr><td>Production</td><td>Planification, calendrier, observations, traitements</td></tr>
+          <tr><td>Ressources</td><td>Matériel, personnel, prix, conversions, documents</td></tr>
+          <tr><td>Commercial</td><td>Ventes</td></tr>
+          <tr><td>Compte</td><td>Profil</td></tr>
+        </tbody>
+      </table>
+      <p>En haut de la nav (ou dans la barre) : la vue en cours — soi, toute la ferme, ou une personne (responsable / propriétaire). Le profil est en bas de la nav.</p>
+
+      <h3>Plan / carte de la ferme · <span class="status decided">décidé</span></h3>
+      <p>Le registre <strong>Plan de la ferme</strong> est une carte interactive (satellite / ortho) pour <strong>dessiner</strong>, <strong>ajouter</strong> et <strong>modifier</strong> les formes des parcelles, et pour <strong>modifier la ferme</strong> elle-même (fiche + emprise). Même coquille. Ordi = dessin et édition fine ; téléphone = consultation, sélection, ouverture des fiches. <strong>Cahier détaillé :</strong> <a href="carte-ferme.html">Carte de la ferme</a> (flux dessin, ajout, édition, fiche ferme, données, scénarios agent, C1–C6).</p>
+      <table>
+        <thead><tr><th>Capacité</th><th>Comportement</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Fond carte</strong></td>
+            <td>Tuiles satellite / ortho centrées sur la ferme (adresse, code postal, ou point GPS). Recentrage après modification de la ferme.</td>
+          </tr>
+          <tr>
+            <td><strong>Dessiner une forme</strong></td>
+            <td>Outils : polygone, rectangle, cercle / ellipse. Clics = sommets ; « Terminer » ou double-clic ferme la forme. Annuler le dernier point. Mode dessin explicite dans la barre d’outils carte.</td>
+          </tr>
+          <tr>
+            <td><strong>Ajouter une forme</strong></td>
+            <td>À la fermeture : panneau « Nouvelle parcelle » (nom, type) → écrit <code>plots</code> + <code>geometry</code> ; ou « Lier à une parcelle existante ». On peut aussi partir de la liste Parcelles → « Dessiner sur la carte ».</td>
+          </tr>
+          <tr>
+            <td><strong>Modifier une forme (parcelle)</strong></td>
+            <td>Sélection → déplacer sommets, translater, redimensionner, dupliquer, supprimer la géométrie (fiche conservée) ou supprimer parcelle (confirmation). Snap optionnel.</td>
+          </tr>
+          <tr>
+            <td><strong>Modifier la ferme</strong></td>
+            <td>Depuis la carte ou Compte / Profil ferme : nom, adresse, code postal, point / emprise ferme (<code>farms.geometry</code> ou centre), évent. calque « limite d’exploitation ». Changer ces champs recentre le fond carte. Multi-fermes : bascule dans la barre ; chaque ferme a sa carte.</td>
+          </tr>
+          <tr>
+            <td><strong>Mesures</strong></td>
+            <td>Surface et périmètre depuis la géométrie ; proposition de mise à jour longueur / largeur / surface sur la fiche (parcelle ou ferme).</td>
+          </tr>
+          <tr>
+            <td><strong>Agent</strong></td>
+            <td>« Ouvre le plan », « Dessine / ajoute une parcelle », « Modifie Serre 1 », « Change l’adresse de la ferme » → dashboard carte ou fiche ferme + confirmation chat.</td>
+          </tr>
+          <tr>
+            <td><strong>Lien planification</strong></td>
+            <td>La géométrie situe le lieu ; les planches restent sur le plan de culture. La carte ne remplace pas le Gantt.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Règle.</strong> Deux niveaux de formes : (1) <em>ferme</em> — centre / emprise pour cadrer la carte ; (2) <em>parcelles</em> — polygones métier. Une parcelle peut exister sans géométrie. Dès qu’une forme parcelle est dessinée, elle est la vérité spatiale de cette parcelle. Calque planches sur satellite = plus tard.</div>
+
+      <h3>Registres</h3>
+      <p>Chaque entrée suit trois gestes. La vue d’ensemble compte, cherche et filtre, puis liste les fiches. Toucher une fiche ouvre le formulaire rempli. Le bouton plus ouvre le formulaire vide. Le chat peut ouvrir ce formulaire déjà rempli. Écrans Figma : « 03 Ferme &amp; ressources » (carte + menus) et coquille « 00 ».</p>
+      <p>Le nom est exigé pour une parcelle. Désactiver une parcelle la garde dans l’historique. Le calendrier, les observations, les traitements, les ventes et le personnel suivent la vue personne. Les parcelles, le plan / carte, la planification, le matériel, les prix et les conversions restent ceux de la ferme.</p>
+      <table>
+        <thead>
+          <tr><th>Entrée</th><th>Vue d’ensemble</th><th>Formulaire, modifié ou vide</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Plan / carte de la ferme</td><td>Satellite + formes parcelles + emprise / fiche ferme. Zoom, sélection, outils dessin.</td><td>Dessiner / ajouter / modifier formes ; modifier la ferme (nom, adresse, centre, limite).</td></tr>
+          <tr><td>Parcelles</td><td>Nombre, actives, inactives. Recherche. Filtre par type et par état. Lien « Voir sur la carte ».</td><td>Nom, type, longueur, largeur, géométrie (optionnelle), nombre et type de sous-parcelles.</td></tr>
+          <tr><td>Planification</td><td>Plans de l’année, phases, jalons (semis / plantation…). Même produit que le calendrier — vue occupation.</td><td>Culture, phases, parcelle / planches, année.</td></tr>
+          <tr><td>Calendrier</td><td>Tâches faites et prévues liées aux plans. Filtres : personne, période, parcelle, culture, activité.</td><td>Action, date, durée, parcelle, culture, statut, lien plan.</td></tr>
+          <tr><td>Observations</td><td>Constats actifs, par gravité.</td><td>Nature, culture, lieu, gravité, date dite.</td></tr>
+          <tr><td>Traitements</td><td>Les traitements faits sur la saison.</td><td>Produit, culture, lieu, date. Demander un produit à ePhy reste une question dans le chat.</td></tr>
+          <tr><td>Matériel</td><td>Les matériels, par catégorie.</td><td>Nom et catégorie.</td></tr>
+          <tr><td>Personnel</td><td>Les membres actifs, par rôle.</td><td>Invitation chat ou écran : lien à envoyer (WhatsApp etc.). Lien / QR permanent pour stagiaires. Une personne seulement citée dans une tâche ne devient pas membre.</td></tr>
+          <tr><td>Prix</td><td>Les cultures qui ont un prix, par canal.</td><td>Culture, canal, prix, unité. Une vente n’écrit pas dans cette grille.</td></tr>
+          <tr><td>Conversions</td><td>Les lignes, et celles encore à préciser.</td><td>Contenant, contenu, valeur, unité.</td></tr>
+          <tr><td>Ventes</td><td>Les factures et leur total.</td><td>Client, quantité, unité dite, prix dit. PDF / photo de facture → voir <a href="documents.html">Documents</a>.</td></tr>
+          <tr><td>Documents</td><td>Fichiers de la ferme (PDF, images…), filtrés par catégorie.</td><td>Ajout / aperçu / lien vers analyse, facture, observation. Détail : <a href="documents.html">Documents</a>.</td></tr>
+          <tr><td>Profil</td><td>La personne, son rôle, la ferme, la vue.</td><td>La vue : soi, toute la ferme, ou une personne pour le responsable et le propriétaire. Inviter quelqu’un se fait dans Personnel.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Harness</h2>
+      <div class="card"><strong>Le code orchestre. Jev juge. Le LLM dialogue.</strong> Les prompts ne choisissent plus l’outil par une chaîne de textes libres. Chaque moteur a un rôle fixe.</div>
+      <div class="card"><strong>La lecture est directe. L’écriture complète s’enregistre.</strong> Si la carte est complète et sans ambiguïté, Thomas écrit tout de suite. Sinon il attend une précision, une répartition, ou une confirmation. Une tâche déjà enregistrée peut être supprimée depuis le chat.</div>
+      <div class="card"><strong>Les droits de l’exploitation s’appliquent à chaque outil.</strong> Ni Jev ni le LLM ne contournent les accès des membres. Les données sont celles de la ferme. La visibilité se restreint ensuite.</div>
+      <div class="card"><strong>Une compétence de conseil est un contenu versionné.</strong> Elle appartient à un groupe, cite ses sources et n’ajoute pas un second moteur. Cette partie n’est pas construite dans le premier lot.</div>
+
+      <h3>Jev et LLM · <span class="status decided">décidé</span></h3>
+      <p>Thomas V3 n’est pas un agent LLM unique. Ce n’est pas non plus Jev seul. C’est un mixte, avec le code au centre. Le bench <code>scripts/jev-bench</code> a déjà montré que Jev route et extrait mieux, moins cher, sur les cas typés. Le LLM reste nécessaire dès qu’il faut parler, reformuler ou trancher un cas ambigu.</p>
+      <table>
+        <thead>
+          <tr><th>Moteur</th><th>Rôle</th><th>Exemples</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Code</strong></td>
+            <td>Contrôle le parcours. Charge le contexte. Compose les réponses. Appelle les outils. Pose les cartes. Applique les seuils de confiance.</td>
+            <td>Découper un message en intentions déjà détectées. Recopier la serre sur deux cartes. Écrire <code>tasks</code> après confirmation. Refuser un accès hors vue.</td>
+          </tr>
+          <tr>
+            <td><strong>Jev</strong> (TypeSafe System One)</td>
+            <td>Jugements typés, rapides, à probabilités. Détecte les éléments et choisit parmi des options connues. Ne génère pas de prose.</td>
+            <td>Usage : tâche faite, prévue, observation, vente, réglage, aide, conversation, précision. Champs : culture, action, durée, parcelle, sous-parcelle, personne, fait ou prévu. Plusieurs questions atomiques en parallèle sur le même état.</td>
+          </tr>
+          <tr>
+            <td><strong>LLM</strong></td>
+            <td>Dialogue et formulation. Intervient quand le texte libre compte, ou quand Jev est peu confiant.</td>
+            <td>Demande de précision sous une carte. Réponse de conversation. Reformulation d’une lecture (météo, ePhy, temps au m²). Escalade d’un message trop mélangé ou trop vague.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Pourquoi pas un seul LLM</h3>
+      <p>Un fournisseur LLM unique simplifie l’architecture, mais repart sur la dette V2 : classification floue, extraction fragile, coût élevé à chaque message, et prompts qui tentent de tout faire. Jev est fait pour les décisions bornées que le chat pose en boucle : quelle intention, quelle culture, quelle parcelle parmi celles de la ferme. Le LLM seul reste meilleur pour rédiger une question ou une réponse.</p>
+
+      <h3>Pourquoi le mixte tient malgré la complexité</h3>
+      <p>La complexité n’est pas « deux modèles qui se parlent ». C’est le code qui enchaîne des étapes courtes. Jev ne reçoit jamais toute la ferme. Le code construit un état mince : le message, les candidats utiles (parcelles, cultures ouvertes, membres, matériels), et les options du choix. Chaque question Jev pointe vers ce qu’il doit juger. Le LLM, lui, reçoit l’historique de conversation et le résultat déjà structuré, pas une seconde copie brute de toute la base.</p>
+      <table>
+        <thead>
+          <tr><th>Risque</th><th>Règle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Contexte trop gros dans Jev</td><td>État par intention. Candidats filtrés par la ferme et la vue. Pas de dump de tables.</td></tr>
+          <tr><td>Deux moteurs qui se contredisent</td><td>Jev propose des champs typés. Le LLM ne réécrit pas ces champs. Il formule la question ou la réponse autour.</td></tr>
+          <tr><td>Orchestration opaque</td><td>Le parcours est dans le code, visible et testable. Jev et le LLM sont des appels, pas des agents libres.</td></tr>
+          <tr><td>Cas douteux</td><td>Sous le seuil de confiance, le code escalade au LLM ou pose une précision. Il n’écrit pas.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Parcours d’un message</h3>
+      <ol class="scenario">
+        <li>Le code charge le contexte utile de la ferme pour la vue en cours.</li>
+        <li>Jev route : une ou plusieurs intentions, avec probabilités.</li>
+        <li>Pour chaque intention d’écriture, Jev extrait les champs parmi les candidats. Le code assemble la carte.</li>
+        <li>Si un champ manque ou si la confiance est basse, le LLM formule la demande sous la carte. Les autres cartes restent confirmables.</li>
+        <li>Si l’intention est une lecture ou une conversation, le LLM rédige la réponse à partir des faits déjà lus par le code.</li>
+        <li>La confirmation de l’agriculteur déclenche l’outil. Ni Jev ni le LLM n’écrivent seuls en base.</li>
+      </ol>
+
+      <h3>Toolcalling visible dans le fil · <span class="status decided">décidé</span></h3>
+      <div class="card"><strong>Style Grok / LLM, discret.</strong> Quand Thomas appelle un outil (recherche, lecture DB, conversion, ePhy, calcul…), le fil montre des <em>bulles d’activité</em> dans la réponse en cours — pas un message utilisateur séparé, pas un panneau debug producteur.</div>
+      <table>
+        <thead><tr><th>Règle</th><th>Comportement</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Où</td>
+            <td>Dans le fil de réponse Thomas, au-dessus ou intercalé avec le texte / les cartes. Même pattern tél et ordi.</td>
+          </tr>
+          <tr>
+            <td>Forme</td>
+            <td>Ligne courte : « Recherche les tâches… », « Utilise la conversion caisse → kg… », « Consulte ePhy… ». État : en cours → fait (ou échec discret, voir <a href="erreurs.html">Erreurs</a> <code>AGT_TOOL_FAIL</code>).</td>
+          </tr>
+          <tr>
+            <td>Ce que ce n’est pas</td>
+            <td>Pas un faux message de l’agriculteur. Pas de JSON d’outil. Pas de console technique. Pas d’animation exagérée ni de liste d’outils permanente.</td>
+          </tr>
+          <tr>
+            <td>Confirmation</td>
+            <td>Les bulles d’activité n’écrivent pas en base. Seule la confirmation de carte (ou l’action explicite) déclenche l’écriture.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="quote"><p>Combien de temps sur les tomates serre 1 cette semaine ?</p></div>
+      <p>Fil Thomas : bulle « Recherche les tâches tomates · serre 1… » → puis réponse chiffrée (carte de lecture). Aucun message utilisateur inventé pour « lancer » l’outil.</p>
+
+      <h3>Système de mémoire · <span class="status decided">décidé</span></h3>
+      <p>La mémoire de Thomas n’est pas un seul store RAG. Six couches, rôles distincts. Aligné sur l’état mince déjà décrit pour Jev.</p>
+      <table>
+        <thead><tr><th>Couche</th><th>Contenu</th><th>Durée / vérité</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>État ferme mince</strong> (DB structurée)</td>
+            <td>Parcelles, plans ouverts, membres, matériels, prix, cultures en cours — candidats filtrés pour la vue</td>
+            <td>Source de vérité opérationnelle. Pas de dump de tables dans le prompt.</td>
+          </tr>
+          <tr>
+            <td><strong>Fil courant</strong></td>
+            <td>Historique de la conversation ouverte + cartes confirmées de la session</td>
+            <td>Contexte immédiat du dialogue. Pas une nav « historique chat » dense.</td>
+          </tr>
+          <tr>
+            <td><strong>Mémoire épisodique</strong></td>
+            <td>Résumés versionnés des conversations passées, recherchables</td>
+            <td>Pour retrouver « ce qu’on a dit en mars », pas pour rejouer tout le fil brut.</td>
+          </tr>
+          <tr>
+            <td><strong>Mémoire métier structurée</strong></td>
+            <td>ITK, itinéraires, séries / plans, coûts culture — entités (voir <a href="itineraires.html">Itinéraires</a>)</td>
+            <td>Vérité métier versionnable. Pas du RAG flou seul.</td>
+          </tr>
+          <tr>
+            <td><strong>Faits confirmés</strong></td>
+            <td>Écritures après confirmation utilisateur (cartes) — tâches, observations, ventes…</td>
+            <td>Seules lignes opérationnelles durables issues du chat.</td>
+          </tr>
+          <tr>
+            <td><strong>Cache outils</strong></td>
+            <td>Résultats d’appels récents (ePhy, conversions, lectures)</td>
+            <td>Court, non durable. Invalidable. Jamais source de vérité seule.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Conséquence harness.</strong> Jev reçoit l’état mince + candidats. Le LLM reçoit le fil courant et les faits déjà structurés. Les résumés épisodiques et l’ITK structurés sont chargés <em>à la demande</em> par le code (outil / lecture), pas collés en masse à chaque message.</div>
+
+      <h3>Plan de tests · place de Jev et fournisseur LLM · <span class="status">brouillon</span></h3>
+      <p>La répartition Jev / LLM se tranche par mesures, pas par préférence. Le banc existant <code>scripts/jev-bench</code> sert de base : goldset, routage, extraction, orchestration, comparaison coût / latence / exactitude. On l’étend pour faire tourner les mêmes cas sur plusieurs moteurs et modèles.</p>
+
+      <h4>Ce que les tests doivent trancher</h4>
+      <table>
+        <thead>
+          <tr><th>Question</th><th>Mesure</th><th>Décision attendue</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Où Jev est meilleur que le LLM</td>
+            <td>Exactitude usage, champs (culture, parcelle, durée, action), coût, latence</td>
+            <td>Liste des étapes gardées à Jev (routage, extraction bornée)</td>
+          </tr>
+          <tr>
+            <td>Où le LLM reste nécessaire</td>
+            <td>Qualité des demandes de précision, conversation, multi-intentions ambiguës</td>
+            <td>Liste des étapes réservées au LLM</td>
+          </tr>
+          <tr>
+            <td>Quel LLM pour ces étapes</td>
+            <td>Même goldset + jeux de précision / dialogue, coût par message, latence p50/p95</td>
+            <td>Un fournisseur principal pour le premier lot, un secours éventuel</td>
+          </tr>
+          <tr>
+            <td>Seuils de confiance</td>
+            <td>Courbe confiance Jev × erreur sur le goldset</td>
+            <td>Seuil « remplir » vs « demander » vs « escalader au LLM »</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h4>Traitements à comparer</h4>
+      <table>
+        <thead>
+          <tr><th>Traitement</th><th>Rôle testé</th><th>Modèles</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Jev seul</strong></td>
+            <td>Routage + extraction typée. Pas de prose.</td>
+            <td>TypeSafe Jev</td>
+          </tr>
+          <tr>
+            <td><strong>LLM seul</strong></td>
+            <td>Même tâches typées que Jev, pour mesurer l’écart. Puis précision et dialogue.</td>
+            <td>OpenAI petit / pas cher · Mistral · DeepSeek (ou équivalent open-weight via API)</td>
+          </tr>
+          <tr>
+            <td><strong>Mixte</strong></td>
+            <td>Jev pour le typé. LLM seulement si confiance basse, précision, ou conversation.</td>
+            <td>Jev + chacun des LLM ci-dessus, un à la fois</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Côté OpenAI, on commence par les plus petits et les moins chers disponibles via API (ex. famille mini / nano), pas par un modèle frontier. Côté Mistral et DeepSeek, même logique : le plus petit qui tient le JSON structuré et le français agricole. Un quatrième fournisseur n’entre que s’il bat clairement le trio sur coût ou qualité de précision.</p>
+
+      <h4>Jeux de cas</h4>
+      <ol class="scenario">
+        <li><strong>Routage (O-…)</strong> — usage : tâche faite, prévue, observation, vente, réglage, aide, conversation, précision.</li>
+        <li><strong>Extraction (T-01 et goldset)</strong> — culture, action, durée, parcelle, sous-parcelle, fait/prévu, multi-activités.</li>
+        <li><strong>Précision</strong> — message incomplet ; juger si la question posée sous la carte est juste, courte, et ne bloque pas les autres cartes.</li>
+        <li><strong>Dialogue / lecture</strong> — météo, ePhy, temps au m² : réponse lisible à partir de faits fournis par le code, sans inventer.</li>
+        <li><strong>Stress contexte</strong> — même message avec état mince (candidats filtrés) vs état trop large, pour mesurer la dégradation de Jev et du LLM.</li>
+      </ol>
+
+      <h4>Critères de choix</h4>
+      <div class="card"><strong>Exactitude d’abord sur le typé.</strong> Un LLM moins cher qui se trompe de parcelle ou d’usage ne remplace pas Jev. Jev garde l’étape s’il gagne ou égale le meilleur LLM à coût et latence inférieurs.</div>
+      <div class="card"><strong>Le LLM gagne sur la prose.</strong> Entre OpenAI mini, Mistral et DeepSeek, on retient celui qui pose les meilleures précisions et lectures, à budget et latence acceptables sur mobile.</div>
+      <div class="card"><strong>Le mixte gagne s’il baisse le coût sans baisser l’exactitude.</strong> Sinon on simplifie : Jev partout où il suffit, un seul LLM pour le reste.</div>
+      <div class="card"><strong>Un fournisseur LLM principal au premier lot.</strong> Le secours (autre API) n’est ajouté que si le bench montre un écart net sur un sous-jeu (ex. français libre, JSON cassé).</div>
+
+      <h4>Livrable du bench</h4>
+      <p>Un rapport par traitement : exactitude par champ, taux d’escalade, coût moyen par message, latence, exemples d’erreurs. À partir de ce rapport on fige : étapes Jev, étapes LLM, modèle retenu, seuils. Tant que le rapport n’existe pas, le fournisseur LLM et les seuils restent ouverts.</p>
+      <div class="card"><strong>A1 · Multi-intentions.</strong> Tranché par le bench (qualité, vitesse, coût) : Jev découpe, ou LLM découpe puis Jev extrait.</div>
+      <div class="card"><strong>A2 · Seuils.</strong> Calibrés sur le bench. Objectif : ~90 % de réussite sur le goldset typé.</div>
+      <div class="card"><strong>A3 · LLM prose.</strong> OpenAI mini, Mistral, DeepSeek — choix par le bench. Détail du plan et du bot UI dans <a href="tests.html">Tests</a>.</div>
+
+      <h3>Orchestrateur</h3>
+      <p>L’orchestrateur est le code. Il lit le message, appelle Jev, puis le LLM si besoin, avant d’appeler un outil. Chaque intention devient sa propre carte, avec son propre outil. Une phrase qui mélange plusieurs travaux ne produit jamais une seule ligne.</p>
+      <div class="card"><strong>Plusieurs activités.</strong> « J’ai désherbé une heure et récolté une demi-heure » donne deux cartes. La durée, la culture et le lieu propres à chacune restent sur leur carte. Ce qui est dit une seule fois pour l’ensemble, comme la date, la personne ou la parcelle, est recopié sur chaque carte et annoncé.</div>
+      <div class="card"><strong>Fait ou prévu.</strong> Un travail déjà accompli, au passé ou au présent, prépare une tâche à enregistrer, <code>tasks.status = terminee</code>. Un travail à venir, « demain », « je vais », « il faut », « prévoir », prépare une tâche à planifier, <code>tasks.status = en_attente</code>, datée du jour dit. Les deux peuvent tenir dans le même message. Thomas le dit, et range chacune dans son statut.</div>
+      <div class="card"><strong>Une demande sous sa carte.</strong> Si une intention manque d’une information, la question est placée sous la carte concernée. Les autres cartes restent confirmables, ensemble ou séparément.</div>
+
+      <h3>Intentions</h3>
+      <p>Une intention est soit une lecture, soit une écriture. La lecture répond tout de suite. L’écriture propose une carte et attend la confirmation. Un même message peut contenir les deux.</p>
+      <table>
+        <thead>
+          <tr><th>Intention</th><th>Ce que Thomas fait</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Retrouver un traitement</td><td>Il cherche les tâches de traitement, le produit ePhy cité et le lieu. Il liste ce qui a été fait. Il n’écrit rien.</td></tr>
+          <tr><td>Retrouver une plantation</td><td>Il lit les plans de l’année dont le semis ou la plantation est fait, et les tâches semer ou planter. Il répond avec la date, la culture et la planche.</td></tr>
+          <tr><td>Temps passé au m²</td><td>Il additionne <code>duration_minutes</code> des tâches de la planche ou de la culture, et divise par la surface de la sous-parcelle, ou de la parcelle si aucune planche n’est dite. La réponse est une carte de lecture.</td></tr>
+          <tr><td>Quel produit utiliser</td><td>Question ePhy. Il cherche le produit et l’usage, puis la liste de produits de l’exploitation. La réponse est indicative. Elle ne crée pas un traitement.</td></tr>
+          <tr><td>Itinéraire technique</td><td>Il lit la base d’itinéraires. Elle est à ajouter au contexte : <code>itineraries</code>, fenêtres climatiques et gestes <code>itinerary_task_templates</code>, venus de Basil. Il décrit le cycle. Il ne pose un plan que si l’agriculteur le demande.</td></tr>
+          <tr><td>Marquer une vente</td><td>Carte d’écriture. Facture au prix dit. La grille de prix ne change pas.</td></tr>
+          <tr><td>Commander des semences</td><td>Un caddie fictif, pas une commande envoyée. Lignes : culture, variété, quantité, unité, fournisseur s’il est dit. Thomas montre le stock <code>semences</code> déjà connu. Confirmer range le caddie. Acheter vraiment est une autre intention.</td></tr>
+          <tr><td>Météo</td><td>Lecture branchée sur la parcelle demandée, sinon sur la commune de la ferme. Aucune ligne n’est écrite.</td></tr>
+        </tbody>
+      </table>
+      <p>La base d’itinéraires et le caddie de semences sont des objets à ajouter — détail produit : <a href="itineraires.html">Itinéraires &amp; coûts</a>. Les autres intentions s’appuient sur des tables déjà là : tâches, plans, ePhy, factures, observations, semences en stock. Les parcours chat se spécifient dans ce cahier (fondation + domaines) ; le fichier Figma actuel est à archiver puis reconstruire <em>après</em> stabilisation du CDC (pas de nouvelles pages Figma « Harness / Intentions » pour l’instant).</p>
+
+      <h2>Visibilité</h2>
+      <p>Les données vivent dans la ferme. En V2, un membre actif voit les tâches de toute la ferme. La V3 garde ce partage, puis le filtre. Trois vues : les siennes, celles de tout le monde, ou celles d’une personne.</p>
+      <table>
+        <thead>
+          <tr><th>Vue</th><th>Qui peut l’ouvrir</th><th>Ce qui s’affiche</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Soi</td><td>Chaque membre</td><td>Les tâches, observations et temps dont il est l’auteur, ou un participant.</td></tr>
+          <tr><td>Toute la ferme</td><td>Chaque membre, sauf s’il est restreint à soi</td><td>Les mêmes données pour tous les membres actifs.</td></tr>
+          <tr><td>Une personne</td><td>Le responsable et le propriétaire</td><td>Les données de ce membre, comme s’il les consultait lui-même.</td></tr>
+        </tbody>
+      </table>
+      <p>Parcelles, sous-parcelles, plans, matériel, prix, conversions, itinéraires, météo et ePhy restent visibles pour la ferme. Ils ne portent pas de personne. Une restriction ne les cache pas.</p>
+      <p>Thomas applique la même vue dans le chat. « Mon temps sur les tomates » reste sur l’auteur. « Le temps de Marie » n’est répondu qu’au responsable ou au propriétaire. Un membre restreint à soi reçoit ses propres lignes, et Thomas le dit.</p>
+
+      <h2>Objets communs</h2>
+      <table>
+        <thead>
+          <tr><th>Objet</th><th>Rôle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Exploitation</td><td>Le cadre de travail, avec ses membres et ses droits.</td></tr>
+          <tr><td>Parcelle</td><td>Le lieu principal, table <code>plots</code>. Serre, tunnel, plein champ, verger.</td></tr>
+          <tr><td>Sous-parcelle</td><td>La division de la parcelle, table <code>surface_units</code>. Planche, rang, ligne. Le nom produit remplace « unité de surface ».</td></tr>
+          <tr><td>Cycle</td><td>La saison, la campagne ou l’année de production.</td></tr>
+          <tr><td>Intervention</td><td>Travail, observation, traitement, apport, récolte, vente ou dépense.</td></tr>
+          <tr><td>Personne</td><td>Celui qui fait, décide ou conseille.</td></tr>
+        </tbody>
+      </table>
+      <p>La filière ne crée pas un produit séparé. Elle change les libellés, les unités, la durée du cycle et les exemples.</p>
+
+      <h2>Filières · <span class="status decided">décidé</span></h2>
+      <div class="card"><strong>Une seule UI / UX pour toutes les filières.</strong> Pas de skins, menus ou parcours distincts par filière. Les libellés, unités, durées de cycle et exemples s’adaptent ; la coquille, le chat, les cartes et les registres restent les mêmes. Un <em>finetuning</em> filière (modèles, catalogues, prompts) pourra venir plus tard — ce n’est pas une variante d’interface.</div>
+      <p>La V2 range déjà les cultures en maraîchage, pépinière, floriculture, arboriculture, grande culture et tropical. La V3 ajoute explicitement la viticulture et les plantes à parfum, aromatiques et médicinales. Une exploitation peut en combiner plusieurs.</p>
+      <table>
+        <thead>
+          <tr><th>Filière</th><th>Parcelle et sous-parcelle</th><th>Cycle typique</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Maraîchage</td><td>Serre, tunnel, planche, plein champ</td><td>Saison, série</td></tr>
+          <tr><td>Arboriculture</td><td>Parcelle, rang, arbre</td><td>Année, campagne de récolte</td></tr>
+          <tr><td>Viticulture</td><td>Parcelle, cépage, rang</td><td>Millésime</td></tr>
+          <tr><td>Grande culture</td><td>Îlot, parcelle</td><td>Campagne culturale</td></tr>
+          <tr><td>Pépinière et floriculture</td><td>Planche, contenant, serre</td><td>Série, lot</td></tr>
+          <tr><td>PPAM</td><td>Parcelle, planche</td><td>Campagne, coupe</td></tr>
+          <tr><td>Tropical</td><td>Parcelle, pied</td><td>Campagne</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Pages transverses</h2>
+      <ul>
+        <li><a href="equivalences.html">Équivalences mobile ↔ desktop</a> — matrice des capacités par surface.</li>
+        <li><a href="erreurs.html">Événements d’erreur</a> — catalogue + parcours de normalisation.</li>
+        <li><a href="itineraires.html">Itinéraires &amp; coûts</a> — fiche culture, ITK, série, coûts.</li>
+        <li><a href="documents.html">Documents</a> — toute pièce joignable à la conversation.</li>
+      </ul>
+
+      <h2>Ordre de lecture</h2>
+      <p>Fondation (coquille, harness, mémoire) → <a href="temps.html">Temps</a> (grille d’écriture) → domaines métier → <a href="donnees.html">Données</a> + <a href="tests.html">Tests</a> (cœur vibe-coding). Météo et conseil / communauté : non précisés pour l’instant (index).</p>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

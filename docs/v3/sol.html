@@ -1,0 +1,229 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sol — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html" aria-current="page">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Sol · <span class="status decided">décidé</span></p>
+      <h1>Analyses complètes. On enregistre ce qui est fourni.</h1>
+      <p class="lede">Une analyse de sol labo est souvent un rapport dense : texture, calcaire, pH, matière organique, CEC, majeurs, oligo-éléments, parfois ETM ou conductivité. Thomas V3 accepte <strong>tous ces postes</strong>. Aucun n’est obligatoire : on ne stocke que ce qui figure sur le bulletin (ou ce que l’agriculteur dicte). On n’invente pas une valeur absente. On n’en déduit pas encore un bilan fertilisation simulé.</p>
+      <div class="card"><strong>Règle d’extraction.</strong> PDF / photo / saisie chat → carte confirmable avec <em>tous</em> les postes détectés (valeur + unité + méthode si lisible). Postes absents du bulletin = absents de la fiche. Commentaires / classes du labo (« faible », « élevé ») sont conservés à part, sans les transformer en chiffres.</div>
+
+      <h2>Métadonnées de l’analyse · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Champ</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Parcelle / sous-parcelle</td><td>Rattachement ferme. Peut être proposé depuis le texte du message.</td></tr>
+          <tr><td>Date de prélèvement</td><td>Prioritaire si présente ; sinon date d’analyse / date dite.</td></tr>
+          <tr><td>Date d’analyse / émission</td><td>Souvent sur le bulletin.</td></tr>
+          <tr><td>Laboratoire</td><td>Nom, parfois n° d’agrément.</td></tr>
+          <tr><td>Référence échantillon / n° dossier</td><td>Pour retrouver le bulletin.</td></tr>
+          <tr><td>Profondeur / horizon</td><td>ex. 0–20 cm, 0–30 cm.</td></tr>
+          <tr><td>Culture / précédent / usage</td><td>Si indiqué sur la demande labo.</td></tr>
+          <tr><td>Document source</td><td>PDF ou image lié (<a href="documents.html">Documents</a>, catégorie <code>analyse-sol</code>).</td></tr>
+        </tbody>
+      </table>
+      <div class="quote"><p>Voici l’analyse de la serre 1 du 12 mars : pH 6,8, P 45, K 180.</p></div>
+      <p>Carte partielle OK : seuls les postes cités (ou lus) sont remplis. Après confirmation, consultable sur la parcelle et dans Sol.</p>
+
+      <h2>Catalogue des postes · <span class="status decided">décidé</span></h2>
+      <p>Inventaire des éléments <em>potentiellement</em> présents sur un bulletin français (chambres d’agriculture, labos agréés, analyses maraîchage / GC / vigne). Stockage souple : couple <code>code</code> + valeur + unité + méthode + (optionnel) classe / commentaire labo.</p>
+
+      <h3>1 · Texture / granulométrie</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes / alias fréquents</th><th>Unités typiques</th></tr></thead>
+        <tbody>
+          <tr><td>Argile (&lt; 2 µm)</td><td><code>clay</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Limons fins (2–20 µm)</td><td><code>fine_silt</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Limons grossiers (20–50 µm)</td><td><code>coarse_silt</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Sables fins (50–200 µm)</td><td><code>fine_sand</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Sables grossiers (200–2000 µm)</td><td><code>coarse_sand</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Limons totaux / sables totaux</td><td><code>silt_total</code>, <code>sand_total</code></td><td>si le labo agrège</td></tr>
+          <tr><td>Classe texturale</td><td><code>texture_class</code></td><td>texte (ex. limono-argileux)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>2 · Calcaire</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Unités / notes</th></tr></thead>
+        <tbody>
+          <tr><td>Calcaire total (CaCO₃)</td><td><code>caco3_total</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Calcaire actif</td><td><code>caco3_active</code></td><td>% ; Drouineau souvent</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3 · Statut acido-basique</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>pH eau</td><td><code>ph_water</code></td><td>Le plus courant</td></tr>
+          <tr><td>pH KCl</td><td><code>ph_kcl</code></td><td>Souvent ~0,5–1 sous le pH eau</td></tr>
+          <tr><td>pH CaCl₂</td><td><code>ph_cacl2</code></td><td>Si présent</td></tr>
+        </tbody>
+      </table>
+
+      <h3>4 · Matière organique / azote</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Unités / notes</th></tr></thead>
+        <tbody>
+          <tr><td>Carbone organique</td><td><code>organic_c</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Matière organique</td><td><code>organic_matter</code></td><td>Souvent C × 1,72 (ou 2 selon labo) — conserver le facteur si indiqué</td></tr>
+          <tr><td>Azote total</td><td><code>n_total</code></td><td>%, ‰, g/kg</td></tr>
+          <tr><td>Rapport C/N</td><td><code>c_n_ratio</code></td><td>sans unité</td></tr>
+          <tr><td>Azote minéral (N-NO₃, N-NH₄)</td><td><code>n_no3</code>, <code>n_nh4</code>, <code>n_mineral</code></td><td>si dosage séparé (relatively rare sur bulletin « terre » standard)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>5 · CEC et cations échangeables</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Unités / notes</th></tr></thead>
+        <tbody>
+          <tr><td>CEC (Metson, cobaltihexamine, BaCl₂…)</td><td><code>cec</code> + <code>method</code></td><td>cmol+/kg ou meq/100 g</td></tr>
+          <tr><td>Taux de saturation (S/T ou S/CEC)</td><td><code>base_saturation</code></td><td>%</td></tr>
+          <tr><td>Ca échangeable</td><td><code>ca_exchangeable</code> / <code>cao_exchangeable</code></td><td>cmol+/kg, mg/kg, g/kg — garder l’unité du bulletin</td></tr>
+          <tr><td>Mg échangeable</td><td><code>mg_exchangeable</code> / <code>mgo_exchangeable</code></td><td>idem</td></tr>
+          <tr><td>K échangeable</td><td><code>k_exchangeable</code> / <code>k2o_exchangeable</code></td><td>idem</td></tr>
+          <tr><td>Na échangeable</td><td><code>na_exchangeable</code> / <code>na2o_exchangeable</code></td><td>idem</td></tr>
+          <tr><td>% saturation par cation</td><td><code>ca_sat_pct</code>, <code>mg_sat_pct</code>, <code>k_sat_pct</code>, <code>na_sat_pct</code></td><td>% de la CEC</td></tr>
+          <tr><td>Ratios d’équilibre</td><td><code>k_mg_ratio</code>, <code>ca_mg_ratio</code>, …</td><td>si calculés / imprimés</td></tr>
+        </tbody>
+      </table>
+
+      <h3>6 · Éléments majeurs assimilables (fertilité)</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Méthodes / unités fréquentes</th></tr></thead>
+        <tbody>
+          <tr><td>Phosphore assimilable</td><td><code>p</code> / <code>p2o5</code></td><td>Olsen, Joret-Hébert, Dyer, etc. — <strong>méthode obligatoire si connue</strong> (les valeurs ne sont pas comparables entre méthodes)</td></tr>
+          <tr><td>Potassium assimilable</td><td><code>k</code> / <code>k2o</code></td><td>mg/kg, ppm, ‰</td></tr>
+          <tr><td>Magnésium assimilable</td><td><code>mg</code> / <code>mgo</code></td><td>idem</td></tr>
+          <tr><td>Calcium assimilable</td><td><code>ca</code> / <code>cao</code></td><td>si distinct du Ca échangeable</td></tr>
+          <tr><td>Sodium</td><td><code>na</code> / <code>na2o</code></td><td>si présent hors CEC</td></tr>
+          <tr><td>Soufre / sulfates</td><td><code>s</code> / <code>so4</code></td><td>si dosé</td></tr>
+        </tbody>
+      </table>
+      <div class="card"><strong>Méthode &gt; chiffre nu.</strong> Pour P (et tout poste multi-méthodes), stocker la méthode à côté de la valeur. Sinon la comparaison entre analyses ou le conseil NPK reste trompeur.</div>
+
+      <h3>7 · Oligo-éléments</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Cuivre</td><td><code>cu</code></td><td>Souvent EDTA / DTPA selon labo</td></tr>
+          <tr><td>Zinc</td><td><code>zn</code></td><td>idem</td></tr>
+          <tr><td>Manganèse</td><td><code>mn</code></td><td>idem</td></tr>
+          <tr><td>Fer</td><td><code>fe</code></td><td>Parfois indice pouvoir chlorosant (IPC) en sol calcaire</td></tr>
+          <tr><td>Bore</td><td><code>b</code></td><td>Souvent soluble eau</td></tr>
+          <tr><td>Molybdène</td><td><code>mo</code></td><td>moins fréquent</td></tr>
+          <tr><td>Cobalt / autres</td><td><code>co</code>, …</td><td>si présents → même modèle générique</td></tr>
+          <tr><td>Indice pouvoir chlorosant</td><td><code>ipc</code></td><td>vigne / vergers, sol calcaire</td></tr>
+        </tbody>
+      </table>
+
+      <h3>8 · Salinité / physique complémentaire</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Unités</th></tr></thead>
+        <tbody>
+          <tr><td>Conductivité électrique (CE)</td><td><code>ec</code></td><td>dS/m, mS/cm, µS/cm</td></tr>
+          <tr><td>Résidu sec / sels totaux</td><td><code>soluble_salts</code></td><td>si présent</td></tr>
+          <tr><td>Densité apparente</td><td><code>bulk_density</code></td><td>g/cm³</td></tr>
+          <tr><td>Humidité à la réception</td><td><code>moisture</code></td><td>%</td></tr>
+          <tr><td>Réserve utile / eau utile (estim.)</td><td><code>available_water</code></td><td>si le bulletin la donne</td></tr>
+        </tbody>
+      </table>
+
+      <h3>9 · Éléments traces métalliques (ETM) / pollution</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Cadmium, plomb, nickel, chrome, mercure, arsenic, cuivre total, zinc total…</td><td><code>cd</code>, <code>pb</code>, <code>ni</code>, <code>cr</code>, <code>hg</code>, <code>as</code>, <code>cu_total</code>, <code>zn_total</code>…</td><td>Souvent mg/kg ; distincts des oligo « assimilables ». Stockés s’ils figurent ; pas d’alerte réglementaire automatisée v1.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>10 · Texte labo / interprétation</h3>
+      <table>
+        <thead><tr><th>Poste</th><th>Codes</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Classe par critère</td><td><code>*.class</code> (ex. <code>p2o5.class</code>)</td><td>« très faible » … « très élevé » — texte, pas recalculé</td></tr>
+          <tr><td>Commentaire / préconisation labo</td><td><code>lab_comment</code></td><td>Texte libre conservé ; ce n’est pas un plan de fertilisation Thomas</td></tr>
+          <tr><td>Autres postes non listés</td><td><code>extra.&lt;slug&gt;</code></td><td>Filet de sécurité : libellé brut + valeur + unité</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Modèle de données · <span class="status decided">décidé</span></h2>
+      <div class="schema">
+        <article class="entity">
+          <header><h3>Analyse de sol</h3><code>soil_analyses</code> (nom à figer en migration)</header>
+          <ul>
+            <li>Métadonnées : parcelle, dates, labo, référence, profondeur, document_id</li>
+            <li><code>results</code> : liste (ou JSON) de postes — <code>{ code, label?, value, unit, method?, class?, confidence? }</code></li>
+            <li>Pas de colonnes figées pour chaque oligo : le catalogue ci-dessus est le vocabulaire produit ; le stockage reste extensible</li>
+            <li><code>raw_text</code> / extrait OCR optionnel pour audit</li>
+            <li><code>is_active</code>, auteur, timestamps</li>
+          </ul>
+        </article>
+      </div>
+      <div class="card"><strong>S1 · Complet mais creux.</strong> Le produit connaît le catalogue large ; une fiche peut n’avoir que 3 postes. L’UI affiche d’abord les postes renseignés, puis un repli « Tous les postes possibles » pour saisie manuelle.</div>
+      <div class="card"><strong>S2 · Méthode &amp; unité.</strong> Toujours conserver l’unité du bulletin. Pour P (et assimilés multi-méthodes), conserver la méthode.</div>
+      <div class="card"><strong>S3 · Pas d’invention.</strong> Extraction : uniquement ce qui est lu / dit. Ambiguïté de lecture → champ marqué + confirmation.</div>
+
+      <h2>Carte chat / dashboard</h2>
+      <ol class="scenario">
+        <li>Message ou fichier → classification analyse de sol.</li>
+        <li>Carte : métadonnées + liste des postes extraits (groupés : texture, pH, MO, CEC, majeurs, oligos, autres).</li>
+        <li>L’agriculteur corrige, ajoute un poste manquant, ou retire une valeur mal lue.</li>
+        <li>Confirmation → enregistrement + document lié.</li>
+      </ol>
+      <p>Sur ordinateur, la fiche Sol montre le détail complet et l’historique des analyses de la parcelle. Téléphone : résumé des postes clés + lien ouvrir le PDF.</p>
+      <div class="card"><strong>Recherche &amp; filtres · décidé.</strong> Sur la fiche analyse (tél + ordi) : champ de recherche par libellé de poste (pH, CEC, Cu…) et chips de filtre par groupe (Tous, Texture, pH, MO, CEC, Majeurs, Oligos, Autres/ETM). Les groupes sans résultat sont masqués. Compteur « N postes visibles ».</div>
+
+      <h2>Besoins NPK · <span class="status decided">décidé</span></h2>
+      <p>Outil séparé de type règle de trois : pour une culture, à partir de besoins NPK issus d’une <strong>source fiable documentée</strong>, ordre de grandeur pour la surface. Ce n’est pas un plan de fertilisation complet, et ce n’est pas une réécriture automatique des commentaires du labo.</p>
+      <p>L’outil peut s’appuyer sur les postes P / K (et N si pertinent) <em>présents</em> sur l’analyse, en respectant la méthode. S’il manque un poste requis, Thomas le dit.</p>
+
+      <h2>Hors premier lot</h2>
+      <div class="card"><strong>Apports.</strong> On n’enregistre pas encore un apport d’engrais comme simulation d’effet sur le sol.</div>
+      <div class="card"><strong>Bilans.</strong> Pas de bilan azoté ni de bilan humique calculés par Thomas.</div>
+      <div class="card"><strong>Alertes ETM / seuils réglementaires.</strong> Stockage oui ; diagnostic réglementaire automatisé plus tard.</div>
+      <div class="card"><strong>Comparaison multi-années avancée / cartographie intra-parcelle.</strong> Plus tard.</div>
+
+      <h2>Écrans Figma</h2>
+      <p>Page « <strong>07 Sol</strong> » : chat multi-postes (carte groupée texture→oligos) · menu liste · fiche / ajout groupée · <em>Desktop · Fiche analyse complète</em> (coquille V3). Page « 10 Documents » : chat PDF analyse aligné. Lien : <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Thomas V3 — carte produit</a>.</p>
+
+      <h2>Lien observations &amp; documents</h2>
+      <p>La catégorie <code>problemes_sol</code> des observations reste pour un constat terrain (compactage, etc.). Elle ne remplace pas une analyse chiffrée. Pipeline fichier : <a href="documents.html">Documents</a> (D4). Schéma : <a href="donnees.html">Données</a>.</p>
+
+      <h2>Décidé (rappel)</h2>
+      <div class="card"><strong>S0.</strong> Analyse = enregistrement parcelle + postes fournis + document optionnel.</div>
+      <div class="card"><strong>S1–S3.</strong> Catalogue large · stockage creux · méthode/unité · pas d’invention.</div>
+      <div class="card"><strong>Besoins NPK.</strong> Règle de trois documentée, hors simulation d’apport.</div>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>

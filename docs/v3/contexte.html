@@ -1,0 +1,161 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contexte — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html" aria-current="page">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Contexte · <span class="status">brouillon</span></p>
+      <h1>Thomas agit avec les objets de l’exploitation.</h1>
+      <p class="lede">Avant une tâche, une observation ou un réglage, l’orchestrateur charge le contexte de la ferme. Il reconnaît un nom, un alias ou un mot-clé. Il propose une carte. L’écriture attend la confirmation.</p>
+      <p>La V2 charge déjà les parcelles, les sous-parcelles, le matériel, le personnel, les conversions, les clients, les fournisseurs et les produits. Elle ne charge pas encore les prix de vente, les plans de culture ni les durées de pousse. La V3 les ajoute, parce qu’une tâche et une observation s’y adossent.</p>
+
+      <h2>Parcelle</h2>
+      <p>Table <code>plots</code>. Le lieu principal de l’exploitation. Thomas ne crée pas une parcelle au milieu d’une déclaration de temps. Il la crée seulement quand le message est un réglage.</p>
+      <table>
+        <thead><tr><th>Colonne</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code>, <code>aliases</code>, <code>llm_keywords</code></td><td>Reconnaissance dans le chat. Le mot-clé par défaut est le nom en minuscules.</td></tr>
+          <tr><td><code>type</code></td><td>Serre plastique, serre verre, plein champ, tunnel, hydroponie, pépinière, autre. Défaut <code>autre</code> si le type dit n’est pas reconnu.</td></tr>
+          <tr><td><code>length</code>, <code>width</code>, <code>surface_area</code></td><td>Dimensions en mètres. La surface est le produit des deux quand elles sont dites, ou reprise de la géométrie carte si confirmée.</td></tr>
+          <tr><td><code>geometry</code> (GeoJSON / polygone)</td><td>Contour sur le plan / carte de la ferme (satellite). Optionnel. Source de vérité spatiale dès qu’il est renseigné — voir <a href="carte-ferme.html">Carte de la ferme</a>.</td></tr>
+          <tr><td><code>standard_bed_width</code>, <code>edge_safety_margin_cm</code></td><td>Préférences par défaut seulement. La disposition réelle (largeur, inter-planche, nombre) est celle du plan de culture — voir <a href="planification.html">Planification</a>.</td></tr>
+          <tr><td><code>is_active</code></td><td>Seules les parcelles actives entrent dans le contexte.</td></tr>
+        </tbody>
+      </table>
+      <div class="quote"><p>Ajoute une serre plastique, Serre 2, 8 mètres sur 30, avec 10 planches.</p></div>
+      <p>Thomas propose une carte de réglage. Après confirmation, il écrit <code>plots</code>. Les « 10 planches » sont une disposition initiale pratique, pas un plafond physique pour toujours. Une culture ultérieure pourra redécouper la même serre autrement (voir disposition flexible en planification).</p>
+      <div class="quote"><p>Ouvre le plan de la ferme et dessine la serre 2.</p></div>
+      <p>Thomas bascule le dashboard sur la carte satellite, centre la ferme, et propose le mode dessin. La forme fermée crée ou met à jour la parcelle (<code>geometry</code>, surface / dimensions proposées).</p>
+      <div class="quote"><p>Modifie l’adresse de la ferme et recentre la carte.</p></div>
+      <p>Réglage sur <code>farms</code> (nom, adresse, centre / emprise). Après confirmation, le fond satellite recentre. Modifier une forme déjà posée (sommets, déplacement) met à jour la géométrie sans recréer la parcelle. Cahier détaillé : <a href="carte-ferme.html">Carte de la ferme</a>.</p>
+
+      <h2>Sous-parcelle</h2>
+      <p>Table <code>surface_units</code>. Nom produit : sous-parcelle. Le type par défaut est <code>planche</code>. Elle a un nom, un code, un numéro d’ordre, des alias, des mots-clés, une longueur, une largeur et une surface.</p>
+      <p>Pour le temps et les observations, Thomas rattache les noms reconnus aux sous-parcelles du <strong>plan ouvert</strong> (disposition active). Un nom inconnu ne crée pas une géométrie au vol pendant une déclaration de temps : il demande, ou renvoie vers la planification si l’agriculteur veut changer le découpage.</p>
+
+      <h2>Matériel</h2>
+      <p>Table <code>materials</code>. Tracteur, outil de tracteur, outil manuel, matériel de vente, petit équipement, ou autre. Le chat le reconnaît par <code>name</code> et <code>llm_keywords</code>.</p>
+      <table>
+        <thead><tr><th>Colonne</th><th>Rôle</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code>, <code>category</code>, <code>custom_category</code></td><td>Identité. Le nom est obligatoire pour un ajout.</td></tr>
+          <tr><td><code>brand</code>, <code>model</code>, <code>supplier</code></td><td>Précisions facultatives.</td></tr>
+          <tr><td><code>cost</code>, <code>purchase_date</code>, <code>condition_notes</code></td><td>Achat et état. Ce n’est pas le prix de vente d’un légume.</td></tr>
+        </tbody>
+      </table>
+      <p>Une tâche range les matériels reconnus dans <code>tasks.material_ids</code>. « J’ai passé le tracteur » rattache le tracteur déjà connu. « Ajoute un tracteur John Deere » est un réglage : il écrit <code>materials</code>, pas une tâche.</p>
+
+      <h2>Personnel · <span class="status decided">décidé</span></h2>
+      <p>Table <code>farm_members</code>, reliée à <code>profiles</code> pour le prénom, le nom et le nom complet. Rôles : propriétaire, responsable, employé, conseiller, lecteur, stagiaire. Seuls les membres actifs sont proposés.</p>
+      <p>Sur une tâche, un prénom reconnu devient une ligne <code>task_members</code>, rôle <code>participant</code>. <code>tasks.number_of_people</code> compte l’effectif (décimal). Si le message dit « avec Marie et Paul » et que seul Marie est membre, Thomas rattache Marie et annonce que Paul n’est pas dans l’équipe.</p>
+      <p>Inviter quelqu’un se fait <strong>depuis le chat et depuis l’écran Personnel</strong>. « Ajoute Paul comme employé » propose une carte d’invitation. Après confirmation, Thomas génère un lien d’invitation à envoyer (WhatsApp ou autre canal choisi par l’agriculteur). Paul crée son compte en ouvrant le lien.</p>
+      <p>En plus des invitations nominatives, chaque ferme a un <strong>lien permanent</strong> (QR code imprimable) pour les stagiaires et les arrivées courtes. Scanner le QR ouvre la création de compte rattachée à la ferme. Le responsable peut révoquer ou régénérer ce lien.</p>
+
+      <h2>Prix des légumes</h2>
+      <p>Deux grilles, distinctes du prix dit au moment d’une vente.</p>
+      <table>
+        <thead><tr><th>Table</th><th>Ce qu’elle fixe</th></tr></thead>
+        <tbody>
+          <tr><td><code>prix_vente</code></td><td>Prix d’une culture (<code>cultures</code>), par canal : vente directe, restauration, marché, panier, grossiste, magasin bio, coopérative, autre. Unité et part des ventes.</td></tr>
+          <tr><td><code>product_sale_prices</code></td><td>Prix d’un produit vendu (<code>products</code>), par canal, avec une fenêtre de semaines facultative.</td></tr>
+          <tr><td><code>user_conversion_units</code></td><td>Liste des équivalences. Elle convertit l’unité dite en unité conventionnelle. Elle ne fixe pas le prix. Le détail est dans Unités.</td></tr>
+        </tbody>
+      </table>
+      <p>Le chat V2 n’a pas d’outil pour modifier la grille. Une phrase « les tomates sont à 3,50 € le kilo en vente directe » est un réglage de <code>prix_vente</code>. Thomas propose la carte, puis écrit la grille après confirmation. Une phrase « j’ai vendu 2 caisses de tomates à 20 € » est une vente : elle écrit la facture avec le prix dit, et elle ne change pas la grille. Si la caisse de tomates est dans la liste, la facture montre aussi les kilogrammes.</p>
+
+      <h2>Unités</h2>
+      <p>L’unité retenue est celle de l’agriculteur. Une caisse, une grande caisse, un cageot, une brouette, un sac, un épandeur, une cuve, un pulvé. La tâche, la vente ou l’intrant garde cette quantité dans <code>quantity_value</code> et <code>quantity_unit</code>. À côté, la liste <code>user_conversion_units</code> donne l’équivalent conventionnel : kilogramme, litre, ou pièce. Quand la ligne existe au moment de confirmer, Thomas remplit aussi <code>quantity_converted_value</code> et <code>quantity_converted_unit</code>. La liste reste la référence. Une quantité déjà enregistrée s’affiche convertie dès que la ligne existe.</p>
+      <p>Chaque ligne est partagée par la ferme. Elle dit : un contenant, ce qu’il contient, une valeur, une unité. La colonne <code>crop_name</code> porte ce contenu, culture ou intrant. <code>container_name</code> est le nom dit, pour distinguer une caisse d’une grande caisse. <code>container_type</code> range la famille quand elle est reconnue : caisse, panier, sac, seau, bidon, brouette, pulvérisateur, épandeur, ou autre. Une cuve ou un cageot gardent leur nom, avec le type autre.</p>
+      <table>
+        <thead>
+          <tr><th>Ce qui est dit</th><th>Ligne</th><th>Unité conventionnelle</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Une caisse de laitue</td><td>1 caisse · laitue</td><td>6 laitues</td></tr>
+          <tr><td>Une grande caisse de tomate</td><td>1 grande caisse · tomate</td><td>10 kg</td></tr>
+          <tr><td>Un cageot</td><td>1 cageot · culture dite</td><td>la valeur dite, en kg ou en pièces</td></tr>
+          <tr><td>Une brouette de fumier</td><td>1 brouette · fumier</td><td>kg</td></tr>
+          <tr><td>Un sac</td><td>1 sac · contenu dit</td><td>kg</td></tr>
+          <tr><td>Un épandeur</td><td>1 épandeur · intrant dit</td><td>kg</td></tr>
+          <tr><td>Une cuve, un pulvé</td><td>1 cuve ou 1 pulvé · bouillie dite</td><td>litres</td></tr>
+        </tbody>
+      </table>
+      <p>Thomas cherche la ligne avant d’enregistrer. Si elle existe, la carte montre les deux quantités : 3 caisses de laitue, soit 18 laitues. Si elle n’existe pas, il ne choisit pas le nombre. La carte de l’action reste confirmable dans l’unité dite, et une seconde carte propose la conversion. La question est sous cette carte : combien dans une brouette de fumier, en kilogrammes. L’agriculteur clique une valeur ou l’écrit. Confirmer la carte écrit la ligne. Le prix, lui, reste sur sa grille.</p>
+      <p>La liste s’ouvre depuis le panneau, entrée Conversions, dans Ressources. On y relit et l’on corrige les lignes de la ferme.</p>
+
+      <h2>Planification</h2>
+      <p>Le calendrier, la pousse, les itinéraires, les variétés, les tâches projetées, les débouchés de la semaine et la rotation viennent de Basil. La définition est dans <a href="planification.html">Planification</a>.</p>
+      <p>Pour une tâche ou une observation, Thomas lit le plan de l’année sur la parcelle : culture, variété, itinéraire, semaines, et semis ou plantation déjà faits. La durée de pousse retenue est celle du plan, sinon de la variété, sinon de l’itinéraire, sinon du catalogue <code>crops</code>.</p>
+
+      <h2>Ce que chaque action en fait</h2>
+      <table>
+        <thead>
+          <tr><th>Action</th><th>Contexte lu</th><th>Écriture après confirmation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Tâche faite</td><td>Parcelle, sous-parcelle, plan ouvert, pousse, personnel, matériel, conversion si une quantité est dite</td><td><code>tasks</code> en <code>terminee</code>, <code>task_members</code>, et le plan si l’action sème, plante ou termine la culture</td></tr>
+          <tr><td>Tâche prévue</td><td>Les mêmes, plus la date dite</td><td><code>tasks</code> en <code>en_attente</code>. Le plan de culture ne passe pas à « fait ».</td></tr>
+          <tr><td>Observation</td><td>Parcelle, sous-parcelle, plan ouvert pour la culture en place</td><td><code>observations</code>. Le plan et la pousse ne changent pas.</td></tr>
+          <tr><td>Ajouter une parcelle</td><td>Les parcelles déjà nommées, pour éviter un doublon</td><td><code>plots</code>, et <code>surface_units</code> si le nombre de sous-parcelles est dit</td></tr>
+          <tr><td>Ajouter un matériel</td><td>Les matériels déjà nommés</td><td><code>materials</code></td></tr>
+          <tr><td>Régler un prix</td><td><code>prix_vente</code>, la culture, le canal</td><td>La grille de prix. Une vente, elle, écrit la facture avec le prix du message.</td></tr>
+          <tr><td>Régler une conversion</td><td><code>user_conversion_units</code></td><td>Une ligne contenant, contenu, valeur, unité. Proposée quand l’unité dite n’a pas encore de ligne. La valeur vient de l’agriculteur.</td></tr>
+        </tbody>
+      </table>
+      <p>Une information manquante reste sous la carte de l’action concernée. Une tâche peut être confirmée pendant qu’un réglage, dans le même message, attend encore un nom. L’orchestrateur ne fond pas les deux dans une seule ligne.</p>
+      <div class="quote"><p>J’ai désherbé les tomates de la serre 1 pendant une heure avec Marie, au tracteur. Ajoute aussi une planche 4 dans cette serre.</p></div>
+      <p>Deux cartes. La première est une tâche : désherbage, 1 h, tomate, serre 1, Marie si elle est membre, tracteur s’il est connu, plan de tomates vérifié. La seconde est un réglage : sous-parcelle Planche 4 sur la serre 1. Chacune se confirme seule.</p>
+      <p>Le schéma est sur la page « 05 Contexte » du fichier Figma. Chaque action a son écran sur la page « 06 Écrans ».</p>
+
+      <h2>Chargement du contexte · <span class="status decided">décidé</span></h2>
+      <p>On ne charge pas tout le catalogue à chaque message. Le parcours retenu est un <strong>index mince, puis hydratation</strong> :</p>
+      <ol class="scenario">
+        <li>Le code charge un index léger : noms, alias, mots-clés des parcelles, cultures ouvertes, matériel, membres, clients — pas les géométries, pas toutes les sous-parcelles, pas tout l’historique.</li>
+        <li>Jev (ou le match) rattache le message à ces candidats.</li>
+        <li>Seulement pour les identifiants retenus, le code charge le détail : sous-parcelles, plan ouvert, prix utiles, conversions citées.</li>
+      </ol>
+      <p>Identifier d’abord les mots du message puis chercher dans le catalogue échoue quand le lieu n’est pas dit (« j’ai désherbé les tomates ») ou quand le surnom diffère. Charger tout le catalogue puis matcher est trop lourd. L’index mince garde la qualité du match et la vitesse.</p>
+
+      <h2>Clients · <span class="status decided">décidé</span></h2>
+      <p>Régler un client depuis le chat est possible. En pratique, on le fait surtout dans le registre dédié, après coup. Le chat reste utile pour une vente qui cite un client inconnu : Thomas peut proposer de l’ajouter, sans l’imposer.</p>
+
+      <h2>Nom ambigu · <span class="status decided">décidé</span></h2>
+      <p>Si plusieurs objets matchent, Thomas ne choisit pas en silence. Il demande une précision sous la carte, signale l’ambiguïté, et propose soit de préciser lequel, soit de renommer pour lever le conflit.</p>
+
+      <h2>Décidé</h2>
+      <div class="card"><strong>C1.</strong> Index mince → match → hydrater sous-parcelles et plans des objets retenus. Pas tout le catalogue.</div>
+      <div class="card"><strong>C2.</strong> Invitation chat + écran Personnel, lien à envoyer (WhatsApp etc.), plus QR / lien permanent pour stagiaires.</div>
+      <div class="card"><strong>C3.</strong> Client réglable dans le chat ; usage principal = registre après coup.</div>
+      <div class="card"><strong>C4.</strong> Ambiguïté → demander, proposer précision ou renommage.</div>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>
