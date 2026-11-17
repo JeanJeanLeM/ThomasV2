@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Navigation &amp; chrome — Thomas V3</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="layout">
+        <nav>
+      <p class="mark">Thomas V3</p>
+      <p class="meta">Carte produit · brouillon</p>
+      <a href="index.html">Sommaire</a>
+      <a href="fondation.html">Fondation</a>
+      <a href="temps.html">Temps</a>
+      <a href="observations.html">Observations</a>
+      <a href="contexte.html">Contexte</a>
+      <a href="carte-ferme.html">Carte ferme</a>
+      <a href="planification.html">Planification</a>
+      <a href="itineraires.html">Itinéraires</a>
+      <a href="traitements.html">Traitements</a>
+      <a href="commercial.html">Commercial</a>
+      <a href="sol.html">Sol</a>
+      <a href="documents.html">Documents</a>
+      <a href="compte.html">Compte</a>
+      <a href="navigation.html" aria-current="page">Navigation</a>
+      <a href="equivalences.html">Équivalences</a>
+      <a href="erreurs.html">Erreurs</a>
+      <a href="donnees.html">Données</a>
+      <a href="tests.html">Tests</a>
+      <a href="https://www.figma.com/design/X0vC8tDxNsXVq3aYnSo6Et" target="_blank" rel="noopener">Figma</a>
+    </nav>
+    <main>
+      <p class="kicker">Navigation &amp; chrome · <span class="status decided">décidé</span></p>
+      <h1>Inventaire SSOT : coquille, écrans, zones, contrôles, ouvertures.</h1>
+      <p class="lede">Cette page est la source de vérité pour le chrome et les surfaces UI retenues dans le CDC. Elle ne remplace pas les pages domaine (règles métier) ni <a href="equivalences.html">Équivalences</a> (où tél vs ordi). Elle dit <em>quoi</em> est à l’écran, <em>comment</em> on y arrive, et <em>ce qui ouvre quoi</em>.</p>
+
+      <div class="card"><strong>Règle de lecture.</strong> Statut <span class="status decided">décidé</span> = déjà tranché dans le CDC. « À préciser » seulement si le produit laisse vraiment un trou. Matrice tél/ordi = <a href="equivalences.html">équivalences</a> — pas de Gantt mobile, pas de dessin carte mobile, pas de fiche ITK éditable mobile.</div>
+      <div class="card"><strong>Règle d’ouverture.</strong> Chat = écriture principale (carte confirmable). Dashboard = approfondir / corriger / cocher. Bascule barre = même app, pas une autre. Erreurs nommées → <a href="erreurs.html">erreurs.html</a>.</div>
+
+      <h2>Sommaire inventaire</h2>
+      <ol class="scenario">
+        <li><a href="#coquille">Coquille partagée</a> (barre, nav, chat, bulles, vue personne)</li>
+        <li><a href="#chat">Surface Chat</a></li>
+        <li><a href="#auth">Auth &amp; états compte</a></li>
+        <li><a href="#ferme">Ferme · carte &amp; parcelles</a></li>
+        <li><a href="#production">Production · planif, calendrier, observations, traitements</a></li>
+        <li><a href="#itk">Itinéraires &amp; coûts</a></li>
+        <li><a href="#ressources">Ressources · matériel, personnel, prix, conversions, documents, sol</a></li>
+        <li><a href="#commercial">Commercial · ventes</a></li>
+        <li><a href="#compte-reg">Compte · profil &amp; multi-fermes</a></li>
+        <li><a href="#ouvertures">Matrice « ce qui ouvre quoi »</a></li>
+        <li><a href="#ambigu">Ouvert / à préciser</a></li>
+      </ol>
+
+      <!-- ========== COQUILLE ========== -->
+      <h2 id="coquille">Coquille partagée · <span class="status decided">décidé</span></h2>
+      <p>Une seule coquille téléphone + ordinateur. Décidé A : tous les dashboards ordi portent cette coquille (pas de chrome Basile / Desktop parallèle).</p>
+
+      <h3>Zones globales</h3>
+      <table>
+        <thead><tr><th>Zone</th><th>Rôle</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Barre d’outils</strong></td>
+            <td>Bascule Chat ↔ Dashboard · marque Thomas · ouvrir/fermer nav · sélecteur ferme · sélecteur vue (soi / ferme / membre)</td>
+            <td>Haut, compacte</td>
+            <td>Haut, permanente</td>
+          </tr>
+          <tr>
+            <td><strong>Nav collapsible</strong></td>
+            <td>Registres groupés. Pas d’historique de conversations dense.</td>
+            <td>Tiroir ~50 % ; overlay assombrit le contenu</td>
+            <td>Colonne gauche repliable (icônes / texte)</td>
+          </tr>
+          <tr>
+            <td><strong>Zone contenu</strong></td>
+            <td>Soit fil de chat, soit dashboard du registre ouvert</td>
+            <td>Plein écran sous la barre</td>
+            <td>Zone principale (chat et/ou dashboard selon bascule)</td>
+          </tr>
+          <tr>
+            <td><strong>Profil (entrée)</strong></td>
+            <td>Bas de nav → dashboard Profil</td>
+            <td>✓</td>
+            <td>✓</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Contrôles barre — nommés</h3>
+      <table>
+        <thead><tr><th>Contrôle</th><th>Action</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Bascule Chat</strong></td><td>Mode contenu = fil</td><td>Surface <a href="#chat">Chat</a></td></tr>
+          <tr><td><strong>Bascule Dashboard</strong></td><td>Mode contenu = dernier registre (ou invite à en choisir un)</td><td>Dashboard du registre courant</td></tr>
+          <tr><td><strong>Menu nav</strong></td><td>Ouvre / ferme la nav</td><td>Tiroir (tél) ou expand colonne (ordi)</td></tr>
+          <tr><td><strong>Sélecteur ferme</strong></td><td>Bascule multi-fermes</td><td>Liste fermes ; recharge contexte + carte</td></tr>
+          <tr><td><strong>Sélecteur vue</strong></td><td>Soi / toute la ferme / une personne</td><td>Menu vues (droits : voir Fondation Visibilité)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Nav — arborescence · <span class="status decided">décidé</span></h3>
+      <table>
+        <thead><tr><th>Catégorie</th><th>Entrée</th><th>Ouvre (dashboard)</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="2">Ferme</td><td>Plan de la ferme</td><td>Carte satellite + panneau sélection</td></tr>
+          <tr><td>Parcelles</td><td>Liste → fiche parcelle</td></tr>
+          <tr><td rowspan="4">Production</td><td>Planification</td><td>Tél : liste plans · Ordi : Gantt / 4 vues occupation</td></tr>
+          <tr><td>Calendrier</td><td>Tél : calendrier semaine · Ordi : calendrier tâches unifié (+ lien planif)</td></tr>
+          <tr><td>Observations</td><td>Liste → fiche constat</td></tr>
+          <tr><td>Traitements</td><td>Liste traitements (+ accès catalogue produits ferme)</td></tr>
+          <tr><td rowspan="5">Ressources</td><td>Matériel</td><td>Liste → fiche</td></tr>
+          <tr><td>Personnel</td><td>Liste membres → invitation / rôles</td></tr>
+          <tr><td>Prix</td><td>Grille prix → édition</td></tr>
+          <tr><td>Conversions</td><td>Liste unités → édition</td></tr>
+          <tr><td>Documents</td><td>Liste fichiers → fiche / aperçu</td></tr>
+          <tr><td>Commercial</td><td>Ventes</td><td>Liste factures → fiche</td></tr>
+          <tr><td>Compte</td><td>Profil</td><td>Personne, rôle, ferme, vue</td></tr>
+        </tbody>
+      </table>
+      <p>Itinéraires / coûts et Sol n’ont pas forcément une entrée nav top-level dédiée au premier lot : lecture via chat + fiches ordi accessibles depuis Planification / Documents / Parcelles (voir sections). <span class="status">à préciser</span> : libellé exact et place d’une entrée « Cultures / ITK » ou « Analyses sol » si on veut un registre visible — aujourd’hui le CDC les expose surtout via chat + fiches liées.</p>
+
+      <h3>États coquille</h3>
+      <table>
+        <thead><tr><th>État</th><th>UI</th><th>Événement lié</th></tr></thead>
+        <tbody>
+          <tr><td>Nav fermée</td><td>Contenu plein ; bouton menu</td><td>—</td></tr>
+          <tr><td>Nav ouverte (tél)</td><td>Tiroir 50 % ; fond assombri ; tap fond = fermer</td><td>—</td></tr>
+          <tr><td>Hors ligne</td><td>Bandeau discret</td><td><code>NET_OFFLINE</code></td></tr>
+          <tr><td>Session expirée</td><td>Invite reconnexion ; brouillon local gardé</td><td><code>AUTH_SESSION_EXPIRED</code></td></tr>
+          <tr><td>Sans ferme</td><td>Contenu = écran sans ferme (pas d’écriture métier)</td><td>—</td></tr>
+          <tr><td>Permission refusée</td><td>Message court, pas d’écriture</td><td><code>PERM_DENIED</code></td></tr>
+        </tbody>
+      </table>
+
+      <!-- ========== CHAT ========== -->
+      <h2 id="chat">Surface Chat · <span class="status decided">décidé</span></h2>
+      <p>Chemin principal d’écriture. Même pattern tél et ordi.</p>
+      <table>
+        <thead><tr><th>Zone</th><th>Contenu</th><th>Contrôles</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>Fil</strong></td>
+            <td>Messages agriculteur · réponses Thomas · cartes · bulles d’activité</td>
+            <td>Scroll ; tap carte → détail / actions</td>
+          </tr>
+          <tr>
+            <td><strong>Carte confirmable</strong></td>
+            <td>Résumé intention (temps, obs, vente, plan…) ; champs ; statut</td>
+            <td>Confirmer · Modifier · Ignorer · Ouvrir détail · Supprimer (si déjà enregistrée)</td>
+          </tr>
+          <tr>
+            <td><strong>Demandes sous carte</strong></td>
+            <td>Question de précision liée à <em>cette</em> carte</td>
+            <td>Réponse texte / choix ; autres cartes restent confirmables</td>
+          </tr>
+          <tr>
+            <td><strong>Bulles d’activité</strong></td>
+            <td>« Recherche… », « Consulte ePhy… » — in-chat, discret</td>
+            <td>État en cours → fait / échec (<code>AGT_TOOL_FAIL</code>)</td>
+          </tr>
+          <tr>
+            <td><strong>Composer</strong></td>
+            <td>Champ texte bas d’écran</td>
+            <td>Envoyer · Trombone / caméra / fichiers · dictée (si dispo)</td>
+          </tr>
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>État carte</th><th>Comportement</th></tr></thead>
+        <tbody>
+          <tr><td>Brouillon incomplet</td><td>Demande sous carte ; pas d’écriture</td></tr>
+          <tr><td>Complète (auto)</td><td>Enregistrement immédiat ; badge « enregistrée » (Temps)</td></tr>
+          <tr><td>À confirmer</td><td>Bouton Confirmer obligatoire</td></tr>
+          <tr><td>Enregistrée</td><td>Lien « Voir au calendrier / registre » ; action Supprimer</td></tr>
+          <tr><td>En attente réseau</td><td>Bulle discrète ; file locale (<code>NET_OFFLINE</code>)</td></tr>
+          <tr><td>Échec validation</td><td>Message + correction (<code>VAL_*</code>)</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Gestes tél :</strong> caméra native, galerie, fichiers, GPS joint prioritaire (observations). <strong>Gestes ordi :</strong> drag &amp; drop fichiers dans le composer / chat.</p>
+
+      <!-- ========== AUTH ========== -->
+      <h2 id="auth">Auth &amp; états hors coquille · <span class="status decided">décidé</span></h2>
+      <p>Surfaces avant ou hors barre Chat/Dashboard pleine (détail métier : <a href="compte.html">Compte</a>).</p>
+      <table>
+        <thead><tr><th>Surface</th><th>Zones / contrôles</th><th>États</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Connexion</td>
+            <td>E-mail, MDP, liens Inscription / Récupération</td>
+            <td>Erreur credentials · <code>AUTH_*</code></td>
+            <td>Coquille (si ferme) ou Sans ferme</td>
+          </tr>
+          <tr>
+            <td>Inscription</td>
+            <td>Prénom, nom, e-mail, MDP</td>
+            <td>Validation champs</td>
+            <td>Création profil</td>
+          </tr>
+          <tr>
+            <td>Création profil</td>
+            <td>Compléments (tél. optionnel)</td>
+            <td>—</td>
+            <td>Sans ferme ou invitation en cours</td>
+          </tr>
+          <tr>
+            <td>Récupération / Nouveau MDP</td>
+            <td>E-mail · nouveau MDP ×2</td>
+            <td>Lien expiré</td>
+            <td>Connexion</td>
+          </tr>
+          <tr>
+            <td>Sans ferme</td>
+            <td>Créer ferme · coller lien · scanner QR</td>
+            <td>Compte OK, 0 appartenance</td>
+            <td>Création ferme / Rejoindre / QR</td>
+          </tr>
+          <tr>
+            <td>Rejoindre via lien / QR</td>
+            <td>Accepter rôle / Refuser</td>
+            <td><code>AUTH_INVITE_INVALID</code></td>
+            <td>Coquille ferme</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ========== FERME ========== -->
+      <h2 id="ferme">Ferme · carte &amp; parcelles · <span class="status decided">décidé</span></h2>
+
+      <h3>Plan de la ferme (carte)</h3>
+      <table>
+        <thead><tr><th></th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr><td>Zones</td><td>Carte lecture · fiche sélection pleine page</td><td>Carte large · barre outils carte · panneau fiche droite/bas</td></tr>
+          <tr><td>Contrôles carte</td><td>Pan, pinch zoom, tap forme, Recentrer</td><td>+ outils dessin (polygone, rectangle, cercle), snap, Terminer, Annuler point</td></tr>
+          <tr><td>États</td><td>Consultation ; tentative dessin → message « Continuer sur ordinateur » (<code>MAP_EDIT_MOBILE_LIMIT</code>)</td><td>Mode sélection / dessin / édition ; géométrie invalide (<code>MAP_*</code>) ; tuiles KO</td></tr>
+          <tr><td>Ouvre</td><td>Fiche parcelle · Compte ferme (texte)</td><td>Panneau nouvelle parcelle · Modifier ferme · Lien liste Parcelles</td></tr>
+        </tbody>
+      </table>
+      <p>Entrées : nav Ferme → Plan · chat « Ouvre le plan » · Parcelles « Voir sur la carte » · « Dessiner sur la carte » (ordi).</p>
+
+      <h3>Parcelles (registre)</h3>
+      <table>
+        <thead><tr><th>Zone</th><th>Contrôles</th><th>États</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Liste</td>
+            <td>Recherche · filtre type / actif · + · Voir sur la carte</td>
+            <td>Vide · chargement · erreur liste</td>
+            <td>Fiche · Carte (filtrée)</td>
+          </tr>
+          <tr>
+            <td>Fiche</td>
+            <td>Nom*, type, dimensions, géométrie, sous-parcelles, désactiver</td>
+            <td>Sans géométrie · inactive</td>
+            <td>Carte dessin (ordi) · chat prérempli</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ========== PRODUCTION ========== -->
+      <h2 id="production">Production · <span class="status decided">décidé</span></h2>
+
+      <h3>Planification</h3>
+      <table>
+        <thead><tr><th>Surface</th><th>Tél</th><th>Ordi</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Chat planif</td>
+            <td>✓ carte plan / disposition / jalon</td>
+            <td>✓</td>
+            <td>Confirmation → <code>plans</code> ; option gestes projetés</td>
+          </tr>
+          <tr>
+            <td>Liste plans</td>
+            <td>✓ année, filtres, détail simple</td>
+            <td>✓ (+ densités)</td>
+            <td>Détail · « Voir les gestes » → Calendrier · chat</td>
+          </tr>
+          <tr>
+            <td>Calendrier semaine (gestes)</td>
+            <td>✓ cases prévues / faites</td>
+            <td>✓</td>
+            <td>Cocher → tâche faite ; ouvrir plan</td>
+          </tr>
+          <tr>
+            <td>Gantt / 4 vues occupation</td>
+            <td>— (P5)</td>
+            <td>✓ drag phases, placement</td>
+            <td>Modal plan · bandeau Calendrier</td>
+          </tr>
+          <tr>
+            <td>Modal plan multi-onglets</td>
+            <td>—</td>
+            <td>✓ Détails → Espacement → Parcelle → Récoltes → Tâches</td>
+            <td>Écriture plan ; Précédent / Annuler / Suivant</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>États planif ordi : culture non placée (panneau drag) · conflit placement (<code>VAL_*</code>) · toast save drag · vide année. Pas de confirmation modale pour un simple resize Gantt.</p>
+
+      <h3>Calendrier (temps / tâches)</h3>
+      <table>
+        <thead><tr><th>Zone</th><th>Contrôles</th><th>Tél</th><th>Ordi</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Liste / tableau interventions</td>
+            <td>Filtres personne, période, parcelle, sous-parcelle, culture, activité · ouvrir ligne</td>
+            <td>Remplace le chat (plein contenu)</td>
+            <td>Colonne principale ; édition masse</td>
+          </tr>
+          <tr>
+            <td>Ligne / fiche tâche</td>
+            <td>Action, date, durée, lieu, culture, statut, note, précision, lien plan</td>
+            <td>Lecture + édition simple</td>
+            <td>Correction tableau confortable</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Ouvertures : nav Calendrier · carte chat « Voir au calendrier » · depuis plan « voir les gestes » · depuis tâche « ouvrir le plan ».</p>
+
+      <h3>Observations</h3>
+      <table>
+        <thead><tr><th>Surface</th><th>Zones / contrôles</th><th>États</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Chat constat</td>
+            <td>Carte · photo · GPS · demande précision</td>
+            <td>Sans photo · ambiguïté lieu</td>
+            <td>Registre · proposition traitement</td>
+          </tr>
+          <tr>
+            <td>Liste registre</td>
+            <td>Filtres gravité / culture / période · +</td>
+            <td>Vide · actifs seulement</td>
+            <td>Fiche · chat</td>
+          </tr>
+          <tr>
+            <td>Fiche</td>
+            <td>Nature, culture, lieu, gravité, date dite, note, PJ, liens matériel/personne</td>
+            <td>—</td>
+            <td>Documents liés · chat « traiter »</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Traitements</h3>
+      <table>
+        <thead><tr><th>Surface</th><th>Tél</th><th>Ordi</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr><td>Chat traitement</td><td>✓ carte dose / produit</td><td>✓</td><td>Catalogue ferme d’abord, puis ePhy</td></tr>
+          <tr><td>Registre traitements</td><td>✓ liste saison</td><td>✓ liste + fiches</td><td>Fiche traitement · produit</td></tr>
+          <tr><td>Catalogue produits ferme</td><td>✓ liste</td><td>✓ liste + fiche</td><td>Fiche produit (AMM, conversions dose)</td></tr>
+          <tr><td>Exploration ePhy</td><td>✓ via chat</td><td>✓ chat (+ listes filtrables)</td><td>Peut proposer carte traitement (pas auto)</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ========== ITK ========== -->
+      <h2 id="itk">Itinéraires &amp; coûts · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Surface</th><th>Tél</th><th>Ordi</th><th>Contrôles / ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Lecture ITK / coût (chat)</td>
+            <td>✓ prioritaire</td>
+            <td>✓</td>
+            <td>Bulles activité lecture · ouverture dashboard filtrée</td>
+          </tr>
+          <tr>
+            <td>Galerie + fiche culture / ITK</td>
+            <td>—</td>
+            <td>✓ édition</td>
+            <td>Variétés, phases, charges types · lien plan</td>
+          </tr>
+          <tr>
+            <td>Dashboard coûts culture</td>
+            <td>lecture courte (chat)</td>
+            <td>✓ complet</td>
+            <td>Filtres culture / série / campagne · postes temps + hors temps</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ========== RESSOURCES ========== -->
+      <h2 id="ressources">Ressources &amp; Sol · <span class="status decided">décidé</span></h2>
+      <p>Pattern commun registres (Fondation) : <strong>vue d’ensemble</strong> (compte, cherche, filtre, liste) → <strong>fiche</strong> (formulaire rempli) · bouton <strong>+</strong> (formulaire vide) · chat peut ouvrir le formulaire prérempli.</p>
+
+      <h3>Matériel · Personnel · Prix · Conversions</h3>
+      <table>
+        <thead><tr><th>Registre</th><th>Liste</th><th>Fiche / +</th><th>Notes surface</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Matériel</td>
+            <td>Par catégorie</td>
+            <td>Nom, catégorie</td>
+            <td>Tél+ordi ; chat peut lier à tâche/obs</td>
+          </tr>
+          <tr>
+            <td>Personnel</td>
+            <td>Actifs par rôle · invitations</td>
+            <td>Invitation · QR permanent stagiaires · rôles</td>
+            <td>Suit la vue personne ; QR scan natif tél</td>
+          </tr>
+          <tr>
+            <td>Prix</td>
+            <td>Cultures × canaux</td>
+            <td>Culture, canal, prix, unité</td>
+            <td>Tél liste ; ordi édition confortable ; import fichier → Documents</td>
+          </tr>
+          <tr>
+            <td>Conversions</td>
+            <td>Lignes + à préciser</td>
+            <td>Contenant, contenu, valeur, unité</td>
+            <td>Utilisées par chat quantité</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Documents</h3>
+      <table>
+        <thead><tr><th>Surface</th><th>Zones</th><th>États</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Chat + PJ</td>
+            <td>Trombone · carte classification · extraction</td>
+            <td>Facile / complexe · quarantaine · <code>DOC_*</code></td>
+            <td>Objets métier (obs, sol, facture, prix) + registre</td>
+          </tr>
+          <tr>
+            <td>Liste Documents</td>
+            <td>Filtres catégorie / période / mime · recherche · drag (ordi)</td>
+            <td>Vide · upload fail</td>
+            <td>Fiche aperçu</td>
+          </tr>
+          <tr>
+            <td>Fiche document</td>
+            <td>Aperçu PDF/image · métadonnées · lié à · renommer · soft delete</td>
+            <td>—</td>
+            <td>Objet lié (analyse, facture…)</td>
+          </tr>
+          <tr>
+            <td>Rapport import complexe</td>
+            <td>Lignes OK / partielles / KO · sélection lot</td>
+            <td><code>DOC_IMPORT_COMPLEX_FAIL</code></td>
+            <td>Cartes / écritures confirmées (préféré ordi)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Sol (analyses)</h3>
+      <table>
+        <thead><tr><th>Surface</th><th>Tél</th><th>Ordi</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr><td>Chat analyse (photo/PDF/saisie)</td><td>✓ prioritaire</td><td>✓ + drag PDF</td><td>Carte multi-postes → Sol + Documents</td></tr>
+          <tr><td>Liste analyses</td><td>✓ lisible</td><td>✓</td><td>Fiche</td></tr>
+          <tr><td>Fiche analyse</td><td>✓ lecture</td><td>✓ édition dense postes</td><td>Document lié · besoin NPK (outil chat)</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ========== COMMERCIAL ========== -->
+      <h2 id="commercial">Commercial · ventes · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Surface</th><th>Contrôles</th><th>Tél / Ordi</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Chat vente</td>
+            <td>Carte client, qté, unité dite, prix dit</td>
+            <td>✓ / ✓</td>
+            <td>Facture ; n’écrit pas la grille prix</td>
+          </tr>
+          <tr>
+            <td>Liste Ventes</td>
+            <td>Filtres · totaux · +</td>
+            <td>✓ / ✓</td>
+            <td>Fiche facture · Documents</td>
+          </tr>
+          <tr>
+            <td>Clients</td>
+            <td>Chat ou registre (Contexte C3)</td>
+            <td>✓ / ✓</td>
+            <td>Fiche client</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Paniers / allocations : hors premier lot — pas d’écran retenu ici.</p>
+
+      <!-- ========== COMPTE ========== -->
+      <h2 id="compte-reg">Compte · profil &amp; multi-fermes · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Surface</th><th>Zones / contrôles</th><th>Ouvre</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Profil</td>
+            <td>Personne, rôle, ferme active, bascule vue</td>
+            <td>Personnel (inviter) · Modifier ferme · Changer de ferme</td>
+          </tr>
+          <tr>
+            <td>Modifier la ferme</td>
+            <td>Nom, adresse, CP, centre / emprise</td>
+            <td>Carte (recentrage proposé) · chat réglage</td>
+          </tr>
+          <tr>
+            <td>Changer de ferme</td>
+            <td>Liste appartenances</td>
+            <td>Recharge coquille + contextes</td>
+          </tr>
+          <tr>
+            <td>Gestion membres</td>
+            <td>Liste, rôles, invitations, QR</td>
+            <td>Invitation chat · régénérer QR</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ========== OUVERTURES ========== -->
+      <h2 id="ouvertures">Matrice « ce qui ouvre quoi » · <span class="status decided">décidé</span></h2>
+      <table>
+        <thead><tr><th>Depuis</th><th>Geste / contrôle</th><th>Vers</th></tr></thead>
+        <tbody>
+          <tr><td>Barre</td><td>Chat / Dashboard</td><td>Fil ↔ dernier registre</td></tr>
+          <tr><td>Barre / nav</td><td>Menu · entrée registre</td><td>Dashboard correspondant (ferme bascule en Dashboard)</td></tr>
+          <tr><td>Nav fermée (tél)</td><td>Swipe bord gauche / bouton</td><td>Tiroir nav</td></tr>
+          <tr><td>Tiroir ouvert</td><td>Tap fond assombri</td><td>Ferme nav</td></tr>
+          <tr><td>Chat carte enregistrée</td><td>« Voir au calendrier »</td><td>Calendrier filtré</td></tr>
+          <tr><td>Chat</td><td>« Ouvre le plan / la carte / Documents… »</td><td>Dashboard cible (+ mode éventuel)</td></tr>
+          <tr><td>Liste Parcelles</td><td>Voir / Dessiner sur la carte</td><td>Plan de la ferme</td></tr>
+          <tr><td>Carte (ordi)</td><td>Fin de tracé</td><td>Panneau Nouvelle parcelle / Lier</td></tr>
+          <tr><td>Plan (ligne)</td><td>Voir les gestes</td><td>Calendrier</td></tr>
+          <tr><td>Tâche</td><td>Ouvrir le plan</td><td>Planification / modal plan</td></tr>
+          <tr><td>Observation</td><td>Proposer traitement</td><td>Chat carte traitement (catalogue → ePhy)</td></tr>
+          <tr><td>Document</td><td>Ouvrir objet lié</td><td>Fiche Sol / Vente / Observation…</td></tr>
+          <tr><td>Import complexe</td><td>Rapport → confirmer lot</td><td>Écritures plans / objets (pas silencieux)</td></tr>
+          <tr><td>Profil</td><td>Changer ferme / vue</td><td>Recharge filtres chat + dashboards</td></tr>
+          <tr><td>Gantt (ordi)</td><td>Sélection / double-clic plan</td><td>Modal plan</td></tr>
+          <tr><td>Gantt (ordi)</td><td>Bandeau Calendrier</td><td>Calendrier tâches unifié</td></tr>
+          <tr><td>Composer</td><td>Fichier / photo</td><td>Pipeline Documents → carte(s)</td></tr>
+        </tbody>
+      </table>
+
+      <h2>États vides / chargement / erreur (pattern transversal)</h2>
+      <table>
+        <thead><tr><th>État</th><th>Comportement produit</th></tr></thead>
+        <tbody>
+          <tr><td>Vide</td><td>Une phrase + CTA (chat ou +). Pas de faux contenu.</td></tr>
+          <tr><td>Chargement</td><td>Skeleton / spinner discret sur la zone concernée uniquement.</td></tr>
+          <tr><td>Erreur</td><td>Événement nommé (<a href="erreurs.html">catalogue</a>) · une phrase · une action (Réessayer, Continuer sur ordi, Choisir A/B…).</td></tr>
+          <tr><td>Sélection</td><td>Surbrillance liste/carte + panneau ou fiche ; multi-sélection seulement où le CDC le dit (ex. import lot, cultures chat).</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="ambigu">Ouvert / à préciser</h2>
+      <table>
+        <thead><tr><th>Point</th><th>Statut</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Entrée nav dédiée « Cultures / ITK » ou « Sol / Analyses »</td>
+            <td><span class="status">à préciser</span></td>
+            <td>Objets et dashboards décidés ; place exacte dans l’arbre nav pas figée (accès via chat + fiches liées OK pour v1).</td>
+          </tr>
+          <tr>
+            <td>Layout ordi chat+dashboard simultanés vs exclusifs</td>
+            <td><span class="status">à préciser</span></td>
+            <td>Fondation dit « colonne ou plein contenu selon bascule » — proportion exacte / split view à figer au rebuild Figma.</td>
+          </tr>
+          <tr>
+            <td>Libellés icônes nav (ordre fin, icônes)</td>
+            <td><span class="status">à préciser</span></td>
+            <td>Catégories et entrées décidées ; look atomes = Figma ultérieur.</td>
+          </tr>
+          <tr>
+            <td>Semences / caddie</td>
+            <td><span class="status">à cadrer</span></td>
+            <td>Intention fondation ; écran registre non retenu premier lot.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Liens</h2>
+      <p><a href="fondation.html">Fondation</a> (coquille, registres, toolcalling) · <a href="equivalences.html">Équivalences</a> (tél↔ordi) · <a href="erreurs.html">Erreurs</a> · domaines : <a href="temps.html">Temps</a>, <a href="carte-ferme.html">Carte</a>, <a href="planification.html">Planification</a>, <a href="documents.html">Documents</a>, <a href="compte.html">Compte</a>.</p>
+    </main>
+  </div>
+  <script src="editor.js"></script>
+</body>
+</html>
