@@ -13,11 +13,15 @@ const allowed = new Set([
   "contexte.html",
   "carte-ferme.html",
   "planification.html",
+  "itineraires.html",
   "traitements.html",
   "commercial.html",
   "sol.html",
   "documents.html",
   "compte.html",
+  "navigation.html",
+  "equivalences.html",
+  "erreurs.html",
   "donnees.html",
   "tests.html"
 ]);
